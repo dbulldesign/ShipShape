@@ -1,0 +1,25 @@
+<!-- Shipshape tab favicon: simplified cut of icon.svg, legible at 16-32px. Vector master for the matching PNGs. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Shipshape">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2=".42" y2="1"><stop offset="0" stop-color="#3d9bff"/><stop offset=".52" stop-color="#007aff"/><stop offset="1" stop-color="#5856d6"/></linearGradient>
+  <linearGradient id="hull" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#a8342b"/><stop offset="1" stop-color="#71201b"/></linearGradient>
+  <linearGradient id="cream" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#f7f6f1"/><stop offset="1" stop-color="#d8d4c4"/></linearGradient>
+  <linearGradient id="funnel" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#9c2e24"/><stop offset=".45" stop-color="#c2432f"/>
+    <stop offset="1" stop-color="#8b2a21"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="114.6" ry="114.6" fill="url(#bg)"/>
+  <g transform="translate(33.6 98.8) scale(2.78)">
+  <path d="M13 54 h38 l3 7 h98 v20 c0 13.5-11 24.5-24.5 24.5 H46 C31 105.5 19 95 16.4 80.6 L13 56 Z" fill="#f7f6f1"/>
+  <clipPath id="hc2"><path d="M13 54 h38 l3 7 h98 v20 c0 13.5-11 24.5-24.5 24.5 H46 C31 105.5 19 95 16.4 80.6 L13 56 Z"/></clipPath>
+  <g clip-path="url(#hc2)"><rect x="8" y="83" width="150" height="34" fill="#a8342b"/></g>
+  <path d="M13 54h38l3 7h98v4.4H52.4l-3-7H13.2Z" fill="#95281e"/>
+  <rect x="58" y="41" width="94" height="21" rx="2" fill="#f7f6f1"/>
+  <rect x="66" y="26" width="80" height="16" rx="2" fill="#f7f6f1"/>
+  <rect x="58" y="41" width="94" height="4" fill="#95281e"/>
+  <rect x="66" y="26" width="80" height="4" fill="#95281e"/>
+  <rect x="88" y="4" width="19" height="24" rx="2" fill="url(#funnel)"/><rect x="88" y="2" width="19" height="9" rx="2.2" fill="#3c3c3e"/><rect x="116" y="4" width="19" height="24" rx="2" fill="url(#funnel)"/><rect x="116" y="2" width="19" height="9" rx="2.2" fill="#3c3c3e"/>
+
+  </g>
+</svg>
