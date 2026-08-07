@@ -7,6 +7,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shipshape">
+<!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
+     shows these, and compares them against whatever is live on the server. -->
+<meta name="app-version" content="1.0.0">
+<meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -254,6 +258,9 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <hr>
             <button data-m="clearDone">Clear completed</button>
             <button data-m="reset" style="color:var(--red)">Delete everything</button>
+            <hr>
+            <button data-m="update" id="updBtn">Check for updates</button>
+            <div class="note" id="verNote"></div>
           </div>
         </div>
         <button class="iconbtn" id="addTop" style="background:var(--blue)" aria-label="New task"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
@@ -391,6 +398,8 @@ grant execute on function shipshape_push(text, jsonb) to anon;</pre>
 <script>
 /* ============ local persistence ============ */
 const KEY='shipshape:v3',SKEY='shipshape:sync';
+const metaTag=n=>document.querySelector(`meta[name="${n}"]`)?.content||'';
+const VERSION=metaTag('app-version'),BUILD=metaTag('app-build');
 const CLOUD=!!(window.storage&&typeof window.storage.get==='function');
 const local={
   async get(k){
@@ -786,6 +795,38 @@ function toast(msg,undo){
   toast._t=setTimeout(()=>$('#toast').classList.remove('on'),undo?4200:2200);
 }
 const buzz=n=>{try{navigator.vibrate&&navigator.vibrate(n||8);}catch(e){}};
+
+/* ============ version ============
+   The running build is whatever was in the HTML the browser cached. To tell
+   whether that is the build actually on the server, re-fetch the page past the
+   cache and compare the app-version meta. */
+let newVersion=null,lastCheck=0;
+function renderVersion(status){
+  $('#verNote').textContent=`Version ${VERSION} · ${BUILD}${status?' · '+status:''}`;
+  $('#updBtn').textContent=newVersion?`Reload for ${newVersion}`:'Check for updates';
+}
+async function liveVersion(){
+  const r=await fetch(location.pathname+'?vcheck='+Date.now(),{cache:'no-store'});
+  if(!r.ok)throw new Error(r.status);
+  const doc=new DOMParser().parseFromString(await r.text(),'text/html');
+  return doc.querySelector('meta[name="app-version"]')?.content||'';
+}
+async function checkUpdate(quiet){
+  if(newVersion){                                   // already found one; this tap reloads past the cache
+    const u=new URL(location.href);u.searchParams.set('v',Date.now());
+    location.replace(u.toString());return;
+  }
+  if(quiet&&Date.now()-lastCheck<60000)return;
+  lastCheck=Date.now();
+  if(!quiet)renderVersion('checking…');
+  try{
+    const live=await liveVersion();
+    if(!live){renderVersion('server version unknown');if(!quiet)toast('Could not read the deployed version.');}
+    else if(live===VERSION){renderVersion('up to date');if(!quiet)toast(`Up to date · ${VERSION}`);}
+    else{newVersion=live;renderVersion(`${live} is live`);toast(`Version ${live} is deployed. Reload to get it.`);}
+  }catch(e){renderVersion(quiet?'':'check failed');if(!quiet)toast('Could not check. Are you offline?');}
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate(true);});
 function findProjectId(name){
   if(!name)return null;
   let p=S.projects.find(p=>p.name.toLowerCase()===name.toLowerCase());
@@ -1073,6 +1114,7 @@ document.addEventListener('click',e=>{
   const m=e.target.closest('[data-m]');if(!m)return;
   const k=m.dataset.m;
   if(k==='sync')openSync();
+  if(k==='update')checkUpdate();
   if(k==='newproj')openProject(null);
   if(k==='sample')loadSample();
   if(k==='export'){
@@ -1184,6 +1226,8 @@ function loadSample(){
   render();
   setSync(sync.on?'idle':'off');
   if(sync.on){startPolling();pull(true);}
+  renderVersion();
+  setTimeout(()=>checkUpdate(true),1200);
 })();
 </script>
 </body>
