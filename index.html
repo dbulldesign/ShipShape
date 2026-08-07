@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.3.0">
+<meta name="app-version" content="1.4.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -315,6 +315,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="cpo">PO number</label><input id="cpo" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
     <div class="field"><label for="ctrack">Tracking</label><input id="ctrack" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false">
       <button class="iconbtn scanbtn" id="cscan" aria-label="Scan a shipping label"><svg viewBox="0 0 20 20"><path d="M2.6 2.6h4.2v1.8H4.4v2.4H2.6V2.6Zm10.6 0h4.2v4.2h-1.8V4.4h-2.4V2.6ZM2.6 13.2h1.8v2.4h2.4v1.8H2.6v-4.2Zm14.8 0v4.2h-4.2v-1.8h2.4v-2.4h1.8ZM5.6 6.4h1.5v7.2H5.6V6.4Zm2.6 0h1v7.2h-1V6.4Zm2 0h1.5v7.2h-1.5V6.4Zm2.6 0h1.6v7.2h-1.6V6.4Z"/></svg></button></div>
+    <div class="field" id="ccarrierrow"><label for="ccarrier">Carrier</label><select id="ccarrier"></select></div>
   </div>
   <div class="crow">
     <button class="tgl" id="cflag" aria-label="Flag"><svg viewBox="0 0 20 20"><path d="M5 2.5a.9.9 0 0 1 .9.9v.3l2.6-.5 3.5.7 3.5-.7v7.2l-3.5.7-3.5-.7-2.6.5v5.7a.9.9 0 1 1-1.8 0V3.4a.9.9 0 0 1 .9-.9Z"/></svg></button>
@@ -470,9 +471,17 @@ const CARRIERS=[
   {id:'usps',name:'USPS',url:n=>`https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`,
    match:n=>/^[A-Z]{2}\d{9}US$/.test(n)||/^(91|92|93|94|95|82)\d{18,20}$/.test(n)},
   {id:'dhl',name:'DHL Express',url:n=>`https://www.dhl.com/en/express/tracking.html?AWB=${n}&brand=DHL`,
-   match:n=>/^JJD\d{15,20}$/.test(n)||/^\d{10}$/.test(n)},
+   match:n=>/^JJD\d{15,20}$/.test(n)},
   {id:'fedex',name:'FedEx',url:n=>`https://www.fedex.com/fedextrack/?trknbr=${n}`,
-   match:n=>/^\d{12}$/.test(n)||/^\d{15}$/.test(n)||/^\d{20}$/.test(n)||/^\d{22}$/.test(n)},
+   match:n=>/^\d{12}$/.test(n)},
+  /* A bare run of digits carries no carrier-specific shape: 10 digits is a DHL
+     Express waybill, a FedEx Freight PRO and plenty else besides. These still
+     offer a link, but as a guess the UI labels as such rather than stating. */
+  {id:'dhl',name:'DHL Express',guess:true,url:n=>`https://www.dhl.com/en/express/tracking.html?AWB=${n}&brand=DHL`,
+   match:n=>/^\d{10}$/.test(n)},
+  {id:'fedex',name:'FedEx',guess:true,url:n=>`https://www.fedex.com/fedextrack/?trknbr=${n}`,
+   match:n=>/^\d{15}$/.test(n)||/^\d{20}$/.test(n)||/^\d{22}$/.test(n)},
+  {id:'fedexfreight',name:'FedEx Freight',pickOnly:true,url:n=>`https://www.fedex.com/fedextrack/?trknbr=${n}`},
   {id:'odfl',name:'Old Dominion',pickOnly:true,url:n=>`https://www.odfl.com/us/en/tools/tracking.html?proNumbers=${n}`},
   {id:'estes',name:'Estes',pickOnly:true,url:n=>`https://www.estes-express.com/myestes/shipment-tracking/?searchValue=${n}`},
   {id:'xpo',name:'XPO',pickOnly:true,url:n=>`https://www.xpo.com/tracking/?reference=${n}`},
@@ -481,7 +490,13 @@ const CARRIERS=[
   {id:'abf',name:'ABF Freight',pickOnly:true,url:n=>`https://arcb.com/tools/tracking.html#/${n}`},
   {id:'other',name:'Other / none',pickOnly:true,url:null},
 ];
+/* Some carriers appear twice: once for a shape that identifies them and once for
+   an ambiguous digit run. Pickers list each carrier once, and an explicit pick
+   resolves to the first (non-guess) entry. */
+const PICKABLE=CARRIERS.filter((c,i)=>CARRIERS.findIndex(x=>x.id===c.id)===i);
 const carrierById=id=>CARRIERS.find(c=>c.id===id)||null;
+const carrierOptions=sel=>'<option value="">Detect automatically</option>'
+  +PICKABLE.map(c=>`<option value="${c.id}" ${sel===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
 function detectCarrier(raw){             // -> carrier object, or null if unrecognised
   const n=clean(raw);
   if(!n)return null;
@@ -495,7 +510,7 @@ function trackInfo(t){
   const c=picked||detectCarrier(n);
   if(!c)return {number:n,unknown:true};
   if(!c.url)return {number:n,carrier:c,noLink:true};
-  return {number:n,carrier:c,auto:!picked,url:c.url(encodeURIComponent(n))};
+  return {number:n,carrier:c,auto:!picked,guess:!picked&&!!c.guess,url:c.url(encodeURIComponent(n))};
 }
 let S={v:3,projects:[],tasks:[],tomb:{},started:false};
 let sync={url:'',key:'',ws:'',on:false};
@@ -957,7 +972,7 @@ function addTask(d){
   if(!d.title)return;
   const t={id:uid(),title:d.title,type:d.type||'task',projectId:findProjectId(d.project),
     manufacturer:d.manufacturer||'',destination:d.destination||'',
-    tracking:d.tracking||'',carrier:'',po:d.po||'',
+    tracking:d.tracking||'',carrier:d.carrier||'',po:d.po||'',
     due:d.due||null,stage:0,flagged:!!d.flagged,notes:'',done:false,created:now(),u:now()};
   S.tasks.push(t);S.started=true;save();render();
   const f=$('#list .rowwrap');if(f)f.classList.add('pop');
@@ -1036,7 +1051,8 @@ function openComposer(){
   $('#scrim').classList.add('on');$('#composer').classList.add('on');
   cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;
   ctx=composerCtx();setType(ctx.type);
-  $('#ci').value='';$('#ctrack').value='';$('#cpo').value='';updatePreview();
+  $('#ci').value='';$('#ctrack').value='';$('#cpo').value='';
+  $('#ccarrier').innerHTML=carrierOptions('');updatePreview();
   setTimeout(()=>$('#ci').focus(),260);
 }
 /* What the current view implies about a new item. Held as state rather than
@@ -1061,6 +1077,7 @@ function composed(){
     destination:p.destination||c.destination,
     tracking:$('#ctrack').value.trim()||c.tracking||'',
     po:$('#cpo').value.trim(),
+    carrier:$('#ccarrier').value,
     due:p.due||c.due};
 }
 function closeSheets(){
@@ -1077,8 +1094,10 @@ function updatePreview(){
   if(p.project){const known=S.projects.find(x=>x.name.toLowerCase()===p.project.toLowerCase());
     c.push(`<span class="pchip"><i style="width:7px;height:7px;border-radius:2px;background:${known?known.color:colorFor(p.project)}"></i><b>${esc(p.project)}</b>${known?'':' · new'}</span>`);}
   if(p.po)c.push(`<span class="pchip">🧾 <b>${esc(p.po)}</b></span>`);
-  if(p.tracking){const car=detectCarrier(p.tracking);
-    c.push(`<span class="pchip">📦 <b>${esc(p.tracking)}</b> · ${car?esc(car.name):'carrier not recognised'}</span>`);}
+  if(p.tracking){const i=trackInfo({tracking:p.tracking,carrier:p.carrier});
+    const who=i.unknown?'carrier not recognised'
+      :esc(i.carrier.name)+(i.guess?' (a guess)':i.auto?'':' (you chose)');
+    c.push(`<span class="pchip">📦 <b>${esc(p.tracking)}</b> · ${who}</span>`);}
   if(p.manufacturer)c.push(`<span class="pchip">🏭 <b>${esc(p.manufacturer)}</b></span>`);
   if(p.destination)c.push(`<span class="pchip">📍 <b>${esc(p.destination)}</b></span>`);
   if(p.flagged||cflag)c.push('<span class="pchip" style="color:var(--orange)">🚩 Flagged</span>');
@@ -1114,8 +1133,7 @@ function openDetail(id){
   $('#dflag').checked=t.flagged;$('#dnotes').value=t.notes||'';
   $('#dmfr').value=t.manufacturer||'';$('#ddest').value=t.destination||'';$('#dtrack').value=t.tracking||'';
   $('#dpo').value=t.po||'';
-  $('#dcarrier').innerHTML='<option value="">Detect automatically</option>'
-    +CARRIERS.map(c=>`<option value="${c.id}" ${t.carrier===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+  $('#dcarrier').innerHTML=carrierOptions(t.carrier);
   renderTrackLink(t);
   $('#dproj').innerHTML='<option value="">No project</option>'
     +S.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
@@ -1259,7 +1277,8 @@ function renderTrackLink(t){
     el.innerHTML='<span class="warn">Carrier not recognised — no link. Pick one above to make one.</span>';return;}
   if(i.noLink){el.innerHTML=`<span class="warn">${esc(i.carrier.name)} has no tracking page here.</span>`;return;}
   el.innerHTML=`<a href="${i.url}" target="_blank" rel="noopener noreferrer">Track with ${esc(i.carrier.name)} ↗</a>`
-    +(i.auto?'<span class="auto">detected automatically</span>':'');
+    +(i.guess?'<span class="auto">a guess — this number’s shape fits several carriers, so set Carrier above if it is wrong</span>'
+      :i.auto?'<span class="auto">detected from the number</span>':'<span class="auto">you chose this carrier</span>');
 }
 function saveDetail(){
   const t=S.tasks.find(x=>x.id===editing);if(!t)return;
@@ -1325,6 +1344,7 @@ $('#dclose').addEventListener('click',closeSheets);
 $('#dscan').addEventListener('click',()=>openScanner('field'));
 $('#cscan').addEventListener('click',()=>openScanner('compose'));
 ['#ctrack','#cpo'].forEach(s=>$(s).addEventListener('input',updatePreview));
+$('#ccarrier').addEventListener('change',updatePreview);
 $('#scanx').addEventListener('click',closeScanner);
 $('#pclose').addEventListener('click',()=>{editProj=null;attachTo=null;closeSheets();});
 $('#sclose').addEventListener('click',closeSheets);
