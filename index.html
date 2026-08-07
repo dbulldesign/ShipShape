@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.2.1">
+<meta name="app-version" content="1.3.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -311,6 +311,11 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <textarea id="ci" rows="2" placeholder="Approve shop drawings #Harbor Lofts fri"></textarea>
   <div class="sugg" id="sugg"></div>
   <div class="hint"><span><code>#</code> project</span><span><code>@</code> maker</span><span><code>&gt;</code> ship to</span><span><code>!</code> flag</span><span><code>fri</code> · <code>oct 15</code> · <code>in 2 weeks</code></span></div>
+  <div class="fgroup" id="cshipfields" style="margin:10px 0 0">
+    <div class="field"><label for="cpo">PO number</label><input id="cpo" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label for="ctrack">Tracking</label><input id="ctrack" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false">
+      <button class="iconbtn scanbtn" id="cscan" aria-label="Scan a shipping label"><svg viewBox="0 0 20 20"><path d="M2.6 2.6h4.2v1.8H4.4v2.4H2.6V2.6Zm10.6 0h4.2v4.2h-1.8V4.4h-2.4V2.6ZM2.6 13.2h1.8v2.4h2.4v1.8H2.6v-4.2Zm14.8 0v4.2h-4.2v-1.8h2.4v-2.4h1.8ZM5.6 6.4h1.5v7.2H5.6V6.4Zm2.6 0h1v7.2h-1V6.4Zm2 0h1.5v7.2h-1.5V6.4Zm2.6 0h1.6v7.2h-1.6V6.4Z"/></svg></button></div>
+  </div>
   <div class="crow">
     <button class="tgl" id="cflag" aria-label="Flag"><svg viewBox="0 0 20 20"><path d="M5 2.5a.9.9 0 0 1 .9.9v.3l2.6-.5 3.5.7 3.5-.7v7.2l-3.5.7-3.5-.7-2.6.5v5.7a.9.9 0 1 1-1.8 0V3.4a.9.9 0 0 1 .9-.9Z"/></svg></button>
     <span class="sp"></span><button class="btn ghost" id="ccancel" style="margin:0">Cancel</button><button class="addbtn" id="cadd" disabled>Add</button>
@@ -868,7 +873,7 @@ function emptyHTML(){
     project:['🌱','This project is empty','Add the first task to get it moving.'],
     all:['📋','All clear','Add a task to get going.']}[view.t]||['🔍','No matches','Try a different search.'];
   return `<div class="empty"><div class="g">${m[0]}</div><h3>${m[1]}</h3><p>${m[2]}</p>
-    <div><button class="btn" data-a="new">New task</button></div></div>`;
+    <div><button class="btn" data-a="new">${composerCtx().type==='shipment'?'Add shipment':'New task'}</button></div></div>`;
 }
 function searchProjectsHTML(){
   const q=query.toLowerCase();
@@ -1022,6 +1027,7 @@ function burst(el){
 /* ============ composer ============ */
 function setType(t){
   ctype=t;$$('#ctype button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  $('#cshipfields').style.display=t==='shipment'?'':'none';   // PO and tracking are shipment-only
   $('#ci').placeholder=t==='shipment'
     ?'40 pendants #Harbor Lofts @Lumina >Chicago warehouse oct 15'
     :'Approve shop drawings #Harbor Lofts fri';
@@ -1030,7 +1036,7 @@ function openComposer(){
   $('#scrim').classList.add('on');$('#composer').classList.add('on');
   cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;
   ctx=composerCtx();setType(ctx.type);
-  $('#ci').value='';updatePreview();
+  $('#ci').value='';$('#ctrack').value='';$('#cpo').value='';updatePreview();
   setTimeout(()=>$('#ci').focus(),260);
 }
 /* What the current view implies about a new item. Held as state rather than
@@ -1053,7 +1059,8 @@ function composed(){
     project:p.project||(cp?cp.name:''),
     manufacturer:p.manufacturer||c.manufacturer,
     destination:p.destination||c.destination,
-    tracking:c.tracking||'',
+    tracking:$('#ctrack').value.trim()||c.tracking||'',
+    po:$('#cpo').value.trim(),
     due:p.due||c.due};
 }
 function closeSheets(){
@@ -1069,6 +1076,7 @@ function updatePreview(){
   if(p.due)c.push(`<span class="pchip" style="color:var(--blue)">📅 <b>${fmtDue(p.due)}</b></span>`);
   if(p.project){const known=S.projects.find(x=>x.name.toLowerCase()===p.project.toLowerCase());
     c.push(`<span class="pchip"><i style="width:7px;height:7px;border-radius:2px;background:${known?known.color:colorFor(p.project)}"></i><b>${esc(p.project)}</b>${known?'':' · new'}</span>`);}
+  if(p.po)c.push(`<span class="pchip">🧾 <b>${esc(p.po)}</b></span>`);
   if(p.tracking){const car=detectCarrier(p.tracking);
     c.push(`<span class="pchip">📦 <b>${esc(p.tracking)}</b> · ${car?esc(car.name):'carrier not recognised'}</span>`);}
   if(p.manufacturer)c.push(`<span class="pchip">🏭 <b>${esc(p.manufacturer)}</b></span>`);
@@ -1090,7 +1098,7 @@ function submitComposer(keep){
   const p=composed();if(!p.title)return;
   const t=addTask({...p,type:ctype,flagged:p.flagged||cflag});buzz();
   const moved=revealTask(t);
-  if(keep){$('#ci').value='';cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;updatePreview();$('#ci').focus();toast(moved?'Added to All':'Added');}
+  if(keep){$('#ci').value='';$('#ctrack').value='';$('#cpo').value='';cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;updatePreview();$('#ci').focus();toast(moved?'Added to All':'Added');}
   else{closeSheets();if(moved)toast('Added to All');}
 }
 
@@ -1214,6 +1222,12 @@ function onScan(raw){
   const n=normalizeScan(raw);
   if(!n)return;
   buzz(20);closeScanner();
+  if(scanMode==='compose'){                       // scanned while writing a new shipment
+    $('#ctrack').value=n;setType('shipment');ctypeManual=true;updatePreview();
+    const c=detectCarrier(n);
+    toast(c?`Scanned · ${c.name}`:'Scanned · carrier not recognised');
+    return;
+  }
   if(scanMode==='field'){
     $('#dtrack').value=n;
     const t=S.tasks.find(x=>x.id===editing);
@@ -1231,7 +1245,9 @@ function onScan(raw){
 function openComposerFor(tracking){
   openComposer();
   ctx.type='shipment';ctx.tracking=tracking;
-  setType('shipment');updatePreview();
+  setType('shipment');ctypeManual=true;
+  $('#ctrack').value=tracking;              // show it, do not just hold it in ctx
+  updatePreview();
 }
 
 /* The tracking row under the shipment fields: a link when one can be built, and
@@ -1307,6 +1323,8 @@ $('#ccancel').addEventListener('click',()=>{editing=null;closeSheets();});
 $('#cadd').addEventListener('click',()=>submitComposer(false));
 $('#dclose').addEventListener('click',closeSheets);
 $('#dscan').addEventListener('click',()=>openScanner('field'));
+$('#cscan').addEventListener('click',()=>openScanner('compose'));
+['#ctrack','#cpo'].forEach(s=>$(s).addEventListener('input',updatePreview));
 $('#scanx').addEventListener('click',closeScanner);
 $('#pclose').addEventListener('click',()=>{editProj=null;attachTo=null;closeSheets();});
 $('#sclose').addEventListener('click',closeSheets);
