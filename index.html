@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.2.0">
+<meta name="app-version" content="1.2.1">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -977,7 +977,9 @@ function toggleDone(id,el){
     if(t.type==='shipment'&&t.stage<4){t.stage0=t.stage;t.stage=4;}
   }else{
     t.completed=null;
-    if(t.type==='shipment'&&t.stage0!=null){t.stage=t.stage0;t.stage0=null;}
+    // only rewind if nothing has touched the stage since; a stage picked by hand
+    // while the shipment was complete is the user's choice and stands
+    if(t.type==='shipment'&&t.stage0!=null){if(t.stage===4)t.stage=t.stage0;t.stage0=null;}
   }
   buzz(t.done?[6,30,10]:6);
   if(t.done&&el){el.closest('.row').classList.add('done');
@@ -1200,6 +1202,8 @@ function scanLoop(){
   };
   scanRAF=requestAnimationFrame(tick);
 }
+// never leave the camera running behind a backgrounded app
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&scanStream)closeScanner();});
 function closeScanner(){
   if(scanRAF)cancelAnimationFrame(scanRAF);scanRAF=null;
   if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}
@@ -1481,7 +1485,9 @@ $('#list').addEventListener('pointerup',endSwipe);
 $('#list').addEventListener('pointercancel',endSwipe);
 document.addEventListener('keydown',e=>{
   const typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
-  if(e.key==='Escape'){closeSheets();document.activeElement.blur();return;}
+  if(e.key==='Escape'){
+    if($('#scanner').classList.contains('on'))return closeScanner();
+    closeSheets();document.activeElement.blur();return;}
   if(typing)return;
   if(e.key==='n'||((e.metaKey||e.ctrlKey)&&e.key==='k')){e.preventDefault();openComposer();}
   if(e.key==='p'){e.preventDefault();openProject(null);}
