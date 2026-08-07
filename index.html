@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.0.1">
+<meta name="app-version" content="1.0.2">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -842,6 +842,14 @@ function addTask(d){
   const f=$('#list .rowwrap');if(f)f.classList.add('pop');
   return t;
 }
+/* A new task can be invisible in the view you added it from — an undated one
+   never matches Today, which reads as though the add silently failed. Move to a
+   view that does show it. setView also clears any selected day and search. */
+function revealTask(t){
+  if(!t||filtered().some(x=>x.id===t.id))return false;
+  setView('all');
+  return true;
+}
 function toggleDone(id,el){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
   const wasStage=t.stage;
@@ -934,9 +942,10 @@ function updatePreview(){
 }
 function submitComposer(keep){
   const p=parseInput($('#ci').value);if(!p.title)return;
-  addTask({...p,type:ctype,flagged:p.flagged||cflag});buzz();
-  if(keep){$('#ci').value=prefill();cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;updatePreview();$('#ci').focus();toast('Added');}
-  else closeSheets();
+  const t=addTask({...p,type:ctype,flagged:p.flagged||cflag});buzz();
+  const moved=revealTask(t);
+  if(keep){$('#ci').value=prefill();cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;updatePreview();$('#ci').focus();toast(moved?'Added to All':'Added');}
+  else{closeSheets();if(moved)toast('Added to All');}
 }
 
 /* ============ detail ============ */
