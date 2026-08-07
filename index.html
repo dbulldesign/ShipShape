@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.0.2">
+<meta name="app-version" content="1.1.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -418,7 +418,7 @@ const PAL=['var(--blue)','var(--purple)','var(--pink)','var(--orange)','var(--te
 let S={v:3,projects:[],tasks:[],tomb:{},started:false};
 let sync={url:'',key:'',ws:'',on:false};
 let view={t:'today'},query='',selDay=null,editing=null,editProj=null,attachTo=null,
-    cflag=false,ctype='task',ctypeManual=false,undoFn=null,saveT=null,pcolor=PAL[0],
+    cflag=false,ctype='task',ctypeManual=false,undoFn=null,saveT=null,pcolor=PAL[0],ctx=null,
     syncStatus='off',pulling=false,pushT=null,pollT=null;
 
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -605,7 +605,10 @@ function matches(t){
 }
 function filtered(){
   let a=S.tasks.filter(matches);const v=view;
-  if(v.t==='today')a=a.filter(t=>!t.done&&t.due&&diff(t.due)<=0);
+  // A day picked on the strip wins over the view's own date rule, otherwise
+  // picking a future day under Today could never match anything.
+  if(selDay&&(v.t==='today'||v.t==='scheduled'))a=a.filter(t=>!t.done&&t.due===selDay);
+  else if(v.t==='today')a=a.filter(t=>!t.done&&t.due&&diff(t.due)<=0);
   else if(v.t==='scheduled')a=a.filter(t=>!t.done&&t.due);
   else if(v.t==='flagged')a=a.filter(t=>!t.done&&t.flagged);
   else if(v.t==='all')a=a.filter(t=>!t.done);
@@ -614,7 +617,6 @@ function filtered(){
   else if(v.t==='project')a=a.filter(t=>t.projectId===v.v);
   else if(v.t==='mfr')a=a.filter(t=>t.manufacturer===v.v&&!t.done);
   else if(v.t==='dest')a=a.filter(t=>t.destination===v.v&&!t.done);
-  if(selDay)a=a.filter(t=>t.due===selDay);
   return a.sort((x,y)=>{
     if(x.done!==y.done)return x.done?1:-1;
     if(!x.due&&!y.due)return y.created-x.created;
@@ -753,6 +755,7 @@ function projectHead(){
       ${p.due?`<span style="${diff(p.due)<0?'color:var(--red)':''}">· target ${fmtDue(p.due)}</span>`:''}</div>
       ${p.notes?`<div class="l" style="color:var(--label3)">${esc(p.notes)}</div>`:''}</div>
     <button class="iconbtn" data-editproj="${p.id}" aria-label="Edit project"><svg viewBox="0 0 20 20"><path d="M14.1 2.6a1.4 1.4 0 0 1 2 0l1.3 1.3a1.4 1.4 0 0 1 0 2l-1 1-3.3-3.3 1-1ZM12 4.7 3.4 13.3 2.5 17l3.7-.9 8.6-8.6L12 4.7Z"/></svg></button>
+    <button class="iconbtn" data-a="new" aria-label="Add to this project" style="background:var(--blue)"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
   </div>`;
 }
 function emptyHTML(){
@@ -903,14 +906,30 @@ function setType(t){
 function openComposer(){
   $('#scrim').classList.add('on');$('#composer').classList.add('on');
   cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;setType('task');
-  $('#ci').value=prefill();updatePreview();
-  setTimeout(()=>{$('#ci').focus();$('#ci').setSelectionRange(0,0);},260);
+  ctx=composerCtx();
+  $('#ci').value='';updatePreview();
+  setTimeout(()=>$('#ci').focus(),260);
 }
-function prefill(){
-  if(view.t==='project'){const p=P(view.v);return p?`  #${p.name} `:'';}
-  if(view.t==='mfr')return `  @${view.v} `;
-  if(view.t==='dest')return `  >${view.v} `;
-  return '';
+/* What the current view implies about a new item. Held as state rather than
+   seeded into the text box: as prefilled text it only parsed correctly if the
+   caret stayed in front of it, and `#Name` swallows the rest of the line, so
+   typing after it produced a project called "Lobby Approve drawings" and no
+   title at all. Anything typed still wins over this. */
+function composerCtx(){
+  const c={projectId:null,manufacturer:'',destination:'',due:null};
+  if(view.t==='project')c.projectId=view.v;
+  else if(view.t==='mfr')c.manufacturer=view.v;
+  else if(view.t==='dest')c.destination=view.v;
+  if(selDay)c.due=selDay;                 // adding while a day is picked dates the task
+  return c;
+}
+function composed(){
+  const p=parseInput($('#ci').value),c=ctx||composerCtx(),cp=c.projectId?P(c.projectId):null;
+  return {...p,
+    project:p.project||(cp?cp.name:''),
+    manufacturer:p.manufacturer||c.manufacturer,
+    destination:p.destination||c.destination,
+    due:p.due||c.due};
 }
 function closeSheets(){
   if(editing)saveDetail();
@@ -919,7 +938,7 @@ function closeSheets(){
   editing=null;editProj=null;
 }
 function updatePreview(){
-  const p=parseInput($('#ci').value);
+  const p=composed();
   if(!ctypeManual){const want=(p.manufacturer||p.destination)?'shipment':'task';if(want!==ctype)setType(want);}
   const c=[];
   if(p.due)c.push(`<span class="pchip" style="color:var(--blue)">📅 <b>${fmtDue(p.due)}</b></span>`);
@@ -941,10 +960,10 @@ function updatePreview(){
       :m==='@'?'🏭':'📍'}${esc(v)}</button>`).join('');
 }
 function submitComposer(keep){
-  const p=parseInput($('#ci').value);if(!p.title)return;
+  const p=composed();if(!p.title)return;
   const t=addTask({...p,type:ctype,flagged:p.flagged||cflag});buzz();
   const moved=revealTask(t);
-  if(keep){$('#ci').value=prefill();cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;updatePreview();$('#ci').focus();toast(moved?'Added to All':'Added');}
+  if(keep){$('#ci').value='';cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;updatePreview();$('#ci').focus();toast(moved?'Added to All':'Added');}
   else{closeSheets();if(moved)toast('Added to All');}
 }
 
