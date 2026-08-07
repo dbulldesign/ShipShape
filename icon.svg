@@ -1,4 +1,4 @@
-<!-- Shipshape app icon: the ship from the app's empty state (U+1F6A2). Vector master for the matching PNGs. -->
+<!-- Shipshape app icon (U+1F6A2 liner). Full-bleed on purpose: iOS and Android round it themselves. Master for the app-icon PNGs. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Shipshape">
   <defs><linearGradient id="bg" x1="0" y1="0" x2=".42" y2="1"><stop offset="0" stop-color="#3d9bff"/><stop offset=".52" stop-color="#007aff"/><stop offset="1" stop-color="#5856d6"/></linearGradient>
   <linearGradient id="hull" x1="0" y1="0" x2="0" y2="1">
@@ -9,8 +9,8 @@
     <stop offset="0" stop-color="#9c2e24"/><stop offset=".45" stop-color="#c2432f"/>
     <stop offset="1" stop-color="#8b2a21"/></linearGradient>
   </defs>
-  <rect width="512" height="512" rx="114.6" ry="114.6" fill="url(#bg)"/>
-  <g transform="translate(33.6 98.8) scale(2.78)">
+  <rect width="512" height="512" rx="0" ry="0" fill="url(#bg)"/>
+  <g transform="translate(68.0 123.7) scale(2.35)">
   <path d="M13 54 h38 l3 7 h98 v20 c0 13.5-11 24.5-24.5 24.5 H46 C31 105.5 19 95 16.4 80.6 L13 56 Z" fill="url(#cream)" stroke="#b9b3a3" stroke-width=".7"/>
   <clipPath id="hc"><path d="M13 54 h38 l3 7 h98 v20 c0 13.5-11 24.5-24.5 24.5 H46 C31 105.5 19 95 16.4 80.6 L13 56 Z"/></clipPath>
   <g clip-path="url(#hc)">
