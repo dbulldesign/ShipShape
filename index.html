@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.1.0">
+<meta name="app-version" content="1.2.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -121,6 +121,18 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   display:inline-flex;align-items:center;gap:4px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip i{width:6px;height:6px;border-radius:2px;flex:none}
 .chip.stage{transition:transform .18s var(--ease)}.chip.stage:active{transform:scale(.92)}
+.chip.track{color:var(--blue);text-decoration:none}
+#scanner{position:fixed;inset:0;z-index:120;background:#000;display:none;flex-direction:column}
+#scanner.on{display:flex}
+#scanner video{flex:1;width:100%;object-fit:cover;background:#000}
+#scanner .frame{position:absolute;left:8%;right:8%;top:34%;height:22%;border:2px solid rgba(255,255,255,.9);
+  border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);pointer-events:none}
+#scanner .bar{position:absolute;left:0;right:0;bottom:0;padding:16px 16px calc(20px + env(safe-area-inset-bottom));
+  display:flex;align-items:center;gap:12px;color:#fff}
+#scanner .msg{flex:1;font-size:15px;line-height:1.35;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+#scanner .btn{margin:0}
+#scanner .top{position:absolute;top:calc(12px + env(safe-area-inset-top));left:16px;right:16px;
+  color:#fff;font-size:13px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.7)}
 .due{font-size:12px;font-weight:600;color:var(--label2);font-variant-numeric:tabular-nums;white-space:nowrap;margin-top:1px}
 .due.late{color:var(--red)}.due.soon{color:var(--orange)}
 .rright{display:flex;align-items:center;gap:8px;flex:none;padding-top:2px}
@@ -189,6 +201,12 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .field:last-child{border-bottom:0}
 .field label{font-size:15px;color:var(--label2);width:98px;flex:none}
 .field input,.field select,.field textarea{flex:1;background:transparent;border:0;outline:none;font-size:16px;text-align:right;min-width:0}
+.scanbtn{width:30px;height:30px;margin-left:8px;background:var(--fill2)}
+.scanbtn svg{width:16px;height:16px;fill:var(--blue)}
+.tracklink{padding:10px 14px;background:var(--card2);font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tracklink a{color:var(--blue);font-weight:600;text-decoration:none}
+.tracklink .warn{color:var(--label2)}
+.tracklink .auto{color:var(--label3);font-size:12.5px}
 .field textarea{text-align:left;resize:vertical;height:64px;font-size:15px}
 .field input.mono{font-family:var(--mono);font-size:13px}
 .fgroup{border-radius:12px;overflow:hidden;margin:12px 14px}
@@ -259,6 +277,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="clearDone">Clear completed</button>
             <button data-m="reset" style="color:var(--red)">Delete everything</button>
             <hr>
+            <button data-m="scan">Scan a shipping label</button>
+            <hr>
             <button data-m="update" id="updBtn">Check for updates</button>
             <div class="note" id="verNote"></div>
           </div>
@@ -310,7 +330,11 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="fgroup" id="shipfields">
     <div class="field"><label for="dmfr">Maker</label><input id="dmfr" list="l-mfr" placeholder="None"></div>
     <div class="field"><label for="ddest">Ship to</label><input id="ddest" list="l-dest" placeholder="None"></div>
-    <div class="field"><label for="dtrack">Tracking</label><input id="dtrack" placeholder="None"></div>
+    <div class="field"><label for="dpo">PO number</label><input id="dpo" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label for="dtrack">Tracking</label><input id="dtrack" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false">
+      <button class="iconbtn scanbtn" id="dscan" aria-label="Scan a shipping label"><svg viewBox="0 0 20 20"><path d="M2.6 2.6h4.2v1.8H4.4v2.4H2.6V2.6Zm10.6 0h4.2v4.2h-1.8V4.4h-2.4V2.6ZM2.6 13.2h1.8v2.4h2.4v1.8H2.6v-4.2Zm14.8 0v4.2h-4.2v-1.8h2.4v-2.4h1.8ZM5.6 6.4h1.5v7.2H5.6V6.4Zm2.6 0h1v7.2h-1V6.4Zm2 0h1.5v7.2h-1.5V6.4Zm2.6 0h1.6v7.2h-1.6V6.4Z"/></svg></button></div>
+    <div class="field"><label for="dcarrier">Carrier</label><select id="dcarrier"></select></div>
+    <div id="dtracklink" class="tracklink"></div>
   </div>
   <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="dnotes">Notes</label><textarea id="dnotes" placeholder="Order numbers, contacts, next steps…"></textarea></div></div>
   <button class="danger" id="ddel">Delete</button>
@@ -395,6 +419,14 @@ grant execute on function shipshape_push(text, jsonb) to anon;</pre>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
 <div id="toast"><span id="tmsg"></span><button id="tundo" hidden>Undo</button></div>
 
+<div id="scanner">
+  <video id="scanvid" playsinline muted autoplay></video>
+  <div class="frame"></div>
+  <div class="top" id="scantop">Point at the barcode on the label</div>
+  <div class="bar"><span class="msg" id="scanmsg">Starting the camera…</span>
+    <button class="btn sec" id="scanx" style="margin:0">Close</button></div>
+</div>
+
 <script>
 /* ============ local persistence ============ */
 const KEY='shipshape:v3',SKEY='shipshape:sync';
@@ -415,6 +447,51 @@ const local={
 const STAGES=['Quote','Ordered','Making','Shipped','Delivered'];
 const SC=['var(--gray)','var(--blue)','var(--orange)','var(--purple)','var(--green)'];
 const PAL=['var(--blue)','var(--purple)','var(--pink)','var(--orange)','var(--teal)','var(--green)','var(--indigo)','var(--yellow)'];
+
+/* ============ carriers ============
+   Guess the carrier from the shape of a tracking number and build a link to
+   its tracking page. Parcel formats are recognised automatically. Freight PRO
+   numbers are just short digit strings with no carrier-specific shape, so those
+   can only be picked by hand — pickOnly carriers never match automatically. */
+const clean=n=>(n||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
+/* Matching is on format alone, deliberately. Carrier check digits would catch
+   typos, but a check digit implemented from memory that is subtly wrong rejects
+   valid numbers, and a rejected USPS number falls through to the FedEx digit
+   patterns and links to the wrong carrier. A wrong link is worse than no
+   validation, so the shape of the number is all this trusts. */
+const CARRIERS=[
+  {id:'ups',name:'UPS',url:n=>`https://www.ups.com/track?loc=en_US&tracknum=${n}`,
+   match:n=>/^1Z[0-9A-Z]{16}$/.test(n)},
+  {id:'usps',name:'USPS',url:n=>`https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`,
+   match:n=>/^[A-Z]{2}\d{9}US$/.test(n)||/^(91|92|93|94|95|82)\d{18,20}$/.test(n)},
+  {id:'dhl',name:'DHL Express',url:n=>`https://www.dhl.com/en/express/tracking.html?AWB=${n}&brand=DHL`,
+   match:n=>/^JJD\d{15,20}$/.test(n)||/^\d{10}$/.test(n)},
+  {id:'fedex',name:'FedEx',url:n=>`https://www.fedex.com/fedextrack/?trknbr=${n}`,
+   match:n=>/^\d{12}$/.test(n)||/^\d{15}$/.test(n)||/^\d{20}$/.test(n)||/^\d{22}$/.test(n)},
+  {id:'odfl',name:'Old Dominion',pickOnly:true,url:n=>`https://www.odfl.com/us/en/tools/tracking.html?proNumbers=${n}`},
+  {id:'estes',name:'Estes',pickOnly:true,url:n=>`https://www.estes-express.com/myestes/shipment-tracking/?searchValue=${n}`},
+  {id:'xpo',name:'XPO',pickOnly:true,url:n=>`https://www.xpo.com/tracking/?reference=${n}`},
+  {id:'saia',name:'Saia',pickOnly:true,url:n=>`https://www.saia.com/track/details?pro=${n}`},
+  {id:'rl',name:'R+L Carriers',pickOnly:true,url:n=>`https://www2.rlcarriers.com/freight/shipping/shipment-tracing?pro=${n}&docType=PRO`},
+  {id:'abf',name:'ABF Freight',pickOnly:true,url:n=>`https://arcb.com/tools/tracking.html#/${n}`},
+  {id:'other',name:'Other / none',pickOnly:true,url:null},
+];
+const carrierById=id=>CARRIERS.find(c=>c.id===id)||null;
+function detectCarrier(raw){             // -> carrier object, or null if unrecognised
+  const n=clean(raw);
+  if(!n)return null;
+  return CARRIERS.find(c=>!c.pickOnly&&c.match(n))||null;
+}
+/* What to show for a shipment: which carrier, and a link if one can be built. */
+function trackInfo(t){
+  const n=clean(t.tracking);
+  if(!n)return {none:true};
+  const picked=t.carrier?carrierById(t.carrier):null;
+  const c=picked||detectCarrier(n);
+  if(!c)return {number:n,unknown:true};
+  if(!c.url)return {number:n,carrier:c,noLink:true};
+  return {number:n,carrier:c,auto:!picked,url:c.url(encodeURIComponent(n))};
+}
 let S={v:3,projects:[],tasks:[],tomb:{},started:false};
 let sync={url:'',key:'',ws:'',on:false};
 let view={t:'today'},query='',selDay=null,editing=null,editProj=null,attachTo=null,
@@ -449,10 +526,19 @@ function migrate(){
   S.v=3;
   for(const t of S.tasks){
     t.type=t.type||'task';t.tracking=t.tracking||'';t.stage=t.stage||0;t.u=t.u||t.created||now();
+    t.po=t.po||'';t.carrier=t.carrier||'';
     delete t.assignee;
   }
   for(const p of S.projects){p.u=p.u||now();delete p.lead;}
+  sanitizeColors();
 }
+/* Project colours are written straight into style attributes. They normally come
+   from the palette, but state also arrives from a shared Supabase workspace or a
+   backup file, so anything that is not a plain colour is dropped rather than
+   interpolated — a crafted value could otherwise fetch a remote URL. */
+const COLOR_OK=/^(var\(--[a-z0-9-]+\)|#[0-9a-f]{3,8}|rgba?\([\d.,\s%/]+\)|hsla?\([\d.,\s%/deg]+\))$/i;
+const safeColor=c=>(typeof c==='string'&&COLOR_OK.test(c.trim()))?c.trim():'var(--gray)';
+function sanitizeColors(){for(const p of S.projects)p.color=safeColor(p.color);}
 function saveLocal(){
   clearTimeout(saveT);
   saveT=setTimeout(async()=>{
@@ -525,7 +611,7 @@ function mergeIn(remote){
   if(n0!==S.tasks.length+S.projects.length)changed=true;
   const cut=now()-60*864e5;
   for(const id in S.tomb)if(S.tomb[id]<cut)delete S.tomb[id];
-  if(changed)S.started=true;
+  if(changed){S.started=true;sanitizeColors();}   // remote projects are untrusted input
   return changed;
 }
 function startPolling(){
@@ -601,10 +687,14 @@ function stats(pid){
 }
 function matches(t){
   if(!query)return true;const q=query.toLowerCase(),p=projectOf(t);
-  return [t.title,t.manufacturer,t.destination,t.notes,t.tracking,p&&p.name].some(v=>(v||'').toLowerCase().includes(q));
+  return [t.title,t.manufacturer,t.destination,t.notes,t.tracking,t.po,p&&p.name]
+    .some(v=>(v||'').toLowerCase().includes(q));
 }
 function filtered(){
   let a=S.tasks.filter(matches);const v=view;
+  // Search is global: a query looks through everything, done included, rather
+  // than only the slice the current tab happens to be showing.
+  if(query)return a.sort(bySort);
   // A day picked on the strip wins over the view's own date rule, otherwise
   // picking a future day under Today could never match anything.
   if(selDay&&(v.t==='today'||v.t==='scheduled'))a=a.filter(t=>!t.done&&t.due===selDay);
@@ -617,13 +707,14 @@ function filtered(){
   else if(v.t==='project')a=a.filter(t=>t.projectId===v.v);
   else if(v.t==='mfr')a=a.filter(t=>t.manufacturer===v.v&&!t.done);
   else if(v.t==='dest')a=a.filter(t=>t.destination===v.v&&!t.done);
-  return a.sort((x,y)=>{
-    if(x.done!==y.done)return x.done?1:-1;
-    if(!x.due&&!y.due)return y.created-x.created;
-    if(!x.due)return 1;if(!y.due)return -1;
-    if(x.due!==y.due)return x.due<y.due?-1:1;
-    return (y.flagged?1:0)-(x.flagged?1:0);
-  });
+  return a.sort(bySort);
+}
+function bySort(x,y){
+  if(x.done!==y.done)return x.done?1:-1;
+  if(!x.due&&!y.due)return y.created-x.created;
+  if(!x.due)return 1;if(!y.due)return -1;
+  if(x.due!==y.due)return x.due<y.due?-1:1;
+  return (y.flagged?1:0)-(x.flagged?1:0);
 }
 function bucket(t){
   if(t.done)return{k:'d',l:'Completed',o:8};
@@ -714,6 +805,11 @@ function rowHTML(t){
   if(p&&view.t!=='project')chips.push(`<span class="chip"><i style="background:${p.color}"></i>${esc(p.name)}</span>`);
   if(t.manufacturer)chips.push(`<span class="chip">${esc(t.manufacturer)}</span>`);
   if(t.destination)chips.push(`<span class="chip">→ ${esc(t.destination)}</span>`);
+  if(t.po)chips.push(`<span class="chip">${/^p\.?o\b/i.test(t.po.trim())?'':'PO '}${esc(t.po)}</span>`);
+  if(t.tracking){const i=trackInfo(t);
+    chips.push(i.url
+      ? `<a class="chip track" href="${i.url}" target="_blank" rel="noopener noreferrer" data-noopen="1">${esc(i.carrier.name)} ↗</a>`
+      : `<span class="chip">${esc(clean(t.tracking)).slice(0,14)}</span>`);}
   if(t.type==='shipment')chips.push(`<button class="chip stage" data-stage="${t.id}" style="color:${SC[t.stage]};background:color-mix(in srgb,${SC[t.stage]} 14%,transparent)">${STAGES[t.stage]}</button>`);
   const n=t.due?diff(t.due):null,cls=n===null?'':n<0?'late':n<=2?'soon':'';
   return `<div class="rowwrap" data-id="${t.id}"><div class="act l">Done</div><div class="act r">Delete</div>
@@ -774,12 +870,27 @@ function emptyHTML(){
   return `<div class="empty"><div class="g">${m[0]}</div><h3>${m[1]}</h3><p>${m[2]}</p>
     <div><button class="btn" data-a="new">New task</button></div></div>`;
 }
+function searchProjectsHTML(){
+  const q=query.toLowerCase();
+  const hits=S.projects.filter(p=>[p.name,p.client,p.notes].some(v=>(v||'').toLowerCase().includes(q)));
+  if(!hits.length)return '';
+  return `<div class="grp">Projects<span class="c">${hits.length}</span></div><div class="card">`
+    +hits.map(p=>{const s=stats(p.id);
+      return `<div class="rowwrap"><div class="row" data-open="${p.id}">
+        <svg class="ring" viewBox="0 0 20 20" style="width:24px;height:24px;margin-top:2px"><circle cx="10" cy="10" r="8" stroke="var(--fill)"/>
+        <circle cx="10" cy="10" r="8" stroke="${p.color}" stroke-dasharray="${(s.pct*50.3).toFixed(1)} 99"/></svg>
+        <div class="rowmain"><div class="tt">${esc(p.name)}</div><div class="meta">
+          <span class="chip">${s.open} open · ${Math.round(s.pct*100)}%</span>
+          ${p.client?`<span class="chip">${esc(p.client)}</span>`:''}</div></div></div></div>`;
+    }).join('')+'</div>';
+}
 function renderList(){
   const el=$('#list');
   if(view.t==='projects'){el.innerHTML=projectsHTML();return;}
   let h='';
   if(view.t==='project')h+=projectHead();
   if((view.t==='today'||view.t==='scheduled')&&!query)h+=stripHTML();
+  if(query)h+=searchProjectsHTML();       // projects are searchable too, not just tasks
   const items=filtered();
   if(!items.length){el.innerHTML=h+emptyHTML();return;}
   const g=new Map();
@@ -831,15 +942,17 @@ async function checkUpdate(quiet){
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate(true);});
 function findProjectId(name){
+  name=(name||'').trim();          // untrimmed names used to make "Acme " a second project
   if(!name)return null;
-  let p=S.projects.find(p=>p.name.toLowerCase()===name.toLowerCase());
+  let p=S.projects.find(p=>(p.name||'').trim().toLowerCase()===name.toLowerCase());
   if(!p){p={id:uid(),name,color:PAL[S.projects.length%PAL.length],client:'',due:null,notes:'',u:now()};S.projects.push(p);}
   return p.id;
 }
 function addTask(d){
   if(!d.title)return;
   const t={id:uid(),title:d.title,type:d.type||'task',projectId:findProjectId(d.project),
-    manufacturer:d.manufacturer||'',destination:d.destination||'',tracking:'',
+    manufacturer:d.manufacturer||'',destination:d.destination||'',
+    tracking:d.tracking||'',carrier:'',po:d.po||'',
     due:d.due||null,stage:0,flagged:!!d.flagged,notes:'',done:false,created:now(),u:now()};
   S.tasks.push(t);S.started=true;save();render();
   const f=$('#list .rowwrap');if(f)f.classList.add('pop');
@@ -857,7 +970,15 @@ function toggleDone(id,el){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
   const wasStage=t.stage;
   t.done=!t.done;t.u=now();
-  if(t.done){t.completed=now();if(t.type==='shipment'&&t.stage<4)t.stage=4;}else t.completed=null;
+  if(t.done){
+    t.completed=now();
+    // completing a shipment marks it Delivered, but remember where it was so
+    // un-ticking the box puts it back instead of stranding it on Delivered
+    if(t.type==='shipment'&&t.stage<4){t.stage0=t.stage;t.stage=4;}
+  }else{
+    t.completed=null;
+    if(t.type==='shipment'&&t.stage0!=null){t.stage=t.stage0;t.stage0=null;}
+  }
   buzz(t.done?[6,30,10]:6);
   if(t.done&&el){el.closest('.row').classList.add('done');
     const s=t.projectId?stats(t.projectId):null;if(s&&s.all&&s.open===0)burst(el);}
@@ -905,8 +1026,8 @@ function setType(t){
 }
 function openComposer(){
   $('#scrim').classList.add('on');$('#composer').classList.add('on');
-  cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;setType('task');
-  ctx=composerCtx();
+  cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;
+  ctx=composerCtx();setType(ctx.type);
   $('#ci').value='';updatePreview();
   setTimeout(()=>$('#ci').focus(),260);
 }
@@ -916,10 +1037,11 @@ function openComposer(){
    typing after it produced a project called "Lobby Approve drawings" and no
    title at all. Anything typed still wins over this. */
 function composerCtx(){
-  const c={projectId:null,manufacturer:'',destination:'',due:null};
+  const c={projectId:null,manufacturer:'',destination:'',due:null,type:'task',tracking:''};
   if(view.t==='project')c.projectId=view.v;
-  else if(view.t==='mfr')c.manufacturer=view.v;
-  else if(view.t==='dest')c.destination=view.v;
+  else if(view.t==='mfr'){c.manufacturer=view.v;c.type='shipment';}
+  else if(view.t==='dest'){c.destination=view.v;c.type='shipment';}
+  else if(view.t==='shipments')c.type='shipment';   // adding from Shipments makes a shipment
   if(selDay)c.due=selDay;                 // adding while a day is picked dates the task
   return c;
 }
@@ -929,6 +1051,7 @@ function composed(){
     project:p.project||(cp?cp.name:''),
     manufacturer:p.manufacturer||c.manufacturer,
     destination:p.destination||c.destination,
+    tracking:c.tracking||'',
     due:p.due||c.due};
 }
 function closeSheets(){
@@ -939,11 +1062,13 @@ function closeSheets(){
 }
 function updatePreview(){
   const p=composed();
-  if(!ctypeManual){const want=(p.manufacturer||p.destination)?'shipment':'task';if(want!==ctype)setType(want);}
+  if(!ctypeManual){const want=(p.manufacturer||p.destination||p.tracking||(ctx&&ctx.type==='shipment'))?'shipment':'task';if(want!==ctype)setType(want);}
   const c=[];
   if(p.due)c.push(`<span class="pchip" style="color:var(--blue)">📅 <b>${fmtDue(p.due)}</b></span>`);
   if(p.project){const known=S.projects.find(x=>x.name.toLowerCase()===p.project.toLowerCase());
     c.push(`<span class="pchip"><i style="width:7px;height:7px;border-radius:2px;background:${known?known.color:colorFor(p.project)}"></i><b>${esc(p.project)}</b>${known?'':' · new'}</span>`);}
+  if(p.tracking){const car=detectCarrier(p.tracking);
+    c.push(`<span class="pchip">📦 <b>${esc(p.tracking)}</b> · ${car?esc(car.name):'carrier not recognised'}</span>`);}
   if(p.manufacturer)c.push(`<span class="pchip">🏭 <b>${esc(p.manufacturer)}</b></span>`);
   if(p.destination)c.push(`<span class="pchip">📍 <b>${esc(p.destination)}</b></span>`);
   if(p.flagged||cflag)c.push('<span class="pchip" style="color:var(--orange)">🚩 Flagged</span>');
@@ -978,11 +1103,143 @@ function openDetail(id){
   $('#dtitle').value=t.title;$('#ddue').value=t.due||'';
   $('#dflag').checked=t.flagged;$('#dnotes').value=t.notes||'';
   $('#dmfr').value=t.manufacturer||'';$('#ddest').value=t.destination||'';$('#dtrack').value=t.tracking||'';
+  $('#dpo').value=t.po||'';
+  $('#dcarrier').innerHTML='<option value="">Detect automatically</option>'
+    +CARRIERS.map(c=>`<option value="${c.id}" ${t.carrier===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+  renderTrackLink(t);
   $('#dproj').innerHTML='<option value="">No project</option>'
     +S.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
     +'<option value="__new">New project…</option>';
   $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
   $('#scrim').classList.add('on');$('#detail').classList.add('on');
+}
+/* ============ label scanning ============
+   Safari has no BarcodeDetector, so the ZXing decoder is vendored and pulled in
+   the first time the scanner is opened. Where the native detector does exist it
+   is used instead: it is faster and costs no download. */
+let scanStream=null,scanRAF=null,scanMode='find',zxingReady=null,nativeDet=null;
+function loadZxing(){
+  if(zxingReady)return zxingReady;
+  zxingReady=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='vendor/zxing.min.js';
+    s.onload=()=>res(window.ZXing);s.onerror=()=>rej(new Error('load failed'));
+    document.head.appendChild(s);
+  });
+  return zxingReady;
+}
+/* Label barcodes are not always bare tracking numbers: a USPS IMpb carries a
+   420 + ZIP routing prefix in front of the 22-digit number. */
+function normalizeScan(raw){
+  const n=clean(raw);
+  if(/^420\d/.test(n)&&n.length>22){
+    const tail=n.slice(-22);
+    if(detectCarrier(tail))return tail;
+  }
+  return n;
+}
+async function openScanner(mode){
+  scanMode=mode||'find';
+  $('#scanner').classList.add('on');
+  $('#scanmsg').textContent='Starting the camera…';
+  if(!window.isSecureContext){
+    $('#scanmsg').textContent='The camera needs a secure (https) connection.';return;}
+  if(!navigator.mediaDevices?.getUserMedia){
+    $('#scanmsg').textContent='This browser will not give the page a camera.';return;}
+  try{
+    scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+  }catch(e){
+    $('#scanmsg').textContent=e&&e.name==='NotAllowedError'
+      ? 'Camera permission was refused. Allow it in Settings, or type the number in by hand.'
+      : 'No camera available. Type the number in by hand.';
+    return;
+  }
+  const v=$('#scanvid');v.srcObject=scanStream;
+  try{await v.play();}catch(e){}
+  $('#scanmsg').textContent='Looking for a barcode…';
+  if(!nativeDet&&window.BarcodeDetector){
+    try{nativeDet=new BarcodeDetector({formats:['code_128','code_39','itf','pdf417','qr_code','data_matrix']});}
+    catch(e){nativeDet=null;}
+  }
+  if(!nativeDet){
+    try{await loadZxing();}
+    catch(e){$('#scanmsg').textContent='Could not load the barcode reader.';return;}
+  }
+  scanLoop();
+}
+function scanLoop(){
+  const v=$('#scanvid');
+  const cv=document.createElement('canvas');
+  let reader=null,busy=false;
+  if(!nativeDet){
+    reader=new ZXing.MultiFormatReader();
+    const h=new Map();
+    h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.ITF,ZXing.BarcodeFormat.PDF_417,ZXing.BarcodeFormat.QR_CODE,ZXing.BarcodeFormat.DATA_MATRIX]);
+    h.set(ZXing.DecodeHintType.TRY_HARDER,true);
+    reader.setHints(h);
+  }
+  const tick=async()=>{
+    scanRAF=requestAnimationFrame(tick);
+    if(busy||!v.videoWidth)return;
+    busy=true;
+    try{
+      cv.width=v.videoWidth;cv.height=v.videoHeight;
+      cv.getContext('2d',{willReadFrequently:true}).drawImage(v,0,0);
+      let text=null;
+      if(nativeDet){const r=await nativeDet.detect(cv);if(r&&r.length)text=r[0].rawValue;}
+      else{
+        try{
+          const lum=new ZXing.HTMLCanvasElementLuminanceSource(cv);
+          text=reader.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum))).getText();
+        }catch(e){}                       // not found in this frame; keep going
+      }
+      if(text)onScan(text);
+    }catch(e){}
+    busy=false;
+  };
+  scanRAF=requestAnimationFrame(tick);
+}
+function closeScanner(){
+  if(scanRAF)cancelAnimationFrame(scanRAF);scanRAF=null;
+  if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}
+  $('#scanvid').srcObject=null;
+  $('#scanner').classList.remove('on');
+}
+function onScan(raw){
+  const n=normalizeScan(raw);
+  if(!n)return;
+  buzz(20);closeScanner();
+  if(scanMode==='field'){
+    $('#dtrack').value=n;
+    const t=S.tasks.find(x=>x.id===editing);
+    if(t){t.tracking=n;t.u=now();save();renderTrackLink(t);}
+    const c=detectCarrier(n);
+    toast(c?`Scanned · ${c.name}`:'Scanned · carrier not recognised');
+    return;
+  }
+  const hit=S.tasks.find(x=>x.tracking&&clean(x.tracking)===n);
+  if(hit){openDetail(hit.id);toast('Found this shipment');return;}
+  openComposerFor(n);
+  const c=detectCarrier(n);
+  toast(c?`New shipment · ${c.name}`:'New shipment · carrier not recognised');
+}
+function openComposerFor(tracking){
+  openComposer();
+  ctx.type='shipment';ctx.tracking=tracking;
+  setType('shipment');updatePreview();
+}
+
+/* The tracking row under the shipment fields: a link when one can be built, and
+   a plain reason when it cannot, so a missing link never looks like a glitch. */
+function renderTrackLink(t){
+  const i=trackInfo(t),el=$('#dtracklink');
+  if(i.none){el.innerHTML='<span class="warn">No tracking number yet.</span>';return;}
+  if(i.unknown){
+    el.innerHTML='<span class="warn">Carrier not recognised — no link. Pick one above to make one.</span>';return;}
+  if(i.noLink){el.innerHTML=`<span class="warn">${esc(i.carrier.name)} has no tracking page here.</span>`;return;}
+  el.innerHTML=`<a href="${i.url}" target="_blank" rel="noopener noreferrer">Track with ${esc(i.carrier.name)} ↗</a>`
+    +(i.auto?'<span class="auto">detected automatically</span>':'');
 }
 function saveDetail(){
   const t=S.tasks.find(x=>x.id===editing);if(!t)return;
@@ -990,6 +1247,7 @@ function saveDetail(){
   t.due=$('#ddue').value||null;
   t.flagged=$('#dflag').checked;t.notes=$('#dnotes').value;
   t.manufacturer=$('#dmfr').value.trim();t.destination=$('#ddest').value.trim();t.tracking=$('#dtrack').value.trim();
+  t.po=$('#dpo').value.trim();t.carrier=$('#dcarrier').value;
   const pv=$('#dproj').value;
   if(pv!=='__new')t.projectId=pv||null;
   t.u=now();save();render();
@@ -1044,6 +1302,8 @@ $('#scrim').addEventListener('click',closeSheets);
 $('#ccancel').addEventListener('click',()=>{editing=null;closeSheets();});
 $('#cadd').addEventListener('click',()=>submitComposer(false));
 $('#dclose').addEventListener('click',closeSheets);
+$('#dscan').addEventListener('click',()=>openScanner('field'));
+$('#scanx').addEventListener('click',closeScanner);
 $('#pclose').addEventListener('click',()=>{editProj=null;attachTo=null;closeSheets();});
 $('#sclose').addEventListener('click',closeSheets);
 $('#psave').addEventListener('click',saveProject);
@@ -1121,7 +1381,12 @@ $('#sugg').addEventListener('click',e=>{
   const b=e.target.closest('[data-ins]');if(!b)return;
   const ci=$('#ci');ci.value=ci.value.replace(/\s+$/,'')+' '+b.dataset.ins+' ';updatePreview();ci.focus();
 });
-['#dtitle','#ddue','#dflag','#dnotes','#dmfr','#ddest','#dtrack'].forEach(s=>$(s).addEventListener('change',saveDetail));
+['#dtitle','#ddue','#dflag','#dnotes','#dmfr','#ddest','#dtrack','#dpo','#dcarrier'].forEach(s=>$(s).addEventListener('change',saveDetail));
+// keep the carrier guess and the link in step while the number is being typed
+['#dtrack','#dcarrier'].forEach(s=>$(s).addEventListener('input',()=>{
+  const t=S.tasks.find(x=>x.id===editing);if(!t)return;
+  renderTrackLink({...t,tracking:$('#dtrack').value,carrier:$('#dcarrier').value});
+}));
 $('#dproj').addEventListener('change',e=>{
   if(e.target.value==='__new'){
     const id=editing;saveDetail();attachTo=id;editing=null;
@@ -1142,6 +1407,7 @@ document.addEventListener('click',e=>{
   const m=e.target.closest('[data-m]');if(!m)return;
   const k=m.dataset.m;
   if(k==='sync')openSync();
+  if(k==='scan')openScanner('find');
   if(k==='update')checkUpdate();
   if(k==='newproj')openProject(null);
   if(k==='sample')loadSample();
@@ -1177,6 +1443,7 @@ $('#navlists').addEventListener('click',e=>{const b=e.target.closest('[data-v]')
 $('#tabbar').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){setView(b.dataset.v);buzz(4);}});
 $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-m]'))return;
+  if(e.target.closest('[data-noopen]'))return;   // tracking link: follow it, don't open the row
   if(e.target.closest('[data-a="new"]'))return openComposer();
   const ep=e.target.closest('[data-editproj]');if(ep)return openProject(ep.dataset.editproj);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
