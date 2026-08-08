@@ -11,6 +11,15 @@ Bump `app-version` and `app-build` in the `<head>` of `index.html` on any deploy
 that changes the app itself. They are the single source of truth: the ⋯ menu
 shows them, and the stale-build check compares them against the deployed copy.
 
+Bump `CACHE` in `sw.js` to match the new `app-version` at the same time. The
+cache name is the only thing that retires the old cached files, so a deploy that
+forgets it can leave icons or the barcode reader stale indefinitely. HTML is
+fetched network-first, so the page itself still updates either way.
+
+`sw.js` must never answer a request carrying `?vcheck=` — that is the page
+re-fetching its own HTML to find out whether it is stale, and a cached answer
+would compare a copy against itself and always agree.
+
 ## Icons
 
 App icons — `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,

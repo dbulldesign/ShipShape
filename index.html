@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.7.0">
+<meta name="app-version" content="9.9.9">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2030,6 +2030,11 @@ function loadSample(){
   if(sync.on){startPolling();pull(true);}
   renderVersion();
   setTimeout(()=>checkUpdate(true),1200);
+  // Offline support. Registered after the first render so it never delays paint,
+  // and only where it can work — a file:// copy has no service workers.
+  if('serviceWorker' in navigator&&window.isSecureContext){
+    try{await navigator.serviceWorker.register('sw.js');}catch(e){}
+  }
 })();
 </script>
 </body>
