@@ -16,24 +16,36 @@ functions the app calls to register a device.
 
 ## 2. Make a key pair
 
-```sh
-npx web-push generate-vapid-keys
-```
+In the app: **⋯ → Sync setup… → Reminders → Make a key pair**. The public half
+fills itself in; the private half appears below it to copy. No terminal needed —
+a VAPID pair is an ordinary P-256 key pair, which the browser can generate.
 
-Two strings come back. The **public** one goes into the app; the **private** one
-stays a secret on Supabase and must never reach the page.
+The **private** half goes to Supabase as a secret in step 3 and must never come
+back into the app. If you would rather use a terminal, `npx web-push
+generate-vapid-keys` produces the same thing.
 
 ## 3. Deploy
 
+Either from the Supabase dashboard — **Edge Functions → Deploy a new function**,
+name it `notify`, paste `index.ts` from this directory — or from a terminal:
+
 ```sh
 supabase functions deploy notify --no-verify-jwt
+```
 
+Then set the secrets. In the dashboard that is **Edge Functions → Secrets**; from
+a terminal:
+
+```sh
 supabase secrets set \
   VAPID_PUBLIC_KEY=<public>  \
   VAPID_PRIVATE_KEY=<private> \
   VAPID_SUBJECT=mailto:you@example.com \
   APP_URL=https://dbulldesign.github.io/ShipShape/
 ```
+
+If you deploy from the dashboard, turn off "Verify JWT" in the function's
+settings so the scheduler can call it.
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
 
@@ -60,7 +72,9 @@ UTC.
 
 ## 5. Turn it on in the app
 
-Paste the **public** key into ⋯ → Sync setup → Reminders, and tap **Turn on
+The public key is already in the field if you generated it there. The function
+URL fills itself in from your Supabase project URL — it is
+`https://<project-ref>.supabase.co/functions/v1/notify`. Tap **Turn on
 reminders**.
 
 On iPhone the app must be on the Home Screen first — Safari refuses notification

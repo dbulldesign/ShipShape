@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.11.0">
+<meta name="app-version" content="1.12.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -463,8 +463,15 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <button class="btn" id="pushon" style="flex:1;margin:0;text-align:center">Turn on reminders</button>
   </div>
   <div style="padding:8px 14px 0;display:flex;gap:8px">
+    <button class="btn sec" id="pushgen" style="flex:1;margin:0;text-align:center;font-size:14px">Make a key pair</button>
     <button class="btn sec" id="pushtest" style="flex:1;margin:0;text-align:center;font-size:14px">Test this device</button>
-    <button class="btn sec" id="pushsend" style="flex:1;margin:0;text-align:center;font-size:14px">Test the whole chain</button>
+    <button class="btn sec" id="pushsend" style="flex:1;margin:0;text-align:center;font-size:14px">Test the chain</button>
+  </div>
+  <div id="pushsecret" style="display:none;padding:10px 14px 0">
+    <div class="blurb" style="padding:0 0 6px">This half is the secret. Put it in Supabase under Edge Functions &rarr;
+    Secrets as <code>VAPID_PRIVATE_KEY</code>. It must never go back into this app.</div>
+    <input id="pushpriv" class="mono" readonly style="width:100%;background:var(--fill2);border:0;border-radius:9px;padding:9px 12px;font-size:13px">
+    <button class="btn sec" id="pushprivcopy" style="margin:8px 0 0;font-size:14px;padding:8px 14px">Copy the private key</button>
   </div>
   <div id="pushdiag" class="tracklink" style="padding-top:10px"></div>
   <div class="blurb" style="padding-top:8px">A push needs a server to send it, so this needs the notify
@@ -838,7 +845,8 @@ const b64ToBytes=b=>{
   return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
 };
 function renderPush(){
-  $('#pushkey').value=sync.pushKey||'';$('#pushurl').value=sync.pushUrl||'';
+  $('#pushkey').value=sync.pushKey||'';
+  $('#pushurl').value=sync.pushUrl||guessFnUrl();
   $('#pushstate').textContent=!('PushManager'in window)?'not supported here'
     :sync.push?'on for this device':'off';
   diagPush();
@@ -846,6 +854,12 @@ function renderPush(){
 /* Reminders cross four things that can each fail on their own: permission, this
    device's subscription, the row in Supabase, and the function that sends. Say
    which of them is actually in place rather than leaving it to be guessed. */
+/* The function sits on the same Supabase project as sync, so its URL can be
+   worked out rather than asked for. */
+function guessFnUrl(){
+  const base=(sync.url||'').replace(/\/+$/,'');
+  return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(base)?base+'/functions/v1/notify':'';
+}
 async function diagPush(){
   const el=$('#pushdiag');if(!el)return;
   const bits=[];
@@ -897,6 +911,28 @@ async function testChainPush(){
     $('#pushdiag').innerHTML='<div class="warn">Could not reach the function. Check the URL, and that it was deployed with --no-verify-jwt.</div>';
   }
 }
+/* A VAPID key pair is just a P-256 key pair, which the browser can make. Doing
+   it here means no terminal is needed: the public half lands in the field, and
+   the private half is shown once to be pasted into Supabase. */
+const b64url=u8=>btoa(String.fromCharCode(...u8)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+async function genVapid(){
+  try{
+    const kp=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+    const raw=new Uint8Array(await crypto.subtle.exportKey('raw',kp.publicKey));
+    const jwk=await crypto.subtle.exportKey('jwk',kp.privateKey);
+    $('#pushkey').value=b64url(raw);
+    $('#pushpriv').value=jwk.d;
+    $('#pushsecret').style.display='';
+    sync.pushKey=b64url(raw);await saveSyncCfg();
+    diagPush();
+    toast('Key pair made — copy the private half into Supabase');
+  }catch(e){toast('This browser cannot make keys here.');}
+}
+$('#pushgen').addEventListener('click',genVapid);
+$('#pushprivcopy').addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText($('#pushpriv').value);toast('Private key copied');}
+  catch(e){toast('Copy blocked. Select the text and copy by hand.');}
+});
 $('#pushtest').addEventListener('click',testLocalPush);
 $('#pushsend').addEventListener('click',testChainPush);
 async function enablePush(){
