@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.10.0">
+<meta name="app-version" content="1.11.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -304,6 +304,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <header id="head">
       <div class="hrow">
         <h1><span class="sub" id="eyebrow">Today</span><span class="nm" id="title">Today</span></h1>
+        <button class="iconbtn" id="calBtn" aria-label="Open the calendar"><svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.5A2.5 2.5 0 0 1 21 6.5v12A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4H6V3a1 1 0 0 1 1-1ZM5 9v9.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V9H5Zm2.5 2h3v3h-3v-3Z"/></svg></button>
         <button class="iconbtn" id="syncBtn" aria-label="Sync"><svg viewBox="0 0 24 24"><path d="M6.5 19A5.5 5.5 0 0 1 5.7 8.06a6.5 6.5 0 0 1 12.34 1.6A4.5 4.5 0 0 1 17.5 19h-11Z"/></svg></button>
         <div style="position:relative">
           <button class="iconbtn" id="moreBtn" aria-label="More"><svg viewBox="0 0 20 20"><circle cx="4" cy="10" r="1.8"/><circle cx="10" cy="10" r="1.8"/><circle cx="16" cy="10" r="1.8"/></svg></button>
@@ -455,11 +456,17 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="trackhead" style="padding-top:14px"><span>Reminders</span><span id="pushstate" class="got"></span></div>
   <div class="fgroup" style="margin-top:0">
     <div class="field"><label for="pushkey">Public key</label><input id="pushkey" class="mono" placeholder="VAPID public key" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label for="pushurl">Function URL</label><input id="pushurl" class="mono" placeholder="https://….functions.supabase.co/notify" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   </div>
-  <div style="padding:10px 14px 0;display:flex;gap:10px">
+  <div style="padding:10px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn sec" id="pushoff" style="flex:1;margin:0;text-align:center">Turn off</button>
     <button class="btn" id="pushon" style="flex:1;margin:0;text-align:center">Turn on reminders</button>
   </div>
+  <div style="padding:8px 14px 0;display:flex;gap:8px">
+    <button class="btn sec" id="pushtest" style="flex:1;margin:0;text-align:center;font-size:14px">Test this device</button>
+    <button class="btn sec" id="pushsend" style="flex:1;margin:0;text-align:center;font-size:14px">Test the whole chain</button>
+  </div>
+  <div id="pushdiag" class="tracklink" style="padding-top:10px"></div>
   <div class="blurb" style="padding-top:8px">A push needs a server to send it, so this needs the notify
   function deployed and its key pasted above — see notify/README.md in the repo. On iPhone the app has to be
   on your Home Screen first; Safari will not grant notifications to a tab.</div>
@@ -692,7 +699,7 @@ let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
 let sortBy='smart',groupBy='auto';
-let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:''};
+let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:'',pushUrl:''};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
    the last one really was. */
 function fmtAgo(ts){
@@ -831,10 +838,67 @@ const b64ToBytes=b=>{
   return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
 };
 function renderPush(){
-  $('#pushkey').value=sync.pushKey||'';
+  $('#pushkey').value=sync.pushKey||'';$('#pushurl').value=sync.pushUrl||'';
   $('#pushstate').textContent=!('PushManager'in window)?'not supported here'
     :sync.push?'on for this device':'off';
+  diagPush();
 }
+/* Reminders cross four things that can each fail on their own: permission, this
+   device's subscription, the row in Supabase, and the function that sends. Say
+   which of them is actually in place rather than leaving it to be guessed. */
+async function diagPush(){
+  const el=$('#pushdiag');if(!el)return;
+  const bits=[];
+  const perm=(window.Notification&&Notification.permission)||'unsupported';
+  bits.push(perm==='granted'?'✓ notifications allowed'
+    :perm==='denied'?'✗ notifications blocked — allow them in Settings'
+    :'· notifications not asked for yet');
+  let sub=null;
+  try{sub=await (await navigator.serviceWorker.ready).pushManager.getSubscription();}catch(e){}
+  bits.push(sub?'✓ this device is subscribed':'✗ this device is not subscribed');
+  bits.push(sync.pushKey?'✓ key set':'✗ no public key');
+  bits.push(sync.pushUrl?'✓ function URL set':'· no function URL (needed only for the chain test)');
+  el.innerHTML=bits.map(b=>`<div class="${b[0]==='✗'?'warn':'auto'}" style="width:100%">${esc(b)}</div>`).join('');
+}
+/* Half the chain runs on this phone. Showing a notification locally proves
+   permission, the service worker and display all work, without a server. */
+async function testLocalPush(){
+  if(!('Notification'in window))return toast('This browser has no notifications.');
+  let perm=Notification.permission;
+  if(perm!=='granted'){try{perm=await Notification.requestPermission();}catch(e){}}
+  if(perm!=='granted'){diagPush();return toast('Notifications are not allowed. On iPhone, add the app to your Home Screen first.');}
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    await reg.showNotification('Shipshape test',{body:'If you can see this, this device can show reminders.',
+      tag:'shipshape-test',icon:'./icon-192.png',badge:'./favicon-32.png'});
+    toast('Sent to this device');
+  }catch(e){toast('Could not show a notification here.');}
+  diagPush();
+}
+/* The other half is the server. Calling the function reports what it found and
+   how many devices it reached, which is the only way to tell "nothing was due"
+   apart from "nothing was delivered". */
+async function testChainPush(){
+  const url=$('#pushurl').value.trim();
+  if(!url)return toast('Paste the function URL first — see notify/README.md.');
+  sync.pushUrl=url;await saveSyncCfg();
+  $('#pushdiag').innerHTML='<div class="auto">Calling the function…</div>';
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const txt=await r.text();
+    let j=null;try{j=JSON.parse(txt);}catch(e){}
+    if(!r.ok){$('#pushdiag').innerHTML=`<div class="warn">The function answered ${r.status}. ${esc(txt.slice(0,120))}</div>`;return;}
+    const lines=[`✓ function answered: ${esc(txt.slice(0,120))}`];
+    if(j&&j.sent>0)lines.push('✓ it pushed to '+j.sent+' device'+(j.sent===1?'':'s')+' — one should arrive now');
+    else if(j&&j.workspaces===0)lines.push('· nothing is due today, so nothing was sent. Give something today\u2019s date and try again');
+    else if(j)lines.push('✗ it found work due but reached no device. Turn reminders on, then try again');
+    $('#pushdiag').innerHTML=lines.map(l=>`<div class="${l[0]==='✗'?'warn':'auto'}" style="width:100%">${l}</div>`).join('');
+  }catch(e){
+    $('#pushdiag').innerHTML='<div class="warn">Could not reach the function. Check the URL, and that it was deployed with --no-verify-jwt.</div>';
+  }
+}
+$('#pushtest').addEventListener('click',testLocalPush);
+$('#pushsend').addEventListener('click',testChainPush);
 async function enablePush(){
   if(!('serviceWorker'in navigator)||!('PushManager'in window))
     return toast('This browser cannot receive push notifications.');
@@ -1167,7 +1231,9 @@ function bucket(t){
 }
 
 /* ============ render ============ */
-function render(){renderNav();renderHead();renderList();renderData();}
+function render(){renderNav();renderHead();renderList();renderData();
+  // the calendar only means anything where the list is organised by date
+  $('#calBtn').style.display=(view.t==='today'||view.t==='scheduled')?'':'none';}
 function renderData(){
   $('#l-mfr').innerHTML=uniq('manufacturer').map(v=>`<option value="${esc(v)}">`).join('');
   $('#l-dest').innerHTML=uniq('destination').map(v=>`<option value="${esc(v)}">`).join('');
@@ -1894,6 +1960,7 @@ function renderCalendar(){
   }
   $('#calgrid').innerHTML=h;
 }
+$('#calBtn').addEventListener('click',()=>{openCalendar();buzz(4);});
 $('#calprev').addEventListener('click',()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()-1);calMonth=d;renderCalendar();});
 $('#calnext').addEventListener('click',()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()+1);calMonth=d;renderCalendar();});
 $('#caltoday').addEventListener('click',()=>{calMonth=midnight();renderCalendar();});
