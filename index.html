@@ -491,6 +491,51 @@ revoke all on function shipshape_pull(text) from public;
 revoke all on function shipshape_push(text, jsonb) from public;
 grant execute on function shipshape_pull(text) to anon;
 grant execute on function shipshape_push(text, jsonb) to anon;</pre>
+  </div></details>
+  <details><summary>Optional: sync item by item</summary><div class="body">
+    <p style="margin:0 0 8px">Without this, each device sends its whole list on every change, and a
+    device that has not caught up can overwrite a change made elsewhere. Run this and the app
+    switches by itself to sending only what changed. It keeps working if you never run it.</p>
+    <button class="btn sec" id="sqlcopy2" style="margin:4px 0 8px;font-size:14px;padding:8px 14px">Copy the SQL</button>
+    <pre id="sql2">create table if not exists shipshape_items (
+  ws         text   not null,
+  id         text   not null,
+  kind       text   not null,
+  data       jsonb,
+  u          bigint not null,
+  updated_at timestamptz not null default now(),
+  primary key (ws, id)
+);
+
+alter table shipshape_items enable row level security;
+-- no policies: the anon key alone cannot read or list this table
+
+create or replace function shipshape_pull_items(k text, since bigint)
+returns table (id text, kind text, data jsonb, u bigint)
+language sql security definer as $$
+  select id, kind, data, u from shipshape_items where ws = k and u > since;
+$$;
+
+create or replace function shipshape_push_items(k text, items jsonb)
+returns bigint language plpgsql security definer as $$
+declare it jsonb;
+begin
+  for it in select * from jsonb_array_elements(items) loop
+    insert into shipshape_items (ws, id, kind, data, u, updated_at)
+    values (k, it->>'id', it->>'kind',
+            case when coalesce((it->>'deleted')::boolean, false) then null else it->'data' end,
+            (it->>'u')::bigint, now())
+    on conflict (ws, id) do update
+      set data = excluded.data, kind = excluded.kind, u = excluded.u, updated_at = now()
+      where shipshape_items.u &lt;= excluded.u;
+  end loop;
+  return (extract(epoch from now()) * 1000)::bigint;
+end $$;
+
+revoke all on function shipshape_pull_items(text, bigint) from public;
+revoke all on function shipshape_push_items(text, jsonb) from public;
+grant execute on function shipshape_pull_items(text, bigint) to anon;
+grant execute on function shipshape_push_items(text, jsonb) to anon;</pre>
     <p style="margin:12px 0 0">Your workspace key is the password. Anyone who has it, plus the page, can read and edit your list. Keep it out of shared docs, and use the Generate button rather than a word you would guess.</p>
   </div></details>
   <div style="height:8px"></div>
@@ -604,7 +649,7 @@ let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
 let sortBy='smart',groupBy='auto';
-let sync={url:'',key:'',ws:'',on:false,last:0};
+let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
    the last one really was. */
 function fmtAgo(ts){
@@ -729,22 +774,97 @@ function schedulePush(){
   clearTimeout(pushT);
   pushT=setTimeout(push,900);
 }
+/* ============ per-item sync ============
+   The original scheme sends the whole document every time, so a device holding
+   a stale copy can overwrite a change made elsewhere. Sending only what changed
+   removes that. It needs two extra functions in Supabase, so the app probes for
+   them once and keeps using the document scheme when they are absent — nothing
+   breaks if the optional SQL is never run.
+
+   Clocks on two devices are never exactly equal, so the pull cursor is rewound
+   by a grace window rather than trusting it to the millisecond. */
+const ITEM_GRACE=5*60*1000;
+const KINDS={task:'tasks',project:'projects',maker:'makers'};
+function itemsSince(ts){
+  const out=[];
+  for(const [kind,key] of Object.entries(KINDS))
+    for(const x of S[key]||[])
+      if((x.u||0)>ts)out.push({id:x.id,kind,u:x.u||now(),data:x});
+  for(const [id,at] of Object.entries(S.tomb||{}))
+    if(at>ts)out.push({id,kind:'task',u:at,deleted:true});
+  return out;
+}
+async function probeItemMode(){
+  if(sync.mode==='items'||sync.mode==='doc')return sync.mode;
+  try{
+    await rpc('shipshape_pull_items',{k:sync.ws,since:0});
+    sync.mode='items';
+  }catch(e){
+    // PostgREST answers 404 for a function that does not exist; anything else is
+    // a real failure and should not silently downgrade the mode
+    sync.mode=/HTTP 404/.test(String(e&&e.message))?'doc':null;
+    if(!sync.mode)throw e;
+  }
+  saveSyncCfg();
+  return sync.mode;
+}
 async function push(){
   if(!sync.on)return;
   setSync('syncing');
-  try{await rpc('shipshape_push',{k:sync.ws,d:payload()});setSync('idle');}
-  catch(e){setSync('error');}
+  try{
+    const mode=await probeItemMode();
+    if(mode==='items'){
+      const batch=itemsSince(sync.pushed||0);
+      if(batch.length)await rpc('shipshape_push_items',{k:sync.ws,items:batch});
+      sync.pushed=Math.max(sync.pushed||0,...batch.map(x=>x.u),now()-1);
+    }else{
+      await rpc('shipshape_push',{k:sync.ws,d:payload()});
+    }
+    setSync('idle');
+  }catch(e){setSync('error');}
 }
 async function pull(quiet){
   if(!sync.on||pulling)return;
   if(sheetOpen()&&quiet)return;
   pulling=true;setSync('syncing');
   try{
-    const remote=await rpc('shipshape_pull',{k:sync.ws});
-    if(remote&&mergeIn(remote)){saveLocal();render();}
+    const mode=await probeItemMode();
+    let changed=false;
+    if(mode==='items'){
+      const since=Math.max(0,(sync.pulled||0)-ITEM_GRACE);
+      const rows=await rpc('shipshape_pull_items',{k:sync.ws,since})||[];
+      changed=mergeItems(rows);
+      sync.pulled=rows.reduce((m,r)=>Math.max(m,+r.u||0),sync.pulled||0);
+      if(rows.length)saveSyncCfg();
+    }else{
+      const remote=await rpc('shipshape_pull',{k:sync.ws});
+      changed=!!(remote&&mergeIn(remote));
+    }
+    if(changed){saveLocal();render();}
     setSync('idle');
   }catch(e){setSync('error');if(!quiet)toast('Could not reach Supabase. Check the URL and key.');}
   finally{pulling=false;}
+}
+/* One row per record, so a delete is a row with no data rather than a tombstone
+   map. Same last-write-wins rule as the document merge, applied per record. */
+function mergeItems(rows){
+  let changed=false;
+  for(const r of rows){
+    const key=KINDS[r.kind]||'tasks',list=S[key]=S[key]||[];
+    const u=+r.u||0;
+    if(!r.data){                                  // deleted elsewhere
+      if(!S.tomb[r.id]||S.tomb[r.id]<u){S.tomb[r.id]=u;changed=true;}
+      const i=list.findIndex(x=>x.id===r.id);
+      if(i>=0&&(list[i].u||0)<=u){list.splice(i,1);changed=true;}
+      continue;
+    }
+    if(S.tomb[r.id]&&S.tomb[r.id]>=u)continue;    // deleted here, and more recently
+    const cur=list.find(x=>x.id===r.id);
+    if(!cur){list.push(r.data);changed=true;}
+    else if(u>(cur.u||0)){Object.assign(cur,r.data);changed=true;}
+  }
+  if(changed){S.started=true;sanitizeColors();}
+  return changed;
 }
 function mergeList(localArr,remoteArr){
   let changed=false;
@@ -1806,22 +1926,29 @@ $('#spaste').addEventListener('click',async()=>{
   }catch(e){toast('No settings found on the clipboard.');}
 });
 $('#son').addEventListener('click',async()=>{
+  const prevWs=sync.ws;
   readSyncFields();
   if(!sync.url||!sync.key||!sync.ws){toast('Fill in all three fields first.');return;}
+  if(sync.ws!==prevWs){sync.mode=null;sync.pushed=0;sync.pulled=0;}   // a new workspace re-probes
   sync.on=true;await saveSyncCfg();
   setSync('syncing');
   try{
-    const remote=await rpc('shipshape_pull',{k:sync.ws});
-    if(remote)mergeIn(remote);
-    await rpc('shipshape_push',{k:sync.ws,d:payload()});
-    saveLocal();render();setSync('idle');startPolling();
+    await pull(true);                       // detects which scheme the project supports
+    if(syncStatus==='error')throw new Error('pull failed');
+    await push();
+    if(syncStatus==='error')throw new Error('push failed');
+    saveLocal();render();startPolling();
     toast('Sync is on');renderSyncSheet();
   }catch(e){
     setSync('error');toast('Could not connect. Check the URL, key, and that the SQL ran.');
   }
 });
 $('#soff').addEventListener('click',async()=>{
-  sync.on=false;await saveSyncCfg();clearInterval(pollT);setSync('off');renderSyncSheet();toast('Sync turned off');
+  sync.on=false;sync.mode=null;sync.pushed=0;sync.pulled=0;await saveSyncCfg();clearInterval(pollT);setSync('off');renderSyncSheet();toast('Sync turned off');
+});
+$('#sqlcopy2').addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText($('#sql2').textContent);toast('SQL copied');}
+  catch(e){toast('Copy blocked. Select the text and copy by hand.');}
 });
 $('#sqlcopy').addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText($('#sql').textContent);toast('SQL copied');}
