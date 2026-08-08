@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.9.0">
+<meta name="app-version" content="1.9.1">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -677,6 +677,9 @@ async function loadAll(){
   migrate();
   const sr=await local.get(SKEY);
   if(sr){try{sync=Object.assign(sync,JSON.parse(sr));}catch(e){}}
+  // "doc" only means the optional functions were missing last time. They can be
+  // added later, so re-check once per session rather than deciding forever.
+  if(sync.mode==='doc')sync.mode=null;
   const vr=await local.get(VKEY);
   if(vr){try{const v=JSON.parse(vr);
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
@@ -746,7 +749,7 @@ const VKEY='shipshape:view';
 async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
-let lastCfgWrite=0;
+let lastCfgWrite=0,probing=false;
 function setSync(s){
   syncStatus=s;
   if(s==='idle'){
@@ -796,6 +799,7 @@ function itemsSince(ts){
 }
 async function probeItemMode(){
   if(sync.mode==='items'||sync.mode==='doc')return sync.mode;
+  probing=true;
   try{
     await rpc('shipshape_pull_items',{k:sync.ws,since:0});
     sync.mode='items';
@@ -805,7 +809,8 @@ async function probeItemMode(){
     sync.mode=/HTTP 404/.test(String(e&&e.message))?'doc':null;
     if(!sync.mode)throw e;
   }
-  saveSyncCfg();
+  probing=false;saveSyncCfg();
+  if($('#ssheet').classList.contains('on'))renderSyncSheet();
   return sync.mode;
 }
 async function push(){
@@ -1738,12 +1743,21 @@ function saveProject(){
 function renderSyncSheet(){
   const msgs={off:'Off. Everything stays on this device.',
     idle:`On. Last sync ${fmtAgo(sync.last)}.`,syncing:'Syncing…',error:'Cannot reach Supabase. Check the URL, key and workspace.'};
-  $('#sstatus').textContent=sync.on?msgs[syncStatus]||msgs.idle:msgs.off;
+  const how=!sync.on?''
+    :sync.mode==='items'?' Sending only what changed.'
+    :sync.mode==='doc'?' Sending the whole list each time — run the optional SQL below to change that.'
+    :probing?' Checking which scheme this project supports…':'';
+  $('#sstatus').textContent=(sync.on?msgs[syncStatus]||msgs.idle:msgs.off)+how;
   $('#surl').value=sync.url;$('#skey').value=sync.key;$('#sws').value=sync.ws;
   $('#soff').style.display=sync.on?'':'none';
   $('#son').textContent=sync.on?'Sync now':'Turn on sync';
 }
-function openSync(){renderSyncSheet();rememberFocus();$('#scrim').classList.add('on');$('#ssheet').classList.add('on');}
+function openSync(){
+  // Looking at this sheet is how you ask "did the optional SQL take effect", so
+  // re-check right here rather than making you reload. Called before the sheet
+  // is marked open, since a quiet pull skips itself while a sheet is up.
+  if(sync.on&&sync.mode==='doc'){sync.mode=null;pull(true);}
+  renderSyncSheet();rememberFocus();$('#scrim').classList.add('on');$('#ssheet').classList.add('on');}
 function readSyncFields(){
   sync.url=$('#surl').value.trim();sync.key=$('#skey').value.trim();sync.ws=$('#sws').value.trim();
 }
