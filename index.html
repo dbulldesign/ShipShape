@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.4.0">
+<meta name="app-version" content="1.5.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -207,6 +207,12 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tracklink a{color:var(--blue);font-weight:600;text-decoration:none}
 .tracklink .warn{color:var(--label2)}
 .tracklink .auto{color:var(--label3);font-size:12.5px}
+.stamps{padding:4px 14px 12px;background:var(--card2);font-size:13px}
+.stamps .warn{color:var(--label3)}
+.stamp{display:flex;align-items:center;gap:8px;padding:3px 0;color:var(--label2)}
+.stamp i{width:7px;height:7px;border-radius:2px;flex:none}
+.stamp b{font-weight:600;color:var(--label);min-width:74px}
+.stamp em{font-style:normal;color:var(--label3);margin-left:auto}
 .field textarea{text-align:left;resize:vertical;height:64px;font-size:15px}
 .field input.mono{font-family:var(--mono);font-size:13px}
 .fgroup{border-radius:12px;overflow:hidden;margin:12px 14px}
@@ -305,7 +311,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 <button id="fab" aria-label="New task"><svg viewBox="0 0 24 24"><path d="M12 4a1.3 1.3 0 0 1 1.3 1.3v5.4h5.4a1.3 1.3 0 0 1 0 2.6h-5.4v5.4a1.3 1.3 0 0 1-2.6 0v-5.4H5.3a1.3 1.3 0 0 1 0-2.6h5.4V5.3A1.3 1.3 0 0 1 12 4Z"/></svg></button>
 <div id="scrim"></div>
 
-<div class="sheet" id="composer"><div class="grab"></div><div class="pad">
+<div class="sheet" role="dialog" aria-modal="true" id="composer"><div class="grab"></div><div class="pad">
   <div class="seg" id="ctype"><button data-t="task" class="on">Task</button><button data-t="shipment">Shipment</button></div>
   <div class="preview" id="prev"></div>
   <textarea id="ci" rows="2" placeholder="Approve shop drawings #Harbor Lofts fri"></textarea>
@@ -323,7 +329,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   </div>
 </div></div>
 
-<div class="sheet" id="detail"><div class="grab"></div>
+<div class="sheet" role="dialog" aria-modal="true" id="detail"><div class="grab"></div>
   <div class="sheettitle"><span id="dkind">Task</span><button class="x" id="dclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div style="padding:12px 14px 0"><div class="seg" id="dtype"><button data-t="task">Task</button><button data-t="shipment">Shipment</button></div></div>
   <div class="stages" id="dstages"></div>
@@ -336,17 +342,20 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="fgroup" id="shipfields">
     <div class="field"><label for="dmfr">Maker</label><input id="dmfr" list="l-mfr" placeholder="None"></div>
     <div class="field"><label for="ddest">Ship to</label><input id="ddest" list="l-dest" placeholder="None"></div>
+    <div class="field"><label for="dqty">Quantity</label><input id="dqty" type="number" min="0" step="1" inputmode="numeric" placeholder="None"></div>
+    <div class="field"><label for="deta">Expected</label><input id="deta" type="date"></div>
     <div class="field"><label for="dpo">PO number</label><input id="dpo" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
     <div class="field"><label for="dtrack">Tracking</label><input id="dtrack" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false">
       <button class="iconbtn scanbtn" id="dscan" aria-label="Scan a shipping label"><svg viewBox="0 0 20 20"><path d="M2.6 2.6h4.2v1.8H4.4v2.4H2.6V2.6Zm10.6 0h4.2v4.2h-1.8V4.4h-2.4V2.6ZM2.6 13.2h1.8v2.4h2.4v1.8H2.6v-4.2Zm14.8 0v4.2h-4.2v-1.8h2.4v-2.4h1.8ZM5.6 6.4h1.5v7.2H5.6V6.4Zm2.6 0h1v7.2h-1V6.4Zm2 0h1.5v7.2h-1.5V6.4Zm2.6 0h1.6v7.2h-1.6V6.4Z"/></svg></button></div>
     <div class="field"><label for="dcarrier">Carrier</label><select id="dcarrier"></select></div>
     <div id="dtracklink" class="tracklink"></div>
+    <div id="dstamps" class="stamps"></div>
   </div>
   <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="dnotes">Notes</label><textarea id="dnotes" placeholder="Order numbers, contacts, next steps…"></textarea></div></div>
   <button class="danger" id="ddel">Delete</button>
 </div>
 
-<div class="sheet" id="psheet"><div class="grab"></div>
+<div class="sheet" role="dialog" aria-modal="true" id="psheet"><div class="grab"></div>
   <div class="sheettitle"><span id="ptitle">New project</span><button class="x" id="pclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="swatches" id="pswatches"></div>
   <div class="fgroup">
@@ -360,7 +369,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <button class="btn" id="psave" style="flex:1;margin:0;text-align:center">Save</button></div>
 </div>
 
-<div class="sheet" id="ssheet"><div class="grab"></div>
+<div class="sheet" role="dialog" aria-modal="true" id="ssheet"><div class="grab"></div>
   <div class="sheettitle">Sync<button class="x" id="sclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="blurb" id="sstatus">Off. Paste your Supabase details below to keep every device in step.</div>
   <div class="fgroup">
@@ -423,7 +432,7 @@ grant execute on function shipshape_push(text, jsonb) to anon;</pre>
 
 <datalist id="l-mfr"></datalist><datalist id="l-dest"></datalist>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
-<div id="toast"><span id="tmsg"></span><button id="tundo" hidden>Undo</button></div>
+<div id="toast" role="status" aria-live="polite"><span id="tmsg"></span><button id="tundo" hidden>Undo</button></div>
 
 <div id="scanner">
   <video id="scanvid" playsinline muted autoplay></video>
@@ -513,7 +522,17 @@ function trackInfo(t){
   return {number:n,carrier:c,auto:!picked,guess:!picked&&!!c.guess,url:c.url(encodeURIComponent(n))};
 }
 let S={v:3,projects:[],tasks:[],tomb:{},started:false};
-let sync={url:'',key:'',ws:'',on:false};
+let sync={url:'',key:'',ws:'',on:false,last:0};
+/* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
+   the last one really was. */
+function fmtAgo(ts){
+  if(!ts)return 'never';
+  const s=Math.max(0,Math.round((Date.now()-ts)/1000));
+  if(s<45)return 'just now';
+  if(s<5400)return `${Math.round(s/60)} min ago`;
+  if(s<86400)return `${Math.round(s/3600)} h ago`;
+  return `${Math.round(s/86400)} d ago`;
+}
 let view={t:'today'},query='',selDay=null,editing=null,editProj=null,attachTo=null,
     cflag=false,ctype='task',ctypeManual=false,undoFn=null,saveT=null,pcolor=PAL[0],ctx=null,
     syncStatus='off',pulling=false,pushT=null,pollT=null;
@@ -546,7 +565,7 @@ function migrate(){
   S.v=3;
   for(const t of S.tasks){
     t.type=t.type||'task';t.tracking=t.tracking||'';t.stage=t.stage||0;t.u=t.u||t.created||now();
-    t.po=t.po||'';t.carrier=t.carrier||'';
+    t.po=t.po||'';t.carrier=t.carrier||'';t.qty=t.qty||null;t.eta=t.eta||null;t.stamps=t.stamps||{};
     delete t.assignee;
   }
   for(const p of S.projects){p.u=p.u||now();delete p.lead;}
@@ -570,8 +589,14 @@ function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
+let lastCfgWrite=0;
 function setSync(s){
   syncStatus=s;
+  if(s==='idle'){
+    sync.last=Date.now();
+    // persist at most once a minute: every edit triggers a push
+    if(Date.now()-lastCfgWrite>60000){lastCfgWrite=Date.now();saveSyncCfg();}
+  }
   $('#syncBtn').className='iconbtn '+(sync.on?s:'off');
   if($('#ssheet').classList.contains('on'))renderSyncSheet();
 }
@@ -825,7 +850,10 @@ function rowHTML(t){
   if(p&&view.t!=='project')chips.push(`<span class="chip"><i style="background:${p.color}"></i>${esc(p.name)}</span>`);
   if(t.manufacturer)chips.push(`<span class="chip">${esc(t.manufacturer)}</span>`);
   if(t.destination)chips.push(`<span class="chip">→ ${esc(t.destination)}</span>`);
+  if(t.qty)chips.push(`<span class="chip">×${t.qty}</span>`);
   if(t.po)chips.push(`<span class="chip">${/^p\.?o\b/i.test(t.po.trim())?'':'PO '}${esc(t.po)}</span>`);
+  // an expected arrival later than the promised date is the thing worth seeing
+  if(t.eta&&!t.done)chips.push(`<span class="chip"${t.due&&t.eta>t.due?' style="color:var(--red)"':''}>ETA ${fmtDue(t.eta)}${t.due&&t.eta>t.due?' · late':''}</span>`);
   if(t.tracking){const i=trackInfo(t);
     chips.push(i.url
       ? `<a class="chip track" href="${i.url}" target="_blank" rel="noopener noreferrer" data-noopen="1">${esc(i.carrier.name)} ↗</a>`
@@ -880,7 +908,7 @@ function emptyHTML(){
       <p>Make a project for each job, then track what needs doing and what is being made and shipped.</p>
       <div><button class="btn" data-m="newproj">New project</button></div>
       <div><button class="btn ghost" data-m="sample">Load a sample setup</button></div></div>`;
-  const m={today:['☕️','Nothing due today','Check Scheduled to see what is coming.'],
+  const m={today:['☕️','Nothing due today','Anything without a date sits in All. Scheduled shows what is coming.'],
     scheduled:['🗓','No dates set','Add a due date and it lands here.'],
     flagged:['🚩','Nothing flagged','Flag anything you want to keep close.'],
     done:['✨','Nothing completed yet','Finished work collects here.'],
@@ -994,7 +1022,7 @@ function toggleDone(id,el){
     t.completed=now();
     // completing a shipment marks it Delivered, but remember where it was so
     // un-ticking the box puts it back instead of stranding it on Delivered
-    if(t.type==='shipment'&&t.stage<4){t.stage0=t.stage;t.stage=4;}
+    if(t.type==='shipment'&&t.stage<4){t.stage0=t.stage;t.stage=4;stampStage(t,4);}
   }else{
     t.completed=null;
     // only rewind if nothing has touched the stage since; a stage picked by hand
@@ -1011,10 +1039,27 @@ function toggleDone(id,el){
   },t.done?280:0);
   if(t.done)toast('Completed',()=>{t.done=false;t.completed=null;t.stage=wasStage;t.u=now();save();render();});
 }
+/* Stage history. Each stage records when it was first reached, so a shipment can
+   answer "when did this ship" and how long it sat at each step. */
+function stampStage(t,stage){
+  if(t.type!=='shipment')return;
+  t.stamps=t.stamps||{};
+  if(!t.stamps[stage])t.stamps[stage]=now();
+}
+function stampsHTML(t){
+  const s=t.stamps||{};
+  const rows=STAGES.map((name,i)=>s[i]?{name,at:s[i],i}:null).filter(Boolean).sort((a,b)=>a.at-b.at);
+  if(!rows.length)return '<span class="warn">No stage history yet.</span>';
+  return rows.map((r,n)=>{
+    const gap=n?Math.round((r.at-rows[n-1].at)/864e5):null;
+    return `<div class="stamp"><i style="background:${SC[r.i]}"></i><b>${esc(r.name)}</b>
+      <span>${fmtDue(iso(new Date(r.at)))}</span>${gap!==null?`<em>+${gap}d</em>`:''}</div>`;
+  }).join('');
+}
 function bumpStage(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
   const prev=t.stage,prevDone=t.done;
-  t.stage=(t.stage+1)%5;t.u=now();
+  t.stage=(t.stage+1)%5;t.u=now();stampStage(t,t.stage);
   if(t.stage===4){t.done=true;t.completed=now();}else if(prevDone){t.done=false;t.completed=null;}
   buzz();save();render();
   toast(`${STAGES[prev]} → ${STAGES[t.stage]}`,()=>{t.stage=prev;t.done=prevDone;t.u=now();save();render();});
@@ -1048,7 +1093,7 @@ function setType(t){
     :'Approve shop drawings #Harbor Lofts fri';
 }
 function openComposer(){
-  $('#scrim').classList.add('on');$('#composer').classList.add('on');
+  rememberFocus();$('#scrim').classList.add('on');$('#composer').classList.add('on');
   cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;
   ctx=composerCtx();setType(ctx.type);
   $('#ci').value='';$('#ctrack').value='';$('#cpo').value='';
@@ -1082,10 +1127,33 @@ function composed(){
 }
 function closeSheets(){
   if(editing)saveDetail();
+  // drop focus from inside the sheet first: hiding a focused field makes the
+  // browser reset focus to the body, which would undo the restore below
+  const a=document.activeElement;
+  if(a&&a.closest&&a.closest('.sheet'))a.blur();
   $('#scrim').classList.remove('on');
   $$('.sheet').forEach(s=>s.classList.remove('on'));
   editing=null;editProj=null;
+  if(lastFocus&&document.contains(lastFocus)){lastFocus.focus();lastFocus=null;}
 }
+/* Keyboard users could tab out of an open sheet into the list behind it. Keep
+   focus inside the sheet while it is up, and give it back on close. */
+let lastFocus=null;
+const openSheet=()=>$$('.sheet.on')[0]||null;
+function rememberFocus(){
+  const a=document.activeElement;
+  if(a&&a!==document.body&&!a.closest('.sheet'))lastFocus=a;
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Tab')return;
+  const sheet=openSheet();if(!sheet)return;
+  const f=[...sheet.querySelectorAll('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+    .filter(el=>el.offsetParent!==null);
+  if(!f.length)return;
+  const first=f[0],last=f[f.length-1];
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+},true);
 function updatePreview(){
   const p=composed();
   if(!ctypeManual){const want=(p.manufacturer||p.destination||p.tracking||(ctx&&ctx.type==='shipment'))?'shipment':'task';if(want!==ctype)setType(want);}
@@ -1132,14 +1200,15 @@ function openDetail(id){
   $('#dtitle').value=t.title;$('#ddue').value=t.due||'';
   $('#dflag').checked=t.flagged;$('#dnotes').value=t.notes||'';
   $('#dmfr').value=t.manufacturer||'';$('#ddest').value=t.destination||'';$('#dtrack').value=t.tracking||'';
-  $('#dpo').value=t.po||'';
+  $('#dpo').value=t.po||'';$('#dqty').value=t.qty||'';$('#deta').value=t.eta||'';
+  $('#dstamps').innerHTML=stampsHTML(t);
   $('#dcarrier').innerHTML=carrierOptions(t.carrier);
   renderTrackLink(t);
   $('#dproj').innerHTML='<option value="">No project</option>'
     +S.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
     +'<option value="__new">New project…</option>';
   $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
-  $('#scrim').classList.add('on');$('#detail').classList.add('on');
+  rememberFocus();$('#scrim').classList.add('on');$('#detail').classList.add('on');
 }
 /* ============ label scanning ============
    Safari has no BarcodeDetector, so the ZXing decoder is vendored and pulled in
@@ -1287,6 +1356,8 @@ function saveDetail(){
   t.flagged=$('#dflag').checked;t.notes=$('#dnotes').value;
   t.manufacturer=$('#dmfr').value.trim();t.destination=$('#ddest').value.trim();t.tracking=$('#dtrack').value.trim();
   t.po=$('#dpo').value.trim();t.carrier=$('#dcarrier').value;
+  const q=parseInt($('#dqty').value,10);t.qty=Number.isFinite(q)&&q>0?q:null;
+  t.eta=$('#deta').value||null;
   const pv=$('#dproj').value;
   if(pv!=='__new')t.projectId=pv||null;
   t.u=now();save();render();
@@ -1302,7 +1373,7 @@ function openProject(id){
   $('#pname').value=p?p.name:'';$('#pclient').value=p?p.client||'':'';
   $('#pdue').value=p?p.due||'':'';$('#pnotes').value=p?p.notes||'':'';
   $('#pdel').style.display=p?'':'none';
-  $('#scrim').classList.add('on');$('#psheet').classList.add('on');
+  rememberFocus();$('#scrim').classList.add('on');$('#psheet').classList.add('on');
   if(!p)setTimeout(()=>$('#pname').focus(),300);
 }
 function saveProject(){
@@ -1320,13 +1391,13 @@ function saveProject(){
 /* ============ sync sheet ============ */
 function renderSyncSheet(){
   const msgs={off:'Off. Everything stays on this device.',
-    idle:'On. Last sync just now.',syncing:'Syncing…',error:'Cannot reach Supabase. Check the URL, key and workspace.'};
+    idle:`On. Last sync ${fmtAgo(sync.last)}.`,syncing:'Syncing…',error:'Cannot reach Supabase. Check the URL, key and workspace.'};
   $('#sstatus').textContent=sync.on?msgs[syncStatus]||msgs.idle:msgs.off;
   $('#surl').value=sync.url;$('#skey').value=sync.key;$('#sws').value=sync.ws;
   $('#soff').style.display=sync.on?'':'none';
   $('#son').textContent=sync.on?'Sync now':'Turn on sync';
 }
-function openSync(){renderSyncSheet();$('#scrim').classList.add('on');$('#ssheet').classList.add('on');}
+function openSync(){renderSyncSheet();rememberFocus();$('#scrim').classList.add('on');$('#ssheet').classList.add('on');}
 function readSyncFields(){
   sync.url=$('#surl').value.trim();sync.key=$('#skey').value.trim();sync.ws=$('#sws').value.trim();
 }
@@ -1438,8 +1509,8 @@ $('#dproj').addEventListener('change',e=>{
 });
 $('#dstages').addEventListener('click',e=>{
   const b=e.target.closest('[data-s]');if(!b||!editing)return;
-  const t=S.tasks.find(x=>x.id===editing);t.stage=+b.dataset.s;t.u=now();
-  if(t.stage===4){t.done=true;t.completed=now();}else{t.done=false;t.completed=null;}
+  const t=S.tasks.find(x=>x.id===editing);t.stage=+b.dataset.s;t.u=now();stampStage(t,t.stage);
+  if(t.stage===4){t.done=true;t.completed=now();}else{t.done=false;t.completed=null;t.stage0=null;}
   buzz();save();openDetail(editing);render();
 });
 $('#tundo').addEventListener('click',()=>{if(undoFn)undoFn();undoFn=null;$('#toast').classList.remove('on');});
@@ -1525,7 +1596,14 @@ document.addEventListener('keydown',e=>{
   const typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   if(e.key==='Escape'){
     if($('#scanner').classList.contains('on'))return closeScanner();
-    closeSheets();document.activeElement.blur();return;}
+    const a=document.activeElement;
+    closeSheets();
+    // Only drop focus from a field outside the sheets — the search box — to
+    // dismiss the keyboard. A sheet hands focus back to whatever opened it, and
+    // the composer closes itself on Escape first, so a blanket blur here would
+    // undo that restore.
+    if(a&&a.closest&&!a.closest('.sheet')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))a.blur();
+    return;}
   if(typing)return;
   if(e.key==='n'||((e.metaKey||e.ctrlKey)&&e.key==='k')){e.preventDefault();openComposer();}
   if(e.key==='p'){e.preventDefault();openProject(null);}
