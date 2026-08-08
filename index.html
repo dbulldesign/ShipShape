@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.12.0">
+<meta name="app-version" content="1.12.1">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -946,6 +946,18 @@ async function enablePush(){
   if(perm!=='granted')return toast('Notifications were not allowed. On iPhone, add the app to your Home Screen first.');
   try{
     const reg=await navigator.serviceWorker.ready;
+    // A subscription is bound to the key it was made with. Making a new key pair
+    // leaves the old subscription in place, and re-subscribing under a different
+    // key throws — so drop the stale one first rather than dead-ending.
+    const prev=await reg.pushManager.getSubscription();
+    if(prev){
+      const want=b64ToBytes(key),have=new Uint8Array(prev.options.applicationServerKey||[]);
+      const same=have.length===want.length&&want.every((b,i)=>b===have[i]);
+      if(!same){
+        try{await rpc('shipshape_push_unsub',{k:sync.ws,endpoint:prev.endpoint});}catch(e){}
+        await prev.unsubscribe();
+      }
+    }
     const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToBytes(key)});
     const j=sub.toJSON();
     await rpc('shipshape_push_sub',{k:sync.ws,endpoint:j.endpoint,keys:j.keys});
