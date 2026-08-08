@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.12.1">
+<meta name="app-version" content="1.12.2">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -883,8 +883,11 @@ async function testLocalPush(){
   if(perm!=='granted'){diagPush();return toast('Notifications are not allowed. On iPhone, add the app to your Home Screen first.');}
   try{
     const reg=await navigator.serviceWorker.ready;
+    // A fixed tag makes every test after the first *replace* the previous one,
+    // which iOS does silently — it lands in the list with no banner and looks
+    // like a failure. A unique tag makes each test alert properly.
     await reg.showNotification('Shipshape test',{body:'If you can see this, this device can show reminders.',
-      tag:'shipshape-test',icon:'./icon-192.png',badge:'./favicon-32.png'});
+      tag:'shipshape-test-'+Date.now(),icon:'./icon-192.png',badge:'./favicon-32.png'});
     toast('Sent to this device');
   }catch(e){toast('Could not show a notification here.');}
   diagPush();

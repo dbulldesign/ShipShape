@@ -75,7 +75,10 @@ Deno.serve(async () => {
           title: `${titles.length} due`,
           body,
           url: APP_URL,
-          tag: `due-${today()}`,        // one notification a day, replaced not stacked
+          // A repeat send under the same tag replaces the earlier one, and iOS
+          // does that silently — no banner. One tag a day suits the scheduled
+          // run; the clock time keeps hand-triggered tests alerting.
+          tag: `due-${today()}-${new Date().getHours()}${new Date().getMinutes()}`,
         }),
       );
       sent++;
