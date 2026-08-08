@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.6.0">
+<meta name="app-version" content="1.7.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -122,6 +122,11 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip i{width:6px;height:6px;border-radius:2px;flex:none}
 .chip.stage{transition:transform .18s var(--ease)}.chip.stage:active{transform:scale(.92)}
 .chip.track{color:var(--blue);text-decoration:none}
+.stagebar{display:inline-flex;align-items:center;gap:3px;padding:2px 6px 2px 3px;border-radius:6px;background:var(--fill2);
+  transition:transform .18s var(--ease)}
+.stagebar:active{transform:scale(.94)}
+.stagebar i{width:9px;height:4px;border-radius:2px;flex:none}
+.stagebar span{font-size:12px;font-weight:600;margin-left:4px}
 #scanner{position:fixed;inset:0;z-index:120;background:#000;display:none;flex-direction:column}
 #scanner.on{display:flex}
 #scanner video{flex:1;width:100%;object-fit:cover;background:#000}
@@ -220,6 +225,24 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trk .gotbtn.on{color:var(--green);font-weight:600}
 .trk .del{margin-left:auto;color:var(--red);font-size:13px}
 .trackadd{display:flex;gap:8px;padding:10px 14px 12px;background:var(--card2)}
+.calnav{display:flex;align-items:center;gap:10px;padding:8px 14px 4px;font-weight:700;font-size:17px}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px 10px 4px}
+.calgrid .wd{text-align:center;font-size:11px;font-weight:700;color:var(--label3);padding:2px 0}
+.calgrid .d{aspect-ratio:1;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;font-size:15px;background:var(--fill2)}
+.calgrid .d.blank{background:transparent}
+.calgrid .d.today{outline:2px solid var(--blue);outline-offset:-2px}
+.calgrid .d.sel{background:var(--blue);color:#fff}
+.calgrid .d .n{font-size:10px;font-weight:700;color:var(--label2)}
+.calgrid .d.sel .n{color:#fff}
+#bulkbar{position:fixed;left:0;right:0;bottom:0;z-index:55;background:var(--elev);backdrop-filter:blur(20px);
+  border-top:.5px solid var(--sep);padding:10px max(12px,env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom));
+  display:none;align-items:center;gap:8px;flex-wrap:wrap}
+#bulkbar.on{display:flex}
+#bulkbar .n{font-weight:700;font-size:15px;margin-right:auto}
+#bulkbar button,#bulkbar select{background:var(--fill2);border-radius:9px;padding:8px 12px;font-size:14px;font-weight:600;border:0}
+#bulkbar .danger{color:var(--red)}
+.row.sel{background:color-mix(in srgb,var(--blue) 12%,var(--card))}
 .stamps{padding:4px 14px 12px;background:var(--card2);font-size:13px}
 .stamps .warn{color:var(--label3)}
 .stamp{display:flex;align-items:center;gap:8px;padding:3px 0;color:var(--label2)}
@@ -293,6 +316,11 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="newproj">New project</button>
             <button data-m="sample">Load a sample setup</button>
             <hr>
+            <button data-m="calendar">Calendar…</button>
+            <button data-m="sort" id="sortBtn"></button>
+            <button data-m="group" id="groupBtn"></button>
+            <hr>
+            <button data-m="undo">Undo last change</button>
             <button data-m="clearDone">Clear completed</button>
             <button data-m="reset" style="color:var(--red)">Delete everything</button>
             <hr>
@@ -384,6 +412,16 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <button class="btn" id="psave" style="flex:1;margin:0;text-align:center">Save</button></div>
 </div>
 
+<div class="sheet" role="dialog" aria-modal="true" id="calsheet"><div class="grab"></div>
+  <div class="sheettitle"><span id="caltitle">Calendar</span><button class="x" id="calclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="calnav"><button class="btn sec" id="calprev" style="margin:0;padding:6px 12px">‹</button>
+    <span id="calmonth"></span>
+    <button class="btn sec" id="calnext" style="margin:0;padding:6px 12px">›</button>
+    <button class="btn sec" id="caltoday" style="margin:0;padding:6px 12px;margin-left:auto">Today</button></div>
+  <div class="calgrid" id="calgrid"></div>
+  <div style="height:12px"></div>
+</div>
+
 <div class="sheet" role="dialog" aria-modal="true" id="msheet"><div class="grab"></div>
   <div class="sheettitle"><span id="mtitle">Maker</span><button class="x" id="mclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="fgroup">
@@ -462,6 +500,15 @@ grant execute on function shipshape_push(text, jsonb) to anon;</pre>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
 <div id="toast" role="status" aria-live="polite"><span id="tmsg"></span><button id="tundo" hidden>Undo</button></div>
 
+<div id="bulkbar">
+  <span class="n" id="bulkn">0 selected</span>
+  <button id="bulkdone">Complete</button>
+  <button id="bulkflag">Flag</button>
+  <select id="bulkproj"></select>
+  <button id="bulkdel" class="danger">Delete</button>
+  <button id="bulkexit">Cancel</button>
+</div>
+
 <div id="scanner">
   <video id="scanvid" playsinline muted autoplay></video>
   <div class="frame"></div>
@@ -488,6 +535,10 @@ const local={
 };
 
 const STAGES=['Quote','Ordered','Making','Shipped','Delivered'];
+const SORTS=['smart','due','added','title','stage'];
+const SORT_LABEL={smart:'Smart',due:'Due date',added:'Recently added',title:'Title',stage:'Stage'};
+const GROUPS=['auto','project','maker','stage','none'];
+const GROUP_LABEL={auto:'By date',project:'By project',maker:'By maker',stage:'By stage',none:'No grouping'};
 const SC=['var(--gray)','var(--blue)','var(--orange)','var(--purple)','var(--green)'];
 const PAL=['var(--blue)','var(--purple)','var(--pink)','var(--orange)','var(--teal)','var(--green)','var(--indigo)','var(--yellow)'];
 
@@ -549,7 +600,10 @@ function trackInfo(t){
   if(!c.url)return {number:n,carrier:c,noLink:true};
   return {number:n,carrier:c,auto:!picked,guess:!picked&&!!c.guess,url:c.url(encodeURIComponent(n))};
 }
-let S={v:3,projects:[],tasks:[],tomb:{},started:false};
+let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
+// view preferences are per device, not synced: they are how you like to look at
+// the list, not part of the data
+let sortBy='smart',groupBy='auto';
 let sync={url:'',key:'',ws:'',on:false,last:0};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
    the last one really was. */
@@ -562,7 +616,7 @@ function fmtAgo(ts){
   return `${Math.round(s/86400)} d ago`;
 }
 let view={t:'today'},query='',selDay=null,editing=null,editProj=null,attachTo=null,
-    cflag=false,ctype='task',ctypeManual=false,undoFn=null,saveT=null,pcolor=PAL[0],ctx=null,editMaker=null,
+    cflag=false,ctype='task',ctypeManual=false,undoFn=null,undoStack=[],saveT=null,pcolor=PAL[0],ctx=null,editMaker=null,
     syncStatus='off',pulling=false,pushT=null,pollT=null;
 
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -578,6 +632,10 @@ async function loadAll(){
   migrate();
   const sr=await local.get(SKEY);
   if(sr){try{sync=Object.assign(sync,JSON.parse(sr));}catch(e){}}
+  const vr=await local.get(VKEY);
+  if(vr){try{const v=JSON.parse(vr);
+    if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
+    if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;}catch(e){}}
 }
 function migrate(){
   S.projects=S.projects||[];S.tasks=S.tasks||[];S.tomb=S.tomb||{};
@@ -639,6 +697,8 @@ function saveLocal(){
 }
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
+const VKEY='shipshape:view';
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0;
@@ -783,8 +843,47 @@ function stats(pid){
     next:all.filter(t=>!t.done&&t.due).sort((a,b)=>a.due<b.due?-1:1)[0],
     late:all.filter(t=>!t.done&&t.due&&diff(t.due)<0).length};
 }
+/* Search understands a few filters alongside free text:
+   is:shipment  is:task  is:done  is:flagged  late:  stage:shipped
+   maker:lumina  to:chicago  project:harbor  po:4417                        */
+function parseQuery(q){
+  const f={text:'',is:[],stage:null,maker:null,to:null,project:null,po:null,late:false};
+  const words=[];
+  for(const w of (q||'').trim().split(/\s+/)){
+    if(!w)continue;
+    const m=w.match(/^(is|stage|maker|to|project|po|late):(.*)$/i);
+    if(!m){words.push(w);continue;}
+    const k=m[1].toLowerCase(),v=m[2].toLowerCase();
+    if(k==='is'&&v)f.is.push(v);
+    else if(k==='late')f.late=true;
+    else if(k==='stage'&&v)f.stage=v;
+    else if(k==='maker'&&v)f.maker=v;
+    else if(k==='to'&&v)f.to=v;
+    else if(k==='project'&&v)f.project=v;
+    else if(k==='po'&&v)f.po=v;
+    else words.push(w);                    // "maker:" with nothing after it is just text
+  }
+  f.text=words.join(' ').toLowerCase();
+  return f;
+}
 function matches(t){
-  if(!query)return true;const q=query.toLowerCase(),p=projectOf(t);
+  if(!query)return true;
+  const f=parseQuery(query),p=projectOf(t);
+  for(const v of f.is){
+    if(v==='shipment'&&t.type!=='shipment')return false;
+    if(v==='task'&&t.type!=='task')return false;
+    if(v==='done'&&!t.done)return false;
+    if(v==='open'&&t.done)return false;
+    if(v==='flagged'&&!t.flagged)return false;
+  }
+  if(f.late&&!(t.due&&!t.done&&diff(t.due)<0))return false;
+  if(f.stage&&!(t.type==='shipment'&&STAGES[t.stage].toLowerCase().startsWith(f.stage)))return false;
+  if(f.maker&&!(t.manufacturer||'').toLowerCase().includes(f.maker))return false;
+  if(f.to&&!(t.destination||'').toLowerCase().includes(f.to))return false;
+  if(f.project&&!((p&&p.name)||'').toLowerCase().includes(f.project))return false;
+  if(f.po&&!(t.po||'').toLowerCase().includes(f.po))return false;
+  if(!f.text)return true;
+  const q=f.text;
   return [t.title,t.manufacturer,t.destination,t.notes,t.po,p&&p.name,...trackNumbers(t)]
     .some(v=>(v||'').toLowerCase().includes(q));
 }
@@ -809,10 +908,29 @@ function filtered(){
 }
 function bySort(x,y){
   if(x.done!==y.done)return x.done?1:-1;
+  if(sortBy==='due'){if(!x.due&&!y.due)return y.created-x.created;
+    if(!x.due)return 1;if(!y.due)return -1;return x.due<y.due?-1:1;}
+  if(sortBy==='added')return y.created-x.created;
+  if(sortBy==='title')return (x.title||'').localeCompare(y.title||'');
+  if(sortBy==='stage'){const d=(y.type==='shipment'?y.stage:-1)-(x.type==='shipment'?x.stage:-1);
+    if(d)return d;return y.created-x.created;}
   if(!x.due&&!y.due)return y.created-x.created;
   if(!x.due)return 1;if(!y.due)return -1;
   if(x.due!==y.due)return x.due<y.due?-1:1;
   return (y.flagged?1:0)-(x.flagged?1:0);
+}
+/* Which heading a row falls under. "auto" keeps the date buckets; the rest let
+   the same list be read by project, maker or stage instead. */
+function groupOf(t){
+  if(groupBy==='none')return {k:'all',l:'Everything',o:0};
+  if(groupBy==='project'){const p=projectOf(t);
+    return p?{k:'p'+p.id,l:p.name,o:1}:{k:'p0',l:'No project',o:2};}
+  if(groupBy==='maker'){const m=(t.manufacturer||'').trim();
+    return m?{k:'m'+m.toLowerCase(),l:m,o:1}:{k:'m0',l:'No maker',o:2};}
+  if(groupBy==='stage'){
+    if(t.type!=='shipment')return {k:'s9',l:'Tasks',o:9};
+    return {k:'s'+t.stage,l:STAGES[t.stage],o:t.stage};}
+  return bucket(t);
 }
 function bucket(t){
   if(t.done)return{k:'d',l:'Completed',o:8};
@@ -832,6 +950,8 @@ function render(){renderNav();renderHead();renderList();renderData();}
 function renderData(){
   $('#l-mfr').innerHTML=uniq('manufacturer').map(v=>`<option value="${esc(v)}">`).join('');
   $('#l-dest').innerHTML=uniq('destination').map(v=>`<option value="${esc(v)}">`).join('');
+  $('#sortBtn').textContent='Sort: '+SORT_LABEL[sortBy];
+  $('#groupBtn').textContent='Group: '+GROUP_LABEL[groupBy];
   $('#storeNote').textContent=sync.on?'Synced through your own Supabase project.'
     :CLOUD?'Saving to your Claude account.':'Saving on this device. Turn on sync to share across devices.';
 }
@@ -915,7 +1035,9 @@ function rowHTML(t){
   else if(trks.length>1){
     const got=trks.filter(x=>x.got).length;
     chips.push(`<span class="chip">${got}/${trks.length} received</span>`);}
-  if(t.type==='shipment')chips.push(`<button class="chip stage" data-stage="${t.id}" style="color:${SC[t.stage]};background:color-mix(in srgb,${SC[t.stage]} 14%,transparent)">${STAGES[t.stage]}</button>`);
+  if(t.type==='shipment')chips.push(`<button class="stagebar" data-stage="${t.id}" aria-label="Stage: ${STAGES[t.stage]}, tap to advance">
+    ${STAGES.map((_,i)=>`<i style="background:${i<=t.stage?SC[t.stage]:'var(--fill)'}"></i>`).join('')}
+    <span style="color:${SC[t.stage]}">${STAGES[t.stage]}</span></button>`);
   const n=t.due?diff(t.due):null,cls=n===null?'':n<0?'late':n<=2?'soon':'';
   return `<div class="rowwrap" data-id="${t.id}"><div class="act l">Done</div><div class="act r">Delete</div>
     <div class="row ${t.done?'done':''}">
@@ -1018,7 +1140,7 @@ function renderList(){
   const items=filtered();
   if(!items.length){el.innerHTML=h+emptyHTML();return;}
   const g=new Map();
-  for(const t of items){const b=bucket(t);if(!g.has(b.k))g.set(b.k,{...b,items:[]});g.get(b.k).items.push(t);}
+  for(const t of items){const b=groupOf(t);if(!g.has(b.k))g.set(b.k,{...b,items:[]});g.get(b.k).items.push(t);}
   for(const x of [...g.values()].sort((a,b)=>a.o-b.o)){
     h+=`<div class="grp ${x.k==='late'?'late':''}">${x.l}<span class="c">${x.items.length}</span></div>`;
     h+='<div class="card">'+x.items.map(rowHTML).join('')+'</div>';
@@ -1028,7 +1150,9 @@ function renderList(){
 
 /* ============ actions ============ */
 function toast(msg,undo){
-  $('#tmsg').textContent=msg;undoFn=undo||null;$('#tundo').hidden=!undo;
+  $('#tmsg').textContent=msg;
+  if(undo){undoStack.push({msg,fn:undo});if(undoStack.length>20)undoStack.shift();}
+  $('#tundo').hidden=!undoStack.length;
   $('#toast').classList.add('on');clearTimeout(toast._t);
   toast._t=setTimeout(()=>$('#toast').classList.remove('on'),undo?4200:2200);
 }
@@ -1515,6 +1639,89 @@ $('#ccancel').addEventListener('click',()=>{editing=null;closeSheets();});
 $('#cadd').addEventListener('click',()=>submitComposer(false));
 $('#dclose').addEventListener('click',closeSheets);
 $('#dscan').addEventListener('click',()=>openScanner('field'));
+/* ============ calendar ============
+   The day strip only reaches 15 days out, so anything further was unreachable
+   without knowing the date already. */
+let calMonth=null;
+function openCalendar(){
+  calMonth=calMonth||midnight();
+  rememberFocus();$('#scrim').classList.add('on');$('#calsheet').classList.add('on');
+  renderCalendar();
+}
+function renderCalendar(){
+  const base=new Date(calMonth),y=base.getFullYear(),m=base.getMonth();
+  $('#calmonth').textContent=base.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  const first=new Date(y,m,1),days=new Date(y,m+1,0).getDate();
+  const counts={};
+  for(const t of openT())if(t.due)counts[t.due]=(counts[t.due]||0)+1;
+  let h=['S','M','T','W','T','F','S'].map(d=>`<div class="wd">${d}</div>`).join('');
+  for(let i=0;i<first.getDay();i++)h+='<div class="d blank"></div>';
+  for(let d=1;d<=days;d++){
+    const k=iso(new Date(y,m,d)),n=counts[k]||0;
+    h+=`<button class="d ${diff(k)===0?'today':''} ${selDay===k?'sel':''}" data-cal="${k}">
+      <span>${d}</span>${n?`<span class="n">${n}</span>`:''}</button>`;
+  }
+  $('#calgrid').innerHTML=h;
+}
+$('#calprev').addEventListener('click',()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()-1);calMonth=d;renderCalendar();});
+$('#calnext').addEventListener('click',()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()+1);calMonth=d;renderCalendar();});
+$('#caltoday').addEventListener('click',()=>{calMonth=midnight();renderCalendar();});
+$('#calclose').addEventListener('click',closeSheets);
+$('#calgrid').addEventListener('click',e=>{
+  const b=e.target.closest('[data-cal]');if(!b)return;
+  const k=b.dataset.cal;
+  closeSheets();
+  setView('scheduled');selDay=k;renderList();buzz(4);
+});
+
+/* ============ bulk actions ============ */
+let selMode=false,selected=new Set(),pressT=null;
+function setSelMode(on){
+  selMode=on;if(!on)selected.clear();
+  $('#bulkbar').classList.toggle('on',on);
+  if(on)$('#bulkproj').innerHTML='<option value="">Move to…</option>'
+    +S.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')
+    +'<option value="__none">No project</option>';
+  renderBulk();render();
+}
+function renderBulk(){
+  $('#bulkn').textContent=`${selected.size} selected`;
+  $$('#list .rowwrap').forEach(w=>{
+    const r=w.querySelector('.row');
+    if(r)r.classList.toggle('sel',selected.has(w.dataset.id));
+  });
+}
+function toggleSel(id){
+  if(!id)return;
+  selected.has(id)?selected.delete(id):selected.add(id);
+  if(!selected.size)return setSelMode(false);
+  renderBulk();
+}
+function bulkEach(fn,label){
+  const ids=[...selected],before=ids.map(id=>{const t=S.tasks.find(x=>x.id===id);return t?JSON.parse(JSON.stringify(t)):null;}).filter(Boolean);
+  ids.forEach(id=>{const t=S.tasks.find(x=>x.id===id);if(t)fn(t);});
+  save();setSelMode(false);
+  toast(`${label} ${ids.length}`,()=>{                 // one undo entry for the whole batch
+    before.forEach(b=>{const i=S.tasks.findIndex(x=>x.id===b.id);if(i>=0)S.tasks[i]=b;else S.tasks.push(b);});
+    save();render();
+  });
+}
+$('#bulkexit').addEventListener('click',()=>setSelMode(false));
+$('#bulkdone').addEventListener('click',()=>bulkEach(t=>{
+  if(!t.done){t.done=true;t.completed=now();if(t.type==='shipment'&&t.stage<4){t.stage0=t.stage;t.stage=4;stampStage(t,4);}t.u=now();}
+},'Completed'));
+$('#bulkflag').addEventListener('click',()=>bulkEach(t=>{t.flagged=!t.flagged;t.u=now();},'Flagged'));
+$('#bulkdel').addEventListener('click',()=>{
+  const ids=[...selected];
+  if(!confirm(`Delete ${ids.length} item${ids.length===1?'':'s'}?`))return;
+  bulkEach(t=>{S.tomb[t.id]=now();t.u=now();},'Deleted');
+  S.tasks=S.tasks.filter(t=>!ids.includes(t.id));
+  save();render();
+});
+$('#bulkproj').addEventListener('change',e=>{
+  const v=e.target.value;if(!v)return;
+  bulkEach(t=>{t.projectId=v==='__none'?null:v;t.u=now();},'Moved');
+});
 function openMaker(name){
   const m=makerFor(name)||{name,contact:'',email:'',phone:'',leadDays:null,notes:''};
   editMaker=name;
@@ -1668,7 +1875,15 @@ $('#dstages').addEventListener('click',e=>{
   if(t.stage===4){t.done=true;t.completed=now();}else{t.done=false;t.completed=null;t.stage0=null;}
   buzz();save();openDetail(editing);render();
 });
-$('#tundo').addEventListener('click',()=>{if(undoFn)undoFn();undoFn=null;$('#toast').classList.remove('on');});
+$('#tundo').addEventListener('click',()=>{popUndo();$('#toast').classList.remove('on');});
+/* Undo remembers the last twenty changes rather than only the most recent, so a
+   toast that scrolls past no longer takes its undo with it. */
+function popUndo(){
+  const u=undoStack.pop();
+  if(!u){toast('Nothing left to undo');return;}
+  u.fn();
+  toast(`Undone: ${u.msg}`);
+}
 $('#moreBtn').addEventListener('click',e=>{e.stopPropagation();$('#moreMenu').classList.toggle('on');});
 document.addEventListener('click',()=>$('#moreMenu').classList.remove('on'));
 document.addEventListener('click',e=>{
@@ -1676,6 +1891,10 @@ document.addEventListener('click',e=>{
   const k=m.dataset.m;
   if(k==='sync')openSync();
   if(k==='scan')openScanner('find');
+  if(k==='undo')popUndo();
+  if(k==='calendar')openCalendar();
+  if(k==='sort'){sortBy=SORTS[(SORTS.indexOf(sortBy)+1)%SORTS.length];saveView();render();toast('Sort: '+SORT_LABEL[sortBy]);}
+  if(k==='group'){groupBy=GROUPS[(GROUPS.indexOf(groupBy)+1)%GROUPS.length];saveView();render();toast('Group: '+GROUP_LABEL[groupBy]);}
   if(k==='update')checkUpdate();
   if(k==='newproj')openProject(null);
   if(k==='sample')loadSample();
@@ -1719,10 +1938,17 @@ $('#list').addEventListener('click',e=>{
   const d=e.target.closest('[data-day]');if(d){selDay=selDay===d.dataset.day?null:d.dataset.day;buzz(4);renderList();return;}
   const c=e.target.closest('[data-check]');if(c)return toggleDone(c.dataset.check,c);
   const s=e.target.closest('[data-stage]');if(s)return bumpStage(s.dataset.stage);
-  const w=e.target.closest('.rowwrap');if(w&&w.dataset.id&&!w._moved)openDetail(w.dataset.id);
+  const w=e.target.closest('.rowwrap');
+  if(w&&w.dataset.id&&selMode)return toggleSel(w.dataset.id);
+  if(w&&w.dataset.id&&!w._moved)openDetail(w.dataset.id);
 });
 let sw=null;
 $('#list').addEventListener('pointerdown',e=>{
+  const lw=e.target.closest('.rowwrap');
+  if(lw&&lw.dataset.id){
+    clearTimeout(pressT);
+    pressT=setTimeout(()=>{if(!selMode){setSelMode(true);toggleSel(lw.dataset.id);buzz(12);}},500);
+  }
   if(e.pointerType==='mouse')return;
   const w=e.target.closest('.rowwrap');if(!w||!w.dataset.id)return;
   sw={w,row:w.querySelector('.row'),x:e.clientX,y:e.clientY,dx:0,lock:null};w._moved=false;
@@ -1738,6 +1964,7 @@ $('#list').addEventListener('pointermove',e=>{
   sw.row.style.transform=`translateX(${sw.dx}px)`;sw.w._moved=true;
 });
 function endSwipe(){
+  clearTimeout(pressT);
   if(!sw)return;
   const{w,row,dx}=sw,id=w.dataset.id;
   row.style.transition='transform .3s var(--ease)';
@@ -1747,6 +1974,7 @@ function endSwipe(){
   const wr=w;setTimeout(()=>{wr._moved=false;},80);sw=null;
 }
 $('#list').addEventListener('pointerup',endSwipe);
+$('#list').addEventListener('pointermove',()=>clearTimeout(pressT));
 $('#list').addEventListener('pointercancel',endSwipe);
 document.addEventListener('keydown',e=>{
   const typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
@@ -1763,6 +1991,7 @@ document.addEventListener('keydown',e=>{
   if(typing)return;
   if(e.key==='n'||((e.metaKey||e.ctrlKey)&&e.key==='k')){e.preventDefault();openComposer();}
   if(e.key==='p'){e.preventDefault();openProject(null);}
+  if((e.metaKey||e.ctrlKey)&&e.key==='z'){e.preventDefault();popUndo();}
   if(e.key==='/'){e.preventDefault();$('#q').focus();}
 });
 
