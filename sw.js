@@ -7,7 +7,7 @@
    The page checks whether it is stale by re-fetching its own HTML with a
    ?vcheck= parameter. Those requests must never be answered from here, or the
    check would compare a cached copy against itself and always agree. */
-const CACHE = 'shipshape-1.9.1';
+const CACHE = 'shipshape-1.10.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icon.svg', './favicon.svg', './favicon.ico',
@@ -60,4 +60,31 @@ self.addEventListener('fetch', e => {
     }
     return res;
   })));
+});
+
+/* ============ reminders ============
+   Payload is JSON: { title, body, url, tag }. Anything unparseable still shows
+   something rather than nothing, because a push that resolves to no
+   notification is a visible violation on some browsers. */
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
+  const title = d.title || 'Shipshape';
+  e.waitUntil(self.registration.showNotification(title, {
+    body: d.body || 'You have work due.',
+    tag: d.tag || 'shipshape-due',
+    data: { url: d.url || './' },
+    icon: './icon-192.png',
+    badge: './favicon-32.png',
+    renotify: !!d.tag,
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = new URL((e.notification.data && e.notification.data.url) || './', self.location).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) if (c.url.startsWith(self.registration.scope) && 'focus' in c) return c.focus();
+    return self.clients.openWindow(target);
+  }));
 });

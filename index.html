@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.9.1">
+<meta name="app-version" content="1.10.0">
 <meta name="app-build" content="2026-08-07">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -452,6 +452,17 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <button class="btn sec" id="soff" style="flex:1;margin:0;text-align:center">Turn off</button>
     <button class="btn" id="son" style="flex:1;margin:0;text-align:center">Turn on sync</button>
   </div>
+  <div class="trackhead" style="padding-top:14px"><span>Reminders</span><span id="pushstate" class="got"></span></div>
+  <div class="fgroup" style="margin-top:0">
+    <div class="field"><label for="pushkey">Public key</label><input id="pushkey" class="mono" placeholder="VAPID public key" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+  </div>
+  <div style="padding:10px 14px 0;display:flex;gap:10px">
+    <button class="btn sec" id="pushoff" style="flex:1;margin:0;text-align:center">Turn off</button>
+    <button class="btn" id="pushon" style="flex:1;margin:0;text-align:center">Turn on reminders</button>
+  </div>
+  <div class="blurb" style="padding-top:8px">A push needs a server to send it, so this needs the notify
+  function deployed and its key pasted above — see notify/README.md in the repo. On iPhone the app has to be
+  on your Home Screen first; Safari will not grant notifications to a tab.</div>
   <details><summary>First-time setup (5 minutes)</summary><div class="body">
     <ol>
       <li>Make a free project at supabase.com.</li>
@@ -536,6 +547,38 @@ revoke all on function shipshape_pull_items(text, bigint) from public;
 revoke all on function shipshape_push_items(text, jsonb) from public;
 grant execute on function shipshape_pull_items(text, bigint) to anon;
 grant execute on function shipshape_push_items(text, jsonb) to anon;</pre>
+  </div></details>
+  <details><summary>Optional: reminders</summary><div class="body">
+    <p style="margin:0 0 8px">Needed only if you want a notification when something is due. Run this,
+    then deploy the notify function from the repo and paste its public key above.</p>
+    <button class="btn sec" id="sqlcopy3" style="margin:4px 0 8px;font-size:14px;padding:8px 14px">Copy the SQL</button>
+    <pre id="sql3">create table if not exists shipshape_push_subs (
+  ws         text not null,
+  endpoint   text not null,
+  keys       jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (ws, endpoint)
+);
+
+alter table shipshape_push_subs enable row level security;
+-- no policies: the anon key alone cannot read or list this table
+
+create or replace function shipshape_push_sub(k text, endpoint text, keys jsonb)
+returns void language sql security definer as $$
+  insert into shipshape_push_subs (ws, endpoint, keys)
+  values (k, endpoint, keys)
+  on conflict (ws, endpoint) do update set keys = excluded.keys;
+$$;
+
+create or replace function shipshape_push_unsub(k text, endpoint text)
+returns void language sql security definer as $$
+  delete from shipshape_push_subs where ws = k and endpoint = shipshape_push_unsub.endpoint;
+$$;
+
+revoke all on function shipshape_push_sub(text, text, jsonb) from public;
+revoke all on function shipshape_push_unsub(text, text) from public;
+grant execute on function shipshape_push_sub(text, text, jsonb) to anon;
+grant execute on function shipshape_push_unsub(text, text) to anon;</pre>
     <p style="margin:12px 0 0">Your workspace key is the password. Anyone who has it, plus the page, can read and edit your list. Keep it out of shared docs, and use the Generate button rather than a word you would guess.</p>
   </div></details>
   <div style="height:8px"></div>
@@ -649,7 +692,7 @@ let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
 let sortBy='smart',groupBy='auto';
-let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0};
+let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:''};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
    the last one really was. */
 function fmtAgo(ts){
@@ -777,6 +820,59 @@ function schedulePush(){
   clearTimeout(pushT);
   pushT=setTimeout(push,900);
 }
+/* ============ reminders ============
+   iOS only shows notifications for an installed app, and only through a real
+   push service, so there is no way to do this locally: something has to send it.
+   The subscription is stored against the workspace, so a reminder reaches every
+   device on that workspace. */
+const b64ToBytes=b=>{
+  const pad='='.repeat((4-b.length%4)%4);
+  const raw=atob((b+pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+};
+function renderPush(){
+  $('#pushkey').value=sync.pushKey||'';
+  $('#pushstate').textContent=!('PushManager'in window)?'not supported here'
+    :sync.push?'on for this device':'off';
+}
+async function enablePush(){
+  if(!('serviceWorker'in navigator)||!('PushManager'in window))
+    return toast('This browser cannot receive push notifications.');
+  if(!sync.on||!sync.ws)return toast('Turn on sync first — reminders go to your workspace.');
+  const key=$('#pushkey').value.trim();
+  if(!key)return toast('Paste the public key from your notify function first.');
+  let perm;
+  try{perm=await Notification.requestPermission();}catch(e){perm='denied';}
+  if(perm!=='granted')return toast('Notifications were not allowed. On iPhone, add the app to your Home Screen first.');
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToBytes(key)});
+    const j=sub.toJSON();
+    await rpc('shipshape_push_sub',{k:sync.ws,endpoint:j.endpoint,keys:j.keys});
+    sync.push=true;sync.pushKey=key;await saveSyncCfg();
+    renderPush();toast('Reminders on');
+  }catch(e){
+    // a key that is not a valid P-256 point fails here rather than at send time
+    const why=(e&&(e.message||e.name))||'';
+    toast(/applicationServerKey|InvalidCharacter|InvalidAccess/.test(String(e))
+      ? 'That key was not accepted. Copy the public key exactly as the function printed it.'
+      : `Could not turn reminders on${why?': '+why:''}`);
+  }
+}
+async function disablePush(){
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){
+      try{await rpc('shipshape_push_unsub',{k:sync.ws,endpoint:sub.endpoint});}catch(e){}
+      await sub.unsubscribe();
+    }
+  }catch(e){}
+  sync.push=false;await saveSyncCfg();renderPush();toast('Reminders off');
+}
+$('#pushon').addEventListener('click',enablePush);
+$('#pushoff').addEventListener('click',disablePush);
+
 /* ============ per-item sync ============
    The original scheme sends the whole document every time, so a device holding
    a stale copy can overwrite a change made elsewhere. Sending only what changed
@@ -1749,6 +1845,7 @@ function renderSyncSheet(){
     :probing?' Checking which scheme this project supports…':'';
   $('#sstatus').textContent=(sync.on?msgs[syncStatus]||msgs.idle:msgs.off)+how;
   $('#surl').value=sync.url;$('#skey').value=sync.key;$('#sws').value=sync.ws;
+  renderPush();
   $('#soff').style.display=sync.on?'':'none';
   $('#son').textContent=sync.on?'Sync now':'Turn on sync';
 }
@@ -1959,6 +2056,10 @@ $('#son').addEventListener('click',async()=>{
 });
 $('#soff').addEventListener('click',async()=>{
   sync.on=false;sync.mode=null;sync.pushed=0;sync.pulled=0;await saveSyncCfg();clearInterval(pollT);setSync('off');renderSyncSheet();toast('Sync turned off');
+});
+$('#sqlcopy3').addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText($('#sql3').textContent);toast('SQL copied');}
+  catch(e){toast('Copy blocked. Select the text and copy by hand.');}
 });
 $('#sqlcopy2').addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText($('#sql2').textContent);toast('SQL copied');}
