@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.19.1">
+<meta name="app-version" content="1.20.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -360,7 +360,19 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 @media (min-width:1440px){:root{--dock:480px}}
 @keyframes dockin{from{opacity:0;transform:translateX(16px)}}
 /* A right-click menu on a row, and the command palette, both hang off .menu. */
-#rowmenu{position:fixed;top:0;left:0;max-width:250px}
+/* right:auto matters: .menu pins right:0, and with left also set the used width
+   depends on left, so measuring to compute left feeds back on itself. */
+#rowmenu{position:fixed;top:0;left:0;right:auto;bottom:auto;max-width:250px}
+/* The + menu. Its first entry is the one that fits the page you are on, so it is
+   drawn as the obvious answer rather than just the top of a list. */
+/* An explicit width, because .menu button is width:100% and a shrink-to-fit
+   parent resolves that against the whole viewport instead of its own content. */
+#addmenu{position:fixed;top:0;left:0;right:auto;bottom:auto;width:max-content;min-width:236px;max-width:min(330px,92vw)}
+#addmenu button{display:flex;align-items:center;gap:10px;padding:10px 12px}
+#addmenu button.first{font-weight:600}
+#addmenu .mi{width:22px;height:22px;flex:none;border-radius:7px;display:grid;place-items:center}
+#addmenu .mi svg{width:13px;height:13px;fill:#fff}
+#addmenu hr{margin:5px 0}
 #rowmenu .head{padding:7px 12px 5px;font-size:12.5px;color:var(--label3);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:226px}
 #rowmenu button.warn{color:var(--red)}
@@ -508,6 +520,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 </div></nav>
 
 <div id="ptr" aria-hidden="true"><img src="favicon.svg" alt=""></div>
+<div class="menu" id="addmenu" role="menu"></div>
 <div class="menu" id="rowmenu" role="menu"></div>
 <div id="palette" role="dialog" aria-modal="true" aria-label="Commands">
   <input id="pq" type="text" placeholder="Jump to a project, maker or task — or run a command" autocomplete="off"
@@ -2203,10 +2216,13 @@ function setType(t){
     ?'40 pendants #Harbor Lofts @Lumina >Chicago warehouse oct 15'
     :'Approve shop drawings #Harbor Lofts fri';
 }
-function openComposer(){
+function openComposer(force){
   rememberFocus();$('#scrim').classList.add('on');$('#composer').classList.add('on');
   cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;
-  ctx=composerCtx();setType(ctx.type);
+  ctx=composerCtx();
+  // an explicit choice from the + menu outranks what the view implies
+  if(force){ctx.type=force;ctypeManual=true;}
+  setType(ctx.type);
   $('#ci').value='';$('#ctrack').value='';$('#cpo').value='';
   $('#ccarrier').innerHTML=carrierOptions('');updatePreview();
   setTimeout(()=>$('#ci').focus(),260);
@@ -2713,8 +2729,57 @@ for(const id in SFIELDS)$('#'+id).addEventListener('input',e=>{
 /* ============ events ============ */
 $('#scroll').addEventListener('scroll',e=>$('#head').classList.toggle('stuck',e.target.scrollTop>4));
 $('#q').addEventListener('input',e=>{query=e.target.value.trim();renderList();});
-$('#fab').addEventListener('click',()=>openComposer());
-$('#addTop').addEventListener('click',()=>openComposer());
+/* ============ the + menu ============
+   The + button used to be one thing — a task composer, whatever you happened to
+   be looking at. What you actually want to add depends on the page: a project on
+   Projects, a shipment under a maker. So it offers the choices, with the one that
+   fits the page first and named for the context it will inherit, which is also
+   how you find out that adding here puts it in this project. */
+function addOptions(){
+  const p=view.t==='project'?P(view.v):null;
+  const task={k:'task',l:'New task'+(p?` in ${p.name}`:''),ico:I.check,col:'var(--blue)'};
+  const ship={k:'shipment',l:'New shipment'
+    +(p?` in ${p.name}`:view.t==='mfr'?` from ${view.v}`:view.t==='dest'?` to ${view.v}`:''),
+    ico:I.truck,col:'var(--purple)'};
+  const proj={k:'project',l:'New project',ico:I.box,col:'var(--indigo)'};
+  const order=view.t==='projects'?[proj,task,ship]
+    :['shipments','mfr','dest'].includes(view.t)?[ship,task,proj]
+    :[task,ship,proj];
+  // scanning is an add too, but it stays last wherever you are: the first entry
+  // moving around is helpful, everything moving around is not
+  return [...order,{k:'scan',l:'Scan a shipping label',ico:I.box,col:'var(--gray)',sep:true}];
+}
+function closeAddMenu(){$('#addmenu').classList.remove('on');}
+function openAddMenu(anchor){
+  closeRowMenu();closeAddMenu();$('#moreMenu').classList.remove('on');
+  const m=$('#addmenu');
+  m.innerHTML=addOptions().map((o,i)=>(o.sep?'<hr>':'')
+    +`<button data-add="${o.k}"${i?'':' class="first"'}>
+      <span class="mi" style="background:${o.col}">${o.ico}</span>${esc(o.l)}</button>`).join('');
+  m.classList.add('on');
+  /* Anchored from the right, and from the bottom when the button sits low — the
+     phone's + is at the bottom right, where a menu dropping downwards has
+     nowhere to go. Deliberately not measured: the menu's own width settles a
+     frame after it is shown, so computing a left edge from it put the box off
+     the side of the screen. Anchoring the edges that line up with the button
+     needs no measurement and cannot drift. */
+  const a=anchor.getBoundingClientRect(),low=a.top>innerHeight/2;
+  m.style.left='auto';
+  m.style.right=Math.max(8,innerWidth-a.right)+'px';
+  m.style.top=low?'auto':Math.round(a.bottom+8)+'px';
+  m.style.bottom=low?Math.round(innerHeight-a.top+8)+'px':'auto';
+}
+$('#addmenu').addEventListener('click',e=>{
+  const b=e.target.closest('[data-add]');if(!b)return;
+  const k=b.dataset.add;
+  closeAddMenu();
+  if(k==='project')return openProject(null);
+  if(k==='scan')return openScanner('find');
+  openComposer(k);
+});
+document.addEventListener('click',e=>{if(!e.target.closest('#addmenu'))closeAddMenu();});
+$('#fab').addEventListener('click',e=>{e.stopPropagation();openAddMenu($('#fab'));buzz(4);});
+$('#addTop').addEventListener('click',e=>{e.stopPropagation();openAddMenu($('#addTop'));});
 $('#syncBtn').addEventListener('click',openSync);
 $('#scrim').addEventListener('click',closeSheets);
 $('#ccancel').addEventListener('click',()=>{editing=null;closeSheets();});
@@ -2987,7 +3052,7 @@ function popUndo(){
   u.fn();
   toast(`Undone: ${u.msg}`);
 }
-$('#moreBtn').addEventListener('click',e=>{e.stopPropagation();$('#moreMenu').classList.toggle('on');});
+$('#moreBtn').addEventListener('click',e=>{e.stopPropagation();closeAddMenu();$('#moreMenu').classList.toggle('on');});
 document.addEventListener('click',()=>$('#moreMenu').classList.remove('on'));
 document.addEventListener('click',e=>{
   const m=e.target.closest('[data-m]');if(!m)return;
@@ -3305,6 +3370,7 @@ document.addEventListener('keydown',e=>{
   }
   if(e.key==='Escape'){
     if($('#palette').classList.contains('on'))return closePalette();
+    if($('#addmenu').classList.contains('on'))return closeAddMenu();
     if($('#rowmenu').classList.contains('on'))return closeRowMenu();
     if($('#scanner').classList.contains('on'))return closeScanner();
     const a=document.activeElement;
