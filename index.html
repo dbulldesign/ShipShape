@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.12.3">
+<meta name="app-version" content="1.12.4">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -74,7 +74,10 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #syncBtn.error svg{fill:var(--red)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .brand{font-family:var(--round);font-weight:800;font-size:20px;letter-spacing:-.3px;padding:6px 10px 12px;display:flex;align-items:center;gap:8px}
-.brand i{width:22px;height:22px;border-radius:7px;background:linear-gradient(160deg,var(--blue),var(--indigo));display:block}
+/* The real ship, not a stand-in gradient tile. favicon.svg is the cut drawn to
+   stay legible small, and the service worker already precaches it. Its rounding
+   is baked in, so nothing here rounds it a second time. */
+.brand img{width:24px;height:24px;flex:none;display:block}
 .navsec{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--label3);padding:16px 12px 6px;display:flex;align-items:center}
 .navsec button{margin-left:auto;color:var(--blue);font-size:12px;font-weight:700;letter-spacing:0;text-transform:none}
 .nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;width:100%;text-align:left;transition:background .12s}
@@ -310,7 +313,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 </head>
 <body>
 <div id="app">
-  <aside id="sidebar"><div class="brand"><i></i>Shipshape</div><div id="navlists"></div></aside>
+  <aside id="sidebar"><div class="brand"><img src="favicon.svg" width="24" height="24" alt="">Shipshape</div><div id="navlists"></div></aside>
   <div id="main">
     <header id="head">
       <div class="hrow">
