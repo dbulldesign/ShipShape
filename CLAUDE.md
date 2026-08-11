@@ -20,6 +20,41 @@ fetched network-first, so the page itself still updates either way.
 re-fetching its own HTML to find out whether it is stale, and a cached answer
 would compare a copy against itself and always agree.
 
+## The list
+
+The list is patched in place, not rebuilt. `rowNode` decides whether a row can be
+kept by comparing `t.u` plus `rowCtx` — the handful of things outside the task
+that its markup depends on. **Every mutation of a task must set `t.u=now()`**, or
+its row will not repaint. Anything new that `rowHTML` reads from outside the task
+has to go into `rowCtx` for the same reason.
+
+Never rebuild a container that holds a row. Detaching a node between pointerdown
+and pointerup makes the browser drop the click entirely — that is why saving a
+field on blur used to swallow the click that caused it, and why a background sync
+landing mid-tap could swallow a tap. `patch()` exists to avoid it.
+
+## Sheets
+
+The detail sheet doubles as a docked column above 1200px, so it lives inside
+`#app` rather than beside it. A docked pane is not modal: no scrim, no focus trap,
+and `sheetOpen()` reports false for it so background pulls are not held off while
+it sits open. `syncDock()` handles the window being resized across that
+threshold.
+
+## The two functions
+
+`notify/` sends reminders, `track/` asks carriers where a parcel is. Both are
+deploy-it-yourself and **neither can be tested here** — one needs a real push
+service, the other real carrier credentials. Both are optional: with neither
+deployed the app works as it always did, and `track` reads and writes nothing, so
+parcel status is only ever a cache on the parcel.
+
+Realtime is a broadcast channel, never postgres_changes: the tables have RLS with
+no policies, so the anon key cannot read them and change events would be invisible
+to it. The broadcast says only "something moved"; each device then pulls through
+the security-definer functions. Every failure path falls back to the 15-second
+poll, so this must never become load-bearing.
+
 ## Icons
 
 App icons — `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
