@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.14.0">
+<meta name="app-version" content="1.15.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -417,7 +417,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="density" id="densityBtn"></button>
             <hr>
             <button data-m="undo">Undo last change</button>
-            <button data-m="clearDone">Clear completed</button>
+            <button data-m="clearDone">Archive completed</button>
+            <button data-m="archive">Archived…</button>
             <button data-m="reset" style="color:var(--red)">Delete everything</button>
             <hr>
             <button data-m="scan">Scan a shipping label</button>
@@ -444,6 +445,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="dtitle">Title</label><input id="dtitle" placeholder="What needs doing"></div>
     <div class="field"><label for="dproj">Project</label><select id="dproj"></select></div>
     <div class="field"><label for="ddue">Due</label><input id="ddue" type="date"></div>
+    <div class="field"><label for="drep">Repeats</label><select id="drep"></select></div>
     <div class="field"><label for="dflag">Flagged</label><input id="dflag" type="checkbox" style="flex:none;width:auto;transform:scale(1.2);accent-color:var(--orange)"></div>
   </div>
   <div class="fgroup" id="shipfields">
@@ -753,6 +755,21 @@ const SORT_LABEL={smart:'Smart',due:'Due date',added:'Recently added',title:'Tit
 const GROUPS=['auto','project','maker','stage','none'];
 const GROUP_LABEL={auto:'By date',project:'By project',maker:'By maker',stage:'By stage',none:'No grouping'};
 const SC=['var(--gray)','var(--blue)','var(--orange)','var(--purple)','var(--green)'];
+/* Work that comes round again — quarterly lead-time checks, monthly invoicing.
+   Completing one of these leaves the next one behind it. */
+const REPS=[[null,'Never'],['weekly','Every week'],['biweekly','Every 2 weeks'],
+  ['monthly','Every month'],['quarterly','Every 3 months'],['yearly','Every year']];
+const REP_SHORT={weekly:'weekly',biweekly:'2-weekly',monthly:'monthly',quarterly:'quarterly',yearly:'yearly'};
+function nextDue(from,rep){
+  const d=fromISO(from);
+  if(rep==='weekly')d.setDate(d.getDate()+7);
+  else if(rep==='biweekly')d.setDate(d.getDate()+14);
+  else if(rep==='monthly')d.setMonth(d.getMonth()+1);
+  else if(rep==='quarterly')d.setMonth(d.getMonth()+3);
+  else if(rep==='yearly')d.setFullYear(d.getFullYear()+1);
+  else return null;
+  return iso(d);
+}
 const PAL=['var(--blue)','var(--purple)','var(--pink)','var(--orange)','var(--teal)','var(--green)','var(--indigo)','var(--yellow)'];
 
 /* ============ carriers ============
@@ -875,6 +892,7 @@ function migrate(){
   for(const t of S.tasks){
     t.type=t.type||'task';t.tracking=t.tracking||'';t.stage=t.stage||0;t.u=t.u||t.created||now();
     t.po=t.po||'';t.carrier=t.carrier||'';t.qty=t.qty||null;t.eta=t.eta||null;t.stamps=t.stamps||{};
+    t.rep=REPS.some(r=>r[0]===t.rep)?t.rep:null;t.arch=t.arch||null;
     // one tracking string becomes the first entry in the parcel list
     if(!Array.isArray(t.tracks))t.tracks=t.tracking?[{id:uid(),n:t.tracking,carrier:t.carrier||'',got:null}]:[];
     delete t.assignee;
@@ -883,6 +901,18 @@ function migrate(){
   S.makers=Array.isArray(S.makers)?S.makers:[];
   sanitizeColors();
 }
+/* A maker's quoted lead time was recorded and then only ever displayed. Given a
+   maker and no expected date, it is the expected date. */
+function leadEta(maker,from){
+  const m=makerFor(maker);
+  if(!m||!m.leadDays)return null;
+  const d=new Date(from?fromISO(from):midnight());
+  d.setDate(d.getDate()+m.leadDays);
+  return iso(d);
+}
+/* Not shipped by the date the maker gave is late at the maker's end, which is a
+   different thing from being late for the job. */
+const makerLate=t=>!!(t.type==='shipment'&&!t.done&&!t.arch&&t.eta&&t.stage<3&&diff(t.eta)<0);
 /* ============ makers ============
    Tasks keep referring to a maker by name, so nothing has to be migrated. A
    maker record just hangs contact details and a lead time off that name, and
@@ -1301,7 +1331,8 @@ function stats(pid){
     late:all.filter(t=>!t.done&&t.due&&diff(t.due)<0).length};
 }
 /* Search understands a few filters alongside free text:
-   is:shipment  is:task  is:done  is:flagged  late:  stage:shipped
+   is:shipment  is:task  is:done  is:flagged  is:archived  is:repeating
+   is:latemaker  late:  stage:shipped
    maker:lumina  to:chicago  project:harbor  po:4417                        */
 function parseQuery(q){
   const f={text:'',is:[],stage:null,maker:null,to:null,project:null,po:null,late:false};
@@ -1352,6 +1383,9 @@ function matches(t){
     if(v==='done'&&!t.done)return false;
     if(v==='open'&&t.done)return false;
     if(v==='flagged'&&!t.flagged)return false;
+    if(v==='archived'&&!t.arch)return false;
+    if(v==='repeating'&&!t.rep)return false;
+    if(v==='latemaker'&&!makerLate(t))return false;
   }
   if(f.late&&!(t.due&&!t.done&&diff(t.due)<0))return false;
   if(f.stage&&!(t.type==='shipment'&&STAGES[t.stage].toLowerCase().startsWith(f.stage)))return false;
@@ -1365,6 +1399,10 @@ function matches(t){
 }
 function filtered(){
   let a=S.tasks.filter(matches);const v=view;
+  /* Archived work is out of the way everywhere but its own view — including in
+     search, unless it is asked for by name. */
+  if(v.t!=='archive'&&!parsedQuery().is.includes('archived'))a=a.filter(t=>!t.arch);
+  if(v.t==='archive')return a.filter(t=>t.arch).sort((x,y)=>y.arch-x.arch);
   // Search is global: a query looks through everything, done included, rather
   // than only the slice the current tab happens to be showing.
   if(query)return a.sort(bySort);
@@ -1454,6 +1492,7 @@ function renderNav(){
   h+=navItem(I.truck,'var(--purple)','Shipments',openT().filter(t=>t.type==='shipment').length,view.t==='shipments','data-v="shipments"');
   h+=navItem(I.list,'var(--gray)','All open',openT().length,view.t==='all','data-v="all"');
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
+  if(S.tasks.some(t=>t.arch))h+=navItem(I.box,'var(--label3)','Archived','',view.t==='archive','data-v="archive"');
   h+='<div class="navsec">Projects<button data-m="newproj">+ New</button></div>';
   if(!S.projects.length)h+='<div style="padding:2px 12px 4px;font-size:13.5px;color:var(--label3)">No projects yet</div>';
   for(const p of S.projects){
@@ -1472,7 +1511,7 @@ function renderNav(){
   $('#navlists').innerHTML=h;
 }
 const TITLES={today:'Today',scheduled:'Scheduled',flagged:'Flagged',all:'All open',done:'Completed',
-  projects:'Projects',shipments:'Shipments'};
+  projects:'Projects',shipments:'Shipments',archive:'Archived'};
 function renderHead(){
   const d=new Date();
   let name=TITLES[view.t]||'Today',sub='&nbsp;';
@@ -1503,8 +1542,11 @@ function rowHTML(t){
   if(t.destination)chips.push(`<span class="chip">→ ${esc(t.destination)}</span>`);
   if(t.qty)chips.push(`<span class="chip">×${t.qty}</span>`);
   if(t.po)chips.push(`<span class="chip">${/^p\.?o\b/i.test(t.po.trim())?'':'PO '}${esc(t.po)}</span>`);
+  if(t.rep)chips.push(`<span class="chip">↻ ${REP_SHORT[t.rep]}</span>`);
   // an expected arrival later than the promised date is the thing worth seeing
-  if(t.eta&&!t.done)chips.push(`<span class="chip"${t.due&&t.eta>t.due?' style="color:var(--red)"':''}>ETA ${fmtDue(t.eta)}${t.due&&t.eta>t.due?' · late':''}</span>`);
+  if(t.eta&&!t.done)chips.push(makerLate(t)
+    ? `<span class="chip" style="color:var(--orange)">Maker ${-diff(t.eta)} d over</span>`
+    : `<span class="chip"${t.due&&t.eta>t.due?' style="color:var(--red)"':''}>ETA ${fmtDue(t.eta)}${t.due&&t.eta>t.due?' · late':''}</span>`);
   const trks=tracksOf(t).filter(x=>clean(x.n));
   if(trks.length===1){const i=trackInfo({tracking:trks[0].n,carrier:trks[0].carrier});
     chips.push(i.url
@@ -1513,7 +1555,8 @@ function rowHTML(t){
   else if(trks.length>1){
     const got=trks.filter(x=>x.got).length;
     chips.push(`<span class="chip">${got}/${trks.length} received</span>`);}
-  if(t.type==='shipment')chips.push(`<button class="stagebar" data-stage="${t.id}" aria-label="Stage: ${STAGES[t.stage]}, tap to advance">
+  if(t.type==='shipment')chips.push(`<button class="stagebar" data-stage="${t.id}" aria-label="Stage: ${STAGES[t.stage]}, tap to advance"
+    title="${esc(stampsTitle(t))}">
     ${STAGES.map((_,i)=>`<i style="background:${i<=t.stage?SC[t.stage]:'var(--fill)'}"></i>`).join('')}
     <span style="color:${SC[t.stage]}">${STAGES[t.stage]}</span></button>`);
   const n=t.due?diff(t.due):null,cls=n===null?'':n<0?'late':n<=2?'soon':'';
@@ -1559,6 +1602,24 @@ function projectHead(){
     <button class="iconbtn" data-a="new" aria-label="Add to this project" style="background:var(--blue)"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
   </div>`;
 }
+/* Whether a maker actually hits the lead time they quote is already recorded —
+   every shipment stamps the day it reached Shipped, and the expected date is
+   there beside it. Nothing had ever read the two together. */
+function makerRecord(name){
+  const mine=S.tasks.filter(t=>t.type==='shipment'&&makerKey(t.manufacturer)===makerKey(name));
+  const judged=mine.filter(t=>t.stamps&&t.stamps[3]&&t.eta);
+  if(!judged.length)return null;
+  const days=judged.map(t=>Math.round((fromISO(iso(new Date(t.stamps[3])))-fromISO(t.eta))/864e5));
+  const onTime=days.filter(d=>d<=0).length;
+  const avg=Math.round(days.reduce((a,b)=>a+b,0)/days.length);
+  return {n:judged.length,onTime,avg,open:mine.filter(t=>!t.done&&!t.arch).length};
+}
+function recordLine(r){
+  if(!r)return '';
+  const when=avg=>avg>0?`${avg} day${avg===1?'':'s'} over on average`
+    :avg<0?`${-avg} day${avg===-1?'':'s'} early on average`:'on the day, on average';
+  return `${r.onTime} of ${r.n} shipped by the expected date · ${when(r.avg)}`;
+}
 /* Header for a maker's view: whatever is on record, plus a way to edit it. */
 function makerHead(){
   const name=view.v,m=makerFor(name);
@@ -1569,9 +1630,11 @@ function makerHead(){
     if(m.email)bits.push(`<a href="mailto:${esc(m.email)}">${esc(m.email)}</a>`);
     if(m.leadDays)bits.push(`${m.leadDays} day lead`);
   }
+  const rec=makerRecord(name);
   return `<div class="phead">
     <div style="flex:1;min-width:0"><h2>${esc(name)}</h2>
       <div class="l">${bits.length?bits.join(' · '):'No contact details yet'}</div>
+      ${rec?`<div class="l" style="color:${rec.avg>0?'var(--orange)':'var(--green)'}">${esc(recordLine(rec))}</div>`:''}
       ${m&&m.notes?`<div class="l" style="color:var(--label3)">${esc(m.notes)}</div>`:''}</div>
     <button class="iconbtn" data-editmaker="1" aria-label="Edit maker"><svg viewBox="0 0 20 20"><path d="M14.1 2.6a1.4 1.4 0 0 1 2 0l1.3 1.3a1.4 1.4 0 0 1 0 2l-1 1-3.3-3.3 1-1ZM12 4.7 3.4 13.3 2.5 17l3.7-.9 8.6-8.6L12 4.7Z"/></svg></button>
     <button class="iconbtn" data-a="new" aria-label="Add a shipment" style="background:var(--blue)"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
@@ -1589,7 +1652,9 @@ function emptyHTML(){
     done:['✨','Nothing completed yet','Finished work collects here.'],
     shipments:['📦','No shipments open','Add one with a maker and a destination.'],
     project:['🌱','This project is empty','Add the first task to get it moving.'],
-    all:['📋','All clear','Add a task to get going.']}[view.t]||['🔍','No matches','Try a different search.'];
+    all:['📋','All clear','Add a task to get going.'],
+    archive:['🗄','Nothing archived','Archive completed work to clear the list and keep its history.']}[view.t]
+    ||['🔍','No matches','Try a different search.'];
   return `<div class="empty"><div class="g">${m[0]}</div><h3>${m[1]}</h3><p>${m[2]}</p>
     <div><button class="btn" data-a="new">${composerCtx().type==='shipment'?'Add shipment':'New task'}</button></div></div>`;
 }
@@ -1759,7 +1824,11 @@ function addTask(d){
     manufacturer:canonMaker(d.manufacturer),destination:d.destination||'',
     tracking:d.tracking||'',carrier:d.carrier||'',po:d.po||'',
     tracks:d.tracking?[{id:uid(),n:d.tracking,carrier:d.carrier||'',got:null}]:[],
-    due:d.due||null,stage:0,flagged:!!d.flagged,notes:'',done:false,created:now(),u:now()};
+    due:d.due||null,stage:0,flagged:!!d.flagged,notes:'',done:false,rep:null,arch:null,
+    created:now(),u:now()};
+  // a maker with a quoted lead time answers "when is this expected" by itself,
+  // counted from today, which is when the order is going in
+  if(t.type==='shipment'&&t.manufacturer)t.eta=leadEta(t.manufacturer)||null;
   S.tasks.push(t);S.started=true;save();render();
   const f=$('#list .rowwrap');if(f)f.classList.add('pop');
   return t;
@@ -1787,6 +1856,9 @@ function toggleDone(id,el){
     // while the shipment was complete is the user's choice and stands
     if(t.type==='shipment'&&t.stage0!=null){if(t.stage===4)t.stage=t.stage0;t.stage0=null;}
   }
+  // completing a repeating task leaves the next one in its place
+  let spawned=null;
+  if(t.done&&t.rep&&t.due)spawned=repeatAfter(t);
   buzz(t.done?[6,30,10]:6);
   if(t.done&&el){el.closest('.row').classList.add('done');
     const s=t.projectId?stats(t.projectId):null;if(s&&s.all&&s.open===0)burst(el);}
@@ -1795,7 +1867,26 @@ function toggleDone(id,el){
     const w=el&&el.closest('.rowwrap');
     if(w&&!['done','all','project'].includes(view.t)){w.classList.add('leaving');setTimeout(render,300);}else render();
   },t.done?280:0);
-  if(t.done)toast('Completed',()=>{t.done=false;t.completed=null;t.stage=wasStage;t.u=now();save();render();});
+  if(t.done)toast(spawned?`Completed — next one due ${fmtDue(spawned.due)}`:'Completed',()=>{
+    t.done=false;t.completed=null;t.stage=wasStage;t.u=now();
+    if(spawned){S.tasks=S.tasks.filter(x=>x.id!==spawned.id);S.tomb[spawned.id]=now();}
+    save();render();});
+}
+/* The next occurrence is a fresh task rather than a moved one, so the record of
+   what was done and when stays put. Dates catch up if one was left late: a
+   monthly task finished three months on should come round next month, not go
+   straight back into the past. */
+function repeatAfter(t){
+  let due=nextDue(t.due,t.rep);
+  for(let i=0;due&&diff(due)<0&&i<60;i++)due=nextDue(due,t.rep);
+  if(!due)return null;
+  const c=JSON.parse(JSON.stringify(t));
+  c.id=uid();c.created=now();c.u=now();c.due=due;c.done=false;c.completed=null;
+  c.stamps={};c.stage0=null;c.arch=null;
+  if(c.type==='shipment'){c.stage=0;c.tracks=[];c.tracking='';c.carrier='';
+    c.eta=leadEta(c.manufacturer,due)||null;}
+  S.tasks.push(c);
+  return c;
 }
 /* Stage history. Each stage records when it was first reached, so a shipment can
    answer "when did this ship" and how long it sat at each step. */
@@ -1803,6 +1894,13 @@ function stampStage(t,stage){
   if(t.type!=='shipment')return;
   t.stamps=t.stamps||{};
   if(!t.stamps[stage])t.stamps[stage]=now();
+}
+/* The stage history was only visible inside the sheet. Hovering the bar on the
+   row is the cheapest possible way to ask "when did this ship". */
+function stampsTitle(t){
+  const s=t.stamps||{};
+  const bits=STAGES.map((n,i)=>s[i]?`${n} ${fmtDue(iso(new Date(s[i])))}`:null).filter(Boolean);
+  return bits.length?bits.join(' · '):`At ${STAGES[t.stage]} · no stage dates recorded yet`;
 }
 function stampsHTML(t){
   const s=t.stamps||{};
@@ -1972,6 +2070,7 @@ function openDetail(id){
     +S.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
     +'<option value="__new">New project…</option>';
   $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
+  $('#drep').innerHTML=REPS.map(([v,l])=>`<option value="${v||''}" ${(t.rep||'')===(v||'')?'selected':''}>${l}</option>`).join('');
   rememberFocus();
   if(wide()){
     // docked: a column beside the list rather than a modal over it
@@ -2174,10 +2273,17 @@ function saveDetail(){
   t.title=$('#dtitle').value.trim()||t.title;
   t.due=$('#ddue').value||null;
   t.flagged=$('#dflag').checked;t.notes=$('#dnotes').value;
+  const wasMaker=t.manufacturer;
   t.manufacturer=canonMaker($('#dmfr').value);t.destination=$('#ddest').value.trim();
   t.po=$('#dpo').value.trim();
+  t.rep=$('#drep').value||null;
   const q=parseInt($('#dqty').value,10);t.qty=Number.isFinite(q)&&q>0?q:null;
   t.eta=$('#deta').value||null;
+  // naming the maker fills in what they quoted, if nothing is expected yet
+  if(!t.eta&&t.manufacturer&&t.manufacturer!==wasMaker){
+    t.eta=leadEta(t.manufacturer)||null;
+    if(t.eta)$('#deta').value=t.eta;
+  }
   const pv=$('#dproj').value;
   if(pv!=='__new')t.projectId=pv||null;
   t.u=now();save();render();
@@ -2540,7 +2646,7 @@ $('#sugg').addEventListener('click',e=>{
   const b=e.target.closest('[data-ins]');if(!b)return;
   const ci=$('#ci');ci.value=ci.value.replace(/\s+$/,'')+' '+b.dataset.ins+' ';updatePreview();ci.focus();
 });
-['#dtitle','#ddue','#dflag','#dnotes','#dmfr','#ddest','#dpo','#dqty','#deta'].forEach(s=>$(s).addEventListener('change',saveDetail));
+['#dtitle','#ddue','#dflag','#dnotes','#dmfr','#ddest','#dpo','#dqty','#deta','#drep'].forEach(s=>$(s).addEventListener('change',saveDetail));
 $('#dproj').addEventListener('change',e=>{
   if(e.target.value==='__new'){
     const id=editing;saveDetail();attachTo=id;editing=null;
@@ -2588,12 +2694,16 @@ function doMenu(k){
     a.download=`shipshape-${iso(new Date())}.json`;a.click();toast('Backup saved');
   }
   if(k==='import')$('#fileIn').click();
+  /* Completed work used to be deleted, which threw away the stage history the
+     maker's record is built from. Archiving keeps it and takes it out of sight. */
   if(k==='clearDone'){
-    const old=S.tasks.slice(),keep=S.tasks.filter(t=>!t.done),n=old.length-keep.length;
-    old.filter(t=>t.done).forEach(t=>S.tomb[t.id]=now());
-    S.tasks=keep;save();render();
-    toast(`Cleared ${n}`,()=>{old.forEach(t=>delete S.tomb[t.id]);S.tasks=old;save();render();});
+    const hit=S.tasks.filter(t=>t.done&&!t.arch);
+    if(!hit.length)return toast('Nothing completed to archive');
+    hit.forEach(t=>{t.arch=now();t.u=now();});
+    save();render();
+    toast(`Archived ${hit.length}`,()=>{hit.forEach(t=>{t.arch=null;t.u=now();});save();render();});
   }
+  if(k==='archive')setView('archive');
   if(k==='reset'&&confirm('Delete every project and task? This cannot be undone.')){
     [...S.tasks,...S.projects].forEach(x=>S.tomb[x.id]=now());
     S.tasks=[];S.projects=[];S.started=false;save();render();
@@ -2656,6 +2766,7 @@ function openRowMenu(id,x,y){
     ['today','Due today'],['tomorrow','Due tomorrow'],t.due?['nodate','Clear the date']:null,
     ['dup','Duplicate'],
     tracksOf(t).some(x=>clean(x.n))?['copytrack','Copy tracking number']:null,
+    t.arch?['unarch','Take out of the archive']:t.done?['arch','Archive']:null,
     ['sel','Select'],
   ].filter(Boolean);
   const projs=S.projects.filter(p=>p.id!==t.projectId);
@@ -2708,6 +2819,8 @@ $('#rowmenu').addEventListener('click',e=>{
   const undo=()=>{Object.assign(t,before);t.u=now();save();render();};
   const dayOff=n=>{const d=new Date(midnight());d.setDate(d.getDate()+n);return iso(d);};
   if(k==='flag'){t.flagged=!t.flagged;t.u=now();save();render();toast(t.flagged?'Flagged':'Flag removed',undo);return;}
+  if(k==='arch'||k==='unarch'){t.arch=k==='arch'?now():null;t.u=now();save();render();
+    toast(t.arch?'Archived':'Out of the archive',undo);return;}
   if(k==='today'||k==='tomorrow'){t.due=dayOff(k==='today'?0:1);t.u=now();save();render();toast('Due '+fmtDue(t.due),undo);return;}
   if(k==='nodate'){t.due=null;t.u=now();save();render();toast('Date cleared',undo);return;}
   if(k.startsWith('proj:')){
@@ -2789,7 +2902,7 @@ function paletteRows(q){
   for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],
     ['flagged','Flagged',I.flag,'var(--orange)'],['shipments','Shipments',I.truck,'var(--purple)'],
     ['all','All open',I.list,'var(--gray)'],['done','Completed',I.check,'var(--green)'],
-    ['projects','Projects',I.box,'var(--indigo)']])
+    ['projects','Projects',I.box,'var(--indigo)'],['archive','Archived',I.box,'var(--label3)']])
     push(l,'View',ico,col,()=>setView(v));
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
   for(const m of uniq('manufacturer'))push(m,'Maker',I.box,colorFor(m),()=>setView('mfr',m));
@@ -2797,7 +2910,7 @@ function paletteRows(q){
   for(const [l,k] of [['New task','new'],['New project','newproj'],['Scan a shipping label','scan'],
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['Save a backup file','export'],['Load from a backup file','import'],
-    ['Undo last change','undo'],['Clear completed','clearDone'],
+    ['Undo last change','undo'],['Archive completed','clearDone'],
     ['Rows: '+(compact?'comfortable':'compact'),'density'],['Check for updates','update'],
     ['Load a sample setup','sample']])
     push(l,'Command',I.list,'var(--gray)',()=>k==='new'?openComposer():doMenu(k));
