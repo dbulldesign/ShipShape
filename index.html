@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.19.0">
+<meta name="app-version" content="1.19.1">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -491,7 +491,6 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
       <button class="btn sec" id="dtrackadd" style="margin:0;font-size:14px;padding:8px 14px">Add a number</button>
       <button class="btn sec" id="dscan" style="margin:0;font-size:14px;padding:8px 14px">Scan a label</button>
       <button class="btn sec" id="dcheck" style="margin:0;font-size:14px;padding:8px 14px;display:none">Check status</button>
-      <button class="btn sec" id="dask" style="margin:0;font-size:14px;padding:8px 14px;display:none">Ask for updates</button>
     </div>
     <div id="dstamps" class="stamps"></div>
   </div>
@@ -2530,37 +2529,6 @@ function renderTracks(t){
   }).join(''):'<div class="trk"><span class="warn">Nothing to track yet.</span></div>';
   const any=list.some(x=>clean(x.n));
   $('#dcheck').style.display=any&&trackFnUrl()?'':'none';
-  $('#dask').style.display=t.type==='shipment'?'':'none';
-}
-/* ============ ask the maker for updates ============
-   The carriers' own notification accounts — My Choice, Delivery Manager — tell
-   whoever holds the delivery address. Almost nothing here ships to us: it goes
-   to a job site or a warehouse, so those accounts would never mention it. The
-   shipper can add anyone to a shipment's notifications at booking, which covers
-   every parcel and every carrier and needs no API at all. It is an email, and
-   everything that email needs to say is already on the record. */
-function askForUpdates(){
-  const t=S.tasks.find(x=>x.id===editing);if(!t)return;
-  const m=makerFor(t.manufacturer);
-  location.href=updatesMailto(t);
-  if(!m||!m.email)toast('No email on file for this maker — add one on the maker to skip this step.');
-}
-function updatesMailto(t){
-  const m=makerFor(t.manufacturer);
-  const nums=tracksOf(t).map(x=>clean(x.n)).filter(Boolean);
-  // only the facts there are, so a sparse order does not send blank lines
-  const facts=[t.title,
-    t.po&&`PO: ${t.po}`,
-    t.qty&&`Quantity: ${t.qty}`,
-    t.destination&&`Shipping to: ${t.destination}`,
-    nums.length&&`Tracking: ${nums.join(', ')}`,
-    t.eta&&`Expected: ${fmtDue(t.eta)}`].filter(Boolean);
-  const lines=[
-    `Could you add me to the carrier's shipment notifications for this order, so I get the tracking updates as it moves?`,
-    '',...facts,'','Thank you.'];
-  return 'mailto:'+encodeURIComponent(m&&m.email?m.email:'')
-    +'?subject='+encodeURIComponent('Shipping updates'+(t.po?` — PO ${t.po}`:` — ${t.title}`))
-    +'&body='+encodeURIComponent(lines.join('\n'));
 }
 /* ============ carrier status ============
    A tracking number was a link and nothing more: to find out where a parcel is
@@ -2754,7 +2722,6 @@ $('#cadd').addEventListener('click',()=>submitComposer(false));
 $('#dclose').addEventListener('click',closeSheets);
 $('#dscan').addEventListener('click',()=>openScanner('field'));
 $('#dcheck').addEventListener('click',checkStatus);
-$('#dask').addEventListener('click',askForUpdates);
 /* ============ calendar ============
    The day strip only reaches 15 days out, so anything further was unreachable
    without knowing the date already. */
