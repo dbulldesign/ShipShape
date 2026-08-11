@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.17.0">
+<meta name="app-version" content="1.18.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -242,6 +242,8 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trk .r2{display:flex;align-items:center;gap:10px;margin-top:4px;font-size:13px;flex-wrap:wrap}
 .trk .r2 a{color:var(--blue);font-weight:600;text-decoration:none}
 .trk .r2 .warn{color:var(--label3)}
+.trk .r2.st{gap:6px}
+.trk .r2.st i{width:7px;height:7px;border-radius:50%;flex:none;display:block}
 .trk .gotbtn{display:flex;align-items:center;gap:5px;color:var(--label2);font-size:13px}
 .trk .gotbtn.on{color:var(--green);font-weight:600}
 .trk .del{margin-left:auto;color:var(--red);font-size:13px}
@@ -473,6 +475,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="dtitle">Title</label><input id="dtitle" placeholder="What needs doing"></div>
     <div class="field"><label for="dproj">Project</label><select id="dproj"></select></div>
     <div class="field"><label for="ddue">Due</label><input id="ddue" type="date"></div>
+    <div class="field"><label for="dremind">Remind me</label><select id="dremind"></select></div>
     <div class="field"><label for="drep">Repeats</label><select id="drep"></select></div>
     <div class="field"><label for="dflag">Flagged</label><input id="dflag" type="checkbox" style="flex:none;width:auto;transform:scale(1.2);accent-color:var(--orange)"></div>
   </div>
@@ -487,6 +490,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="trackadd">
       <button class="btn sec" id="dtrackadd" style="margin:0;font-size:14px;padding:8px 14px">Add a number</button>
       <button class="btn sec" id="dscan" style="margin:0;font-size:14px;padding:8px 14px">Scan a label</button>
+      <button class="btn sec" id="dcheck" style="margin:0;font-size:14px;padding:8px 14px;display:none">Check status</button>
     </div>
     <div id="dstamps" class="stamps"></div>
   </div>
@@ -617,7 +621,10 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div id="pushdiag" class="tracklink" style="padding-top:10px"></div>
   <div class="blurb" style="padding-top:8px">A push needs a server to send it, so this needs the notify
   function deployed and its key pasted above — see notify/README.md in the repo. On iPhone the app has to be
-  on your Home Screen first; Safari will not grant notifications to a tab.</div>
+  on your Home Screen first; Safari will not grant notifications to a tab.
+  <br><br>A second function on the same project can say where a parcel actually is, which puts a
+  <b>Check status</b> button on any shipment with a tracking number — see track/README.md. It needs the
+  function URL above, and your own carrier credentials.</div>
   <details><summary>First-time setup (5 minutes)</summary><div class="body">
     <ol>
       <li>Make a free project at supabase.com.</li>
@@ -786,6 +793,10 @@ const GROUP_LABEL={auto:'By date',project:'By project',maker:'By maker',stage:'B
 const SC=['var(--gray)','var(--blue)','var(--orange)','var(--purple)','var(--green)'];
 /* Work that comes round again — quarterly lead-time checks, monthly invoicing.
    Completing one of these leaves the next one behind it. */
+/* The daily reminder covers what is due today. A shipment usually needs chasing
+   before it is due, so each one can ask for its own reminder ahead of time. */
+const REMINDS=[[0,'On the day'],[1,'1 day before'],[2,'2 days before'],[3,'3 days before'],
+  [7,'A week before'],[14,'2 weeks before']];
 const REPS=[[null,'Never'],['weekly','Every week'],['biweekly','Every 2 weeks'],
   ['monthly','Every month'],['quarterly','Every 3 months'],['yearly','Every year']];
 const REP_SHORT={weekly:'weekly',biweekly:'2-weekly',monthly:'monthly',quarterly:'quarterly',yearly:'yearly'};
@@ -922,6 +933,7 @@ function migrate(){
     t.type=t.type||'task';t.tracking=t.tracking||'';t.stage=t.stage||0;t.u=t.u||t.created||now();
     t.po=t.po||'';t.carrier=t.carrier||'';t.qty=t.qty||null;t.eta=t.eta||null;t.stamps=t.stamps||{};
     t.rep=REPS.some(r=>r[0]===t.rep)?t.rep:null;t.arch=t.arch||null;
+    t.remind=Number.isFinite(t.remind)&&t.remind>0?t.remind:null;
     // one tracking string becomes the first entry in the parcel list
     if(!Array.isArray(t.tracks))t.tracks=t.tracking?[{id:uid(),n:t.tracking,carrier:t.carrier||'',got:null}]:[];
     delete t.assignee;
@@ -1217,7 +1229,77 @@ async function push(){
       await rpc('shipshape_push',{k:sync.ws,d:payload()});
     }
     setSync('idle');
+    nudge();                                  // tell the other devices to pull now
   }catch(e){setSync('error');}
+}
+/* ============ live nudges over Realtime ============
+   Polling every fifteen seconds is a request whether or not anything changed, and
+   still means a change can sit unseen for fifteen seconds. Supabase Realtime can
+   carry a message the moment a push lands, so the other devices pull straight
+   away and the poll can drop back to a slow safety net.
+
+   Deliberately a broadcast channel and not postgres_changes: the tables have row
+   level security with no policies, so the anon key cannot read them — that is the
+   whole security model here, and table change events would be invisible to it
+   anyway. A broadcast carries no data, only "something moved", and each device
+   then pulls through the same security-definer functions as always. The channel
+   name is derived from the workspace key, which is already the shared secret.
+
+   The socket is a best-effort optimisation. Every failure path falls back to the
+   fifteen-second poll, which is exactly the behaviour that existed before, so a
+   project where this does not work loses nothing. */
+let rtWS=null,rtRef=0,rtBeat=null,rtRetry=0,rtJoined=false,rtT=null;
+const rtTopic=()=>'realtime:shipshape-'+(sync.ws||'').slice(0,32);
+function rtSend(o){try{rtWS&&rtWS.readyState===1&&rtWS.send(JSON.stringify(o));}catch(e){}}
+function rtClose(){
+  clearInterval(rtBeat);clearTimeout(rtT);rtBeat=rtT=null;
+  rtJoined=false;
+  if(rtWS){try{rtWS.onclose=null;rtWS.close();}catch(e){}rtWS=null;}
+}
+function rtConnect(){
+  rtClose();
+  if(!sync.on||!sync.url||!sync.key||!sync.ws||!('WebSocket'in window))return;
+  let url;
+  try{
+    url=new URL(sync.url.replace(/\/+$/,''));
+    url.protocol=url.protocol==='http:'?'ws:':'wss:';
+    url.pathname='/realtime/v1/websocket';
+    url.searchParams.set('apikey',sync.key);
+    url.searchParams.set('vsn','1.0.0');
+  }catch(e){return;}
+  let ws;
+  try{ws=new WebSocket(url.toString());}catch(e){return;}
+  rtWS=ws;
+  ws.onopen=()=>{
+    rtRetry=0;
+    rtSend({topic:rtTopic(),event:'phx_join',ref:String(++rtRef),
+      payload:{config:{broadcast:{self:false,ack:false},presence:{key:''},private:false}}});
+    rtBeat=setInterval(()=>rtSend({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++rtRef)}),25000);
+  };
+  ws.onmessage=ev=>{
+    let m=null;try{m=JSON.parse(ev.data);}catch(e){return;}
+    if(m.event==='phx_reply'&&m.topic===rtTopic()){
+      rtJoined=m.payload&&m.payload.status==='ok';
+      if(rtJoined)startPolling();            // a live socket earns the slow poll
+      return;
+    }
+    if(m.event==='broadcast'&&m.payload&&m.payload.event==='moved')pull(true);
+  };
+  ws.onclose=()=>{
+    const wasJoined=rtJoined;
+    rtWS=null;rtJoined=false;clearInterval(rtBeat);
+    if(wasJoined)startPolling();             // back to the fast poll while it is down
+    if(!sync.on)return;
+    // back off to a minute: a project without Realtime enabled closes immediately
+    const wait=Math.min(60000,2000*Math.pow(2,Math.min(rtRetry++,5)));
+    rtT=setTimeout(rtConnect,wait);
+  };
+  ws.onerror=()=>{};
+}
+function nudge(){
+  if(!rtJoined)return;
+  rtSend({topic:rtTopic(),event:'broadcast',ref:String(++rtRef),
+    payload:{type:'broadcast',event:'moved',payload:{at:now()}}});
 }
 async function pull(quiet){
   if(!sync.on||pulling)return;
@@ -1288,9 +1370,11 @@ function mergeIn(remote){
   if(changed){S.started=true;sanitizeColors();}   // remote projects are untrusted input
   return changed;
 }
+/* With a live socket the poll is only a safety net, so it slows right down; with
+   no socket it is the only thing keeping devices in step, so it stays quick. */
 function startPolling(){
   clearInterval(pollT);
-  if(sync.on)pollT=setInterval(()=>pull(true),15000);
+  if(sync.on)pollT=setInterval(()=>pull(true),rtJoined?120000:15000);
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull(true);});
 window.addEventListener('focus',()=>pull(true));
@@ -1623,6 +1707,9 @@ function rowHTML(t){
   else if(trks.length>1){
     const got=trks.filter(x=>x.got).length;
     chips.push(`<span class="chip">${got}/${trks.length} received</span>`);}
+  const st=trks.map(x=>x.status).filter(Boolean).sort((a,b)=>b.at-a.at)[0];
+  if(st&&!t.done)chips.push(`<span class="chip" style="color:${st.done?'var(--green)':'var(--purple)'}"
+    title="checked ${esc(fmtAgo(st.at))}">${esc(st.text)}</span>`);
   if(t.type==='shipment')chips.push(`<button class="stagebar" data-stage="${t.id}" aria-label="Stage: ${STAGES[t.stage]}, tap to advance"
     title="${esc(stampsTitle(t))}">
     ${STAGES.map((_,i)=>`<i style="background:${i<=t.stage?SC[t.stage]:'var(--fill)'}"></i>`).join('')}
@@ -2239,6 +2326,7 @@ function openDetail(id){
     +'<option value="__new">New project…</option>';
   $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
   $('#drep').innerHTML=REPS.map(([v,l])=>`<option value="${v||''}" ${(t.rep||'')===(v||'')?'selected':''}>${l}</option>`).join('');
+  $('#dremind').innerHTML=REMINDS.map(([v,l])=>`<option value="${v}" ${(t.remind||0)===v?'selected':''}>${l}</option>`).join('');
   rememberFocus();
   if(wide()){
     // docked: a column beside the list rather than a modal over it
@@ -2433,8 +2521,59 @@ function renderTracks(t){
         <select data-f="carrier">${carrierOptions(tr.carrier)}</select></div>
       <div class="r2">${line}
         <button class="gotbtn ${tr.got?'on':''}" data-got="${tr.id}">${tr.got?'✓ Received':'Mark received'}</button>
-        <button class="del" data-deltrk="${tr.id}">Remove</button></div></div>`;
+        <button class="del" data-deltrk="${tr.id}">Remove</button></div>
+      ${tr.status?`<div class="r2 st"><i style="background:${tr.status.done?'var(--green)':'var(--purple)'}"></i>
+        <span>${esc(tr.status.text)}</span>
+        ${tr.status.where?`<span class="warn">${esc(tr.status.where)}</span>`:''}
+        <span class="warn">checked ${fmtAgo(tr.status.at)}</span></div>`:''}</div>`;
   }).join(''):'<div class="trk"><span class="warn">Nothing to track yet.</span></div>';
+  const any=list.some(x=>clean(x.n));
+  $('#dcheck').style.display=any&&sync.pushUrl?'':'none';
+}
+/* ============ carrier status ============
+   A tracking number was a link and nothing more: to find out where a parcel is
+   you left the app. Carriers all want credentials and none of them allow a call
+   from a browser, so the asking is done by a companion function on the same
+   Supabase project — see track/README.md — which holds the keys and answers with
+   a line of text per number. What comes back is stored on the parcel like any
+   other field, so it syncs, and it is only ever a cache: nothing here depends on
+   the function existing, and with it absent the app behaves exactly as before. */
+function trackFnUrl(){
+  const b=(sync.pushUrl||'').replace(/\/notify\/?$/,'');
+  return b?b+'/track':'';
+}
+let checking=false;
+async function checkStatus(){
+  const t=S.tasks.find(x=>x.id===editing);if(!t||checking)return;
+  const url=trackFnUrl();
+  if(!url)return toast('Deploy the track function first — see track/README.md.');
+  const list=tracksOf(t).filter(x=>clean(x.n));
+  if(!list.length)return;
+  checking=true;$('#dcheck').textContent='Checking…';
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({numbers:list.map(x=>({n:clean(x.n),carrier:x.carrier||''}))})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    let hits=0;
+    for(const tr of tracksOf(t)){
+      const got=(j.results||[]).find(x=>x.n===clean(tr.n));
+      if(!got||!got.text)continue;
+      tr.status={text:got.text,where:got.where||'',done:!!got.delivered,at:Date.now()};
+      hits++;
+      // the carrier saying it arrived is better evidence than anyone's memory
+      if(got.delivered&&!tr.got)tr.got=now();
+    }
+    if(hits){
+      t.u=now();
+      if(tracksOf(t).length&&tracksOf(t).every(x=>x.got)&&t.stage<4){t.stage=4;stampStage(t,4);}
+      save();renderTracks(t);render();
+      toast(`Checked ${hits} number${hits===1?'':'s'}`);
+    }else toast('The carrier had nothing to report yet.');
+  }catch(e){
+    toast('Could not reach the track function.');
+  }
+  checking=false;$('#dcheck').textContent='Check status';
 }
 
 function saveDetail(){
@@ -2446,6 +2585,7 @@ function saveDetail(){
   t.manufacturer=canonMaker($('#dmfr').value);t.destination=$('#ddest').value.trim();
   t.po=$('#dpo').value.trim();
   t.rep=$('#drep').value||null;
+  const rd=parseInt($('#dremind').value,10);t.remind=Number.isFinite(rd)&&rd>0?rd:null;
   const q=parseInt($('#dqty').value,10);t.qty=Number.isFinite(q)&&q>0?q:null;
   t.eta=$('#deta').value||null;
   // naming the maker fills in what they quoted, if nothing is expected yet
@@ -2533,10 +2673,12 @@ function spreadSettings(v){
 function renderSyncSheet(){
   const msgs={off:'Off. Everything stays on this device.',
     idle:`On. Last sync ${fmtAgo(sync.last)}.`,syncing:'Syncing…',error:'Cannot reach Supabase. Check the URL, key and workspace.'};
-  const how=!sync.on?''
+  const how=(!sync.on?''
     :sync.mode==='items'?' Sending only what changed.'
     :sync.mode==='doc'?' Sending the whole list each time — run the optional SQL below to change that.'
-    :probing?' Checking which scheme this project supports…':'';
+    :probing?' Checking which scheme this project supports…':'')
+    +(sync.on?(rtJoined?' Live — changes arrive as they happen.'
+      :' Checking every 15 seconds; turn on Realtime in Supabase to make it instant.'):'');
   $('#sstatus').textContent=(sync.on?msgs[syncStatus]||msgs.idle:msgs.off)+how;
   const d=sync.draft||{};
   fillSyncField('surl',d.surl||sync.url);fillSyncField('skey',d.skey||sync.key);fillSyncField('sws',d.sws||sync.ws);
@@ -2573,6 +2715,7 @@ $('#ccancel').addEventListener('click',()=>{editing=null;closeSheets();});
 $('#cadd').addEventListener('click',()=>submitComposer(false));
 $('#dclose').addEventListener('click',closeSheets);
 $('#dscan').addEventListener('click',()=>openScanner('field'));
+$('#dcheck').addEventListener('click',checkStatus);
 /* ============ calendar ============
    The day strip only reaches 15 days out, so anything further was unreachable
    without knowing the date already. */
@@ -2759,7 +2902,7 @@ $('#son').addEventListener('click',async()=>{
     if(syncStatus==='error')throw new Error('pull failed');
     await push();
     if(syncStatus==='error')throw new Error('push failed');
-    saveLocal();render();startPolling();
+    saveLocal();render();rtConnect();startPolling();
     flushSyncDraft();                       // committed, so it is no longer a draft
     toast('Sync is on');renderSyncSheet();
   }catch(e){
@@ -2767,7 +2910,7 @@ $('#son').addEventListener('click',async()=>{
   }
 });
 $('#soff').addEventListener('click',async()=>{
-  sync.on=false;sync.mode=null;sync.pushed=0;sync.pulled=0;await saveSyncCfg();clearInterval(pollT);setSync('off');renderSyncSheet();toast('Sync turned off');
+  sync.on=false;sync.mode=null;sync.pushed=0;sync.pulled=0;await saveSyncCfg();clearInterval(pollT);rtClose();setSync('off');renderSyncSheet();toast('Sync turned off');
 });
 $('#sqlcopy3').addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText($('#sql3').textContent);toast('SQL copied');}
@@ -2815,7 +2958,7 @@ $('#sugg').addEventListener('click',e=>{
   const b=e.target.closest('[data-ins]');if(!b)return;
   const ci=$('#ci');ci.value=ci.value.replace(/\s+$/,'')+' '+b.dataset.ins+' ';updatePreview();ci.focus();
 });
-['#dtitle','#ddue','#dflag','#dnotes','#dmfr','#ddest','#dpo','#dqty','#deta','#drep'].forEach(s=>$(s).addEventListener('change',saveDetail));
+['#dtitle','#ddue','#dflag','#dnotes','#dmfr','#ddest','#dpo','#dqty','#deta','#drep','#dremind'].forEach(s=>$(s).addEventListener('change',saveDetail));
 $('#dproj').addEventListener('change',e=>{
   if(e.target.value==='__new'){
     const id=editing;saveDetail();attachTo=id;editing=null;
@@ -3290,7 +3433,7 @@ function loadSample(){
   await loadAll();
   render();
   setSync(sync.on?'idle':'off');
-  if(sync.on){startPolling();pull(true);}
+  if(sync.on){rtConnect();startPolling();pull(true);}
   renderVersion();
   setTimeout(()=>checkUpdate(true),1200);
   // Offline support. Registered after the first render so it never delays paint,

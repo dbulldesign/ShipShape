@@ -31,27 +31,57 @@ const rest = (path: string, init: RequestInit = {}) =>
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-/** Items due on or before today, per workspace. Reads whichever table the
+/** Whether an item wants a reminder today, and what to say about it.
+ *
+ *  The plain case is "due on or before today". On top of that an item can carry
+ *  `remind`, a number of days to be told ahead of time, and a shipment can have
+ *  an `eta` that matters sooner than the due date does. So the date to measure
+ *  against is the earlier of due and eta, and the reminder opens `remind` days
+ *  before it — which is why this cannot simply be a `due <= today` filter.
+ *
+ *  Archived items are out. So is anything already done. */
+function wanted(t: Record<string, unknown>): string | null {
+  if (!t || t.done || t.arch) return null;
+  const due = typeof t.due === "string" ? t.due : "";
+  const eta = typeof t.eta === "string" ? t.eta : "";
+  const when = [due, eta].filter(Boolean).sort()[0];
+  if (!when) return null;
+  const lead = Number(t.remind) > 0 ? Number(t.remind) : 0;
+  const open = new Date(when + "T00:00:00Z");
+  open.setUTCDate(open.getUTCDate() - lead);
+  if (open.toISOString().slice(0, 10) > today()) return null;
+  const title = (t.title as string) ?? "Untitled";
+  // say why it is being mentioned early, or it reads as a mistake
+  if (lead && when > today()) {
+    const days = Math.round((+new Date(when + "T00:00:00Z") - +new Date(today() + "T00:00:00Z")) / 864e5);
+    return `${title} — in ${days} day${days === 1 ? "" : "s"}`;
+  }
+  return title;
+}
+
+/** Everything wanting a reminder today, per workspace. Reads whichever table the
  *  workspace uses: the per-item one if it has rows, else the whole document. */
 async function dueByWorkspace(): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
-  const cutoff = today();
+  const seen = new Set<string>();
 
   const items = await (await rest("shipshape_items?select=ws,data&data=not.is.null")).json();
   for (const row of items ?? []) {
-    const t = row.data;
-    if (!t || t.done || !t.due || t.due > cutoff) continue;
+    seen.add(row.ws);
+    const line = wanted(row.data);
+    if (!line) continue;
     if (!out.has(row.ws)) out.set(row.ws, []);
-    out.get(row.ws)!.push(t.title ?? "Untitled");
+    out.get(row.ws)!.push(line);
   }
 
   const docs = await (await rest("shipshape_state?select=id,data")).json();
   for (const row of docs ?? []) {
-    if (out.has(row.id)) continue;                    // per-item rows win
+    if (seen.has(row.id)) continue;                   // per-item rows win
     for (const t of row.data?.tasks ?? []) {
-      if (t.done || !t.due || t.due > cutoff) continue;
+      const line = wanted(t);
+      if (!line) continue;
       if (!out.has(row.id)) out.set(row.id, []);
-      out.get(row.id)!.push(t.title ?? "Untitled");
+      out.get(row.id)!.push(line);
     }
   }
   return out;
