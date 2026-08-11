@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.12.4">
+<meta name="app-version" content="1.13.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -312,6 +312,21 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 </style>
 </head>
 <body>
+<!-- One copy of each repeated icon. The nav draws seven of these and every row
+     with a flag drew its own; a <use> reference is a fraction of the markup and
+     one node instead of several. Only icons whose colour comes from the outer
+     <svg> can live here: fill and stroke inherit into a <use>, but a rule like
+     ".check .f{transform:…}" cannot reach inside one, so the checkbox and the
+     progress rings stay inline where their parts are styled individually. -->
+<svg id="sprite" aria-hidden="true"><defs>
+  <symbol id="i-today" viewBox="0 0 20 20"><path d="M6 1.6a.9.9 0 0 1 .9.9v.9h6.2v-.9a.9.9 0 1 1 1.8 0v.9h.3A2 2 0 0 1 17 5.4v10.2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5.4a2 2 0 0 1 2-1.9h.1v-.9a.9.9 0 0 1 .9-1Zm-1.2 6.2v7.8c0 .1.1.2.2.2h10c.1 0 .2-.1.2-.2V7.8H4.8Z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 20 20"><path d="M10 1.8a8.2 8.2 0 1 1 0 16.4 8.2 8.2 0 0 1 0-16.4Zm.9 4a.9.9 0 1 0-1.8 0v4.6l3 2a.9.9 0 1 0 1-1.5l-2.2-1.5V5.8Z"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 20 20"><path d="M5 2.5a.9.9 0 0 1 .9.9v.3l2.6-.5 3.5.7 3.5-.7v7.2l-3.5.7-3.5-.7-2.6.5v5.7a.9.9 0 1 1-1.8 0V3.4a.9.9 0 0 1 .9-.9Z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 20 20"><path d="M4 4.6h12a.9.9 0 1 1 0 1.8H4a.9.9 0 0 1 0-1.8Zm0 4.5h12a.9.9 0 1 1 0 1.8H4a.9.9 0 1 1 0-1.8Zm0 4.5h12a.9.9 0 1 1 0 1.8H4a.9.9 0 1 1 0-1.8Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 20 20"><path d="M8.1 13.5 4.9 10.3a1 1 0 0 1 1.4-1.4l2.2 2.2 5.1-5.6a1 1 0 1 1 1.5 1.4l-5.8 6.4a1 1 0 0 1-1.2.2Z"/></symbol>
+  <symbol id="i-box" viewBox="0 0 20 20"><path d="M3 4h4l1.1 1.4H17a1 1 0 0 1 1 1v8.2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 20 20"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h7A1.5 1.5 0 0 1 12 5.5V7h2.4l2.6 3v4h-2a2 2 0 1 1-4 0H7a2 2 0 1 1-4 0H2V5.5Z"/></symbol>
+</defs></svg>
 <div id="app">
   <aside id="sidebar"><div class="brand"><img src="favicon.svg" width="24" height="24" alt="">Shipshape</div><div id="navlists"></div></aside>
   <div id="main">
@@ -736,7 +751,8 @@ function fmtAgo(ts){
 }
 let view={t:'today'},query='',selDay=null,editing=null,editProj=null,attachTo=null,
     cflag=false,ctype='task',ctypeManual=false,undoFn=null,undoStack=[],saveT=null,pcolor=PAL[0],ctx=null,editMaker=null,
-    syncStatus='off',pulling=false,pushT=null,pollT=null;
+    syncStatus='off',pulling=false,pushT=null,pollT=null,
+    sw=null;   // the row a finger is currently dragging, if any
 
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const uid=()=>Math.random().toString(36).slice(2,10);
@@ -1222,9 +1238,29 @@ function parseQuery(q){
   f.text=words.join(' ').toLowerCase();
   return f;
 }
+/* matches() runs once per task per keystroke, and used to re-split and re-scan
+   the query string every single time, then lowercase every field of the task it
+   was testing. Both answers are the same for the whole pass, so both are kept:
+   the parsed query until the query changes, and each task's searchable text
+   until that task is edited (every edit bumps t.u). A project rename does not
+   touch the task, so the project name is tested outside the cache. */
+let qParsed={q:null,f:null};
+function parsedQuery(){
+  if(qParsed.q!==query)qParsed={q:query,f:parseQuery(query)};
+  return qParsed.f;
+}
+const hayCache=new Map();
+function haystack(t){
+  const c=hayCache.get(t.id);
+  if(c&&c.u===t.u)return c.s;
+  const s=[t.title,t.manufacturer,t.destination,t.notes,t.po,...trackNumbers(t)]
+    .map(v=>(v||'').toLowerCase()).join('\n');
+  hayCache.set(t.id,{u:t.u,s});
+  return s;
+}
 function matches(t){
   if(!query)return true;
-  const f=parseQuery(query),p=projectOf(t);
+  const f=parsedQuery(),p=projectOf(t);
   for(const v of f.is){
     if(v==='shipment'&&t.type!=='shipment')return false;
     if(v==='task'&&t.type!=='task')return false;
@@ -1240,8 +1276,7 @@ function matches(t){
   if(f.po&&!(t.po||'').toLowerCase().includes(f.po))return false;
   if(!f.text)return true;
   const q=f.text;
-  return [t.title,t.manufacturer,t.destination,t.notes,t.po,p&&p.name,...trackNumbers(t)]
-    .some(v=>(v||'').toLowerCase().includes(q));
+  return haystack(t).includes(q)||((p&&p.name)||'').toLowerCase().includes(q);
 }
 function filtered(){
   let a=S.tasks.filter(matches);const v=view;
@@ -1313,15 +1348,9 @@ function renderData(){
   $('#storeNote').textContent=sync.on?'Synced through your own Supabase project.'
     :CLOUD?'Saving to your Claude account.':'Saving on this device. Turn on sync to share across devices.';
 }
-const I={
-  today:'<svg viewBox="0 0 20 20"><path d="M6 1.6a.9.9 0 0 1 .9.9v.9h6.2v-.9a.9.9 0 1 1 1.8 0v.9h.3A2 2 0 0 1 17 5.4v10.2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5.4a2 2 0 0 1 2-1.9h.1v-.9a.9.9 0 0 1 .9-1Zm-1.2 6.2v7.8c0 .1.1.2.2.2h10c.1 0 .2-.1.2-.2V7.8H4.8Z"/></svg>',
-  clock:'<svg viewBox="0 0 20 20"><path d="M10 1.8a8.2 8.2 0 1 1 0 16.4 8.2 8.2 0 0 1 0-16.4Zm.9 4a.9.9 0 1 0-1.8 0v4.6l3 2a.9.9 0 1 0 1-1.5l-2.2-1.5V5.8Z"/></svg>',
-  flag:'<svg viewBox="0 0 20 20"><path d="M5 2.5a.9.9 0 0 1 .9.9v.3l2.6-.5 3.5.7 3.5-.7v7.2l-3.5.7-3.5-.7-2.6.5v5.7a.9.9 0 1 1-1.8 0V3.4a.9.9 0 0 1 .9-.9Z"/></svg>',
-  list:'<svg viewBox="0 0 20 20"><path d="M4 4.6h12a.9.9 0 1 1 0 1.8H4a.9.9 0 0 1 0-1.8Zm0 4.5h12a.9.9 0 1 1 0 1.8H4a.9.9 0 1 1 0-1.8Zm0 4.5h12a.9.9 0 1 1 0 1.8H4a.9.9 0 1 1 0-1.8Z"/></svg>',
-  check:'<svg viewBox="0 0 20 20"><path d="M8.1 13.5 4.9 10.3a1 1 0 0 1 1.4-1.4l2.2 2.2 5.1-5.6a1 1 0 1 1 1.5 1.4l-5.8 6.4a1 1 0 0 1-1.2.2Z"/></svg>',
-  box:'<svg viewBox="0 0 20 20"><path d="M3 4h4l1.1 1.4H17a1 1 0 0 1 1 1v8.2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/></svg>',
-  truck:'<svg viewBox="0 0 20 20"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h7A1.5 1.5 0 0 1 12 5.5V7h2.4l2.6 3v4h-2a2 2 0 1 1-4 0H7a2 2 0 1 1-4 0H2V5.5Z"/></svg>',
-};
+const icon=n=>`<svg viewBox="0 0 20 20"><use href="#i-${n}"/></svg>`;
+const I={today:icon('today'),clock:icon('clock'),flag:icon('flag'),list:icon('list'),
+  check:icon('check'),box:icon('box'),truck:icon('truck')};
 function navItem(icon,color,name,count,active,extra=''){
   return `<button class="nav ${active?'on':''}" ${extra}><span class="dot" style="background:${color}">${icon}</span>
     <span class="nm">${esc(name)}</span><span class="ct">${count===''?'':count}</span></button>`;
@@ -1403,7 +1432,7 @@ function rowHTML(t){
         <circle class="o" cx="11.5" cy="11.5" r="10.6"/><circle class="f" cx="11.5" cy="11.5" r="11.5"/>
         <path class="k" d="M6.4 11.9 10 15.4l6.5-7.5"/></svg></button>
       <div class="rowmain"><div class="tt">${esc(t.title)}</div>${chips.length?`<div class="meta">${chips.join('')}</div>`:''}</div>
-      <div class="rright">${t.flagged?'<svg class="flag" viewBox="0 0 20 20"><path d="M5 2.5a.9.9 0 0 1 .9.9v.3l2.6-.5 3.5.7 3.5-.7v7.2l-3.5.7-3.5-.7-2.6.5v5.7a.9.9 0 1 1-1.8 0V3.4a.9.9 0 0 1 .9-.9Z"/></svg>':''}
+      <div class="rright">${t.flagged?'<svg class="flag" viewBox="0 0 20 20"><use href="#i-flag"/></svg>':''}
       ${t.due?`<span class="due ${cls}">${fmtDue(t.due)}</span>`:''}</div></div></div>`;
 }
 function projectsHTML(){
@@ -1487,23 +1516,63 @@ function searchProjectsHTML(){
           ${p.client?`<span class="chip">${esc(p.client)}</span>`:''}</div></div></div></div>`;
     }).join('')+'</div>';
 }
+/* Rows are reused, not rebuilt. Assigning innerHTML for the whole list threw
+   away every node on every change: it reparses the lot, drops the transform of
+   whatever row a finger is mid-swipe on, and makes a row impossible to animate
+   because the node being animated stops existing halfway through. Each row's
+   own HTML doubles as its signature — an identical string means the existing
+   node still stands, so a change to one row touches one row. */
+const rowNodes=new Map();
+const parseHTML=(()=>{const t=document.createElement('template');
+  return html=>{t.innerHTML=html;return [...t.content.childNodes];};})();
+/* Everything outside the task itself that its markup depends on: which view (the
+   project chip is dropped inside a project), today's date (the "2 days late"
+   reading), and the projects' own names and colours. With this and t.u — which
+   every edit bumps — an unchanged row can be recognised without building its
+   HTML at all, which is most of the cost of a render. */
+let rowCtx='';
+function rowNode(t){
+  const key=t.u+'|'+rowCtx,c=rowNodes.get(t.id);
+  const keep=el=>{
+    // a kept node can be carrying a half-finished swipe; only the row actually
+    // under the finger is allowed to hold its transform
+    const r=el.querySelector('.row');
+    if(r&&r.style.transform&&!(sw&&sw.w===el)){r.style.transition='';r.style.transform='';}
+    // a row kept mid-exit would otherwise stay at the end of that animation
+    el.classList.remove('leaving');
+    return el;
+  };
+  if(c&&c.key===key)return keep(c.el);
+  const sig=rowHTML(t);
+  if(c&&c.sig===sig){c.key=key;return keep(c.el);}   // same markup by another route
+  const el=parseHTML(sig)[0];
+  rowNodes.set(t.id,{key,sig,el});
+  return el;
+}
 function renderList(){
-  const el=$('#list');
-  if(view.t==='projects'){el.innerHTML=projectsHTML();return;}
-  let h='';
-  if(view.t==='project')h+=projectHead();
-  if(view.t==='mfr')h+=makerHead();
-  if((view.t==='today'||view.t==='scheduled')&&!query)h+=stripHTML();
-  if(query)h+=searchProjectsHTML();       // projects are searchable too, not just tasks
+  const el=$('#list'),out=[];
+  rowCtx=view.t+'|'+iso(midnight())+'|'+S.projects.map(p=>p.id+p.u).join(',');
+  const chunk=h=>{if(h)out.push(...parseHTML(h));};
+  if(view.t==='projects'){chunk(projectsHTML());el.replaceChildren(...out);return;}
+  if(view.t==='project')chunk(projectHead());
+  if(view.t==='mfr')chunk(makerHead());
+  if((view.t==='today'||view.t==='scheduled')&&!query)chunk(stripHTML());
+  if(query)chunk(searchProjectsHTML());    // projects are searchable too, not just tasks
   const items=filtered();
-  if(!items.length){el.innerHTML=h+emptyHTML();return;}
+  if(!items.length){chunk(emptyHTML());el.replaceChildren(...out);return;}
   const g=new Map();
   for(const t of items){const b=groupOf(t);if(!g.has(b.k))g.set(b.k,{...b,items:[]});g.get(b.k).items.push(t);}
   for(const x of [...g.values()].sort((a,b)=>a.o-b.o)){
-    h+=`<div class="grp ${x.k==='late'?'late':''}">${x.l}<span class="c">${x.items.length}</span></div>`;
-    h+='<div class="card">'+x.items.map(rowHTML).join('')+'</div>';
+    chunk(`<div class="grp ${x.k==='late'?'late':''}">${x.l}<span class="c">${x.items.length}</span></div>`);
+    const card=document.createElement('div');
+    card.className='card';
+    card.append(...x.items.map(rowNode));
+    out.push(card);
   }
-  el.innerHTML=h;
+  el.replaceChildren(...out);
+  // Nodes for rows the current view leaves out stay cached, so switching back is
+  // free; the cache is only swept when it grows past any plausible list.
+  if(rowNodes.size>600)for(const [id,c] of rowNodes)if(!c.el.isConnected)rowNodes.delete(id);
 }
 
 /* ============ actions ============ */
@@ -2378,7 +2447,6 @@ $('#list').addEventListener('click',e=>{
   if(w&&w.dataset.id&&selMode)return toggleSel(w.dataset.id);
   if(w&&w.dataset.id&&!w._moved)openDetail(w.dataset.id);
 });
-let sw=null;
 $('#list').addEventListener('pointerdown',e=>{
   const lw=e.target.closest('.rowwrap');
   if(lw&&lw.dataset.id){
