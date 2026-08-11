@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.20.0">
+<meta name="app-version" content="1.20.1">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -368,6 +368,9 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 /* An explicit width, because .menu button is width:100% and a shrink-to-fit
    parent resolves that against the whole viewport instead of its own content. */
 #addmenu{position:fixed;top:0;left:0;right:auto;bottom:auto;width:max-content;min-width:236px;max-width:min(330px,92vw)}
+/* Driven from script instead of the shared .menu pop, so it can grow out of
+   whichever corner of itself is against the button. */
+#addmenu.on{animation:none}
 #addmenu button{display:flex;align-items:center;gap:10px;padding:10px 12px}
 #addmenu button.first{font-weight:600}
 #addmenu .mi{width:22px;height:22px;flex:none;border-radius:7px;display:grid;place-items:center}
@@ -2768,6 +2771,13 @@ function openAddMenu(anchor){
   m.style.right=Math.max(8,innerWidth-a.right)+'px';
   m.style.top=low?'auto':Math.round(a.bottom+8)+'px';
   m.style.bottom=low?Math.round(innerHeight-a.top+8)+'px':'auto';
+  // grow out of the corner that is against the button, so the list reads as
+  // coming from the + rather than simply appearing over the page
+  m.style.transformOrigin=low?'100% 100%':'100% 0%';
+  if(!reduced())m.animate([
+    {opacity:0,transform:`scale(.9) translateY(${low?9:-9}px)`},
+    {opacity:1,transform:'none'}],
+    {duration:200,easing:'cubic-bezier(.2,.85,.25,1)'});
 }
 $('#addmenu').addEventListener('click',e=>{
   const b=e.target.closest('[data-add]');if(!b)return;
