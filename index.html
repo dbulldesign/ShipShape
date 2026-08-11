@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.18.0">
+<meta name="app-version" content="1.18.1">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2528,7 +2528,7 @@ function renderTracks(t){
         <span class="warn">checked ${fmtAgo(tr.status.at)}</span></div>`:''}</div>`;
   }).join(''):'<div class="trk"><span class="warn">Nothing to track yet.</span></div>';
   const any=list.some(x=>clean(x.n));
-  $('#dcheck').style.display=any&&sync.pushUrl?'':'none';
+  $('#dcheck').style.display=any&&trackFnUrl()?'':'none';
 }
 /* ============ carrier status ============
    A tracking number was a link and nothing more: to find out where a parcel is
@@ -2538,8 +2538,14 @@ function renderTracks(t){
    a line of text per number. What comes back is stored on the parcel like any
    other field, so it syncs, and it is only ever a cache: nothing here depends on
    the function existing, and with it absent the app behaves exactly as before. */
+/* Both functions sit on the same project, so this is the reminders URL with
+   /notify swapped for /track. sync.pushUrl is only actually stored once the chain
+   test has been run, so fall back to what is typed in the field and then to the
+   URL worked out from the project — otherwise the button stays hidden for anyone
+   who turned reminders on without testing them, which is most people. */
 function trackFnUrl(){
-  const b=(sync.pushUrl||'').replace(/\/notify\/?$/,'');
+  const typed=(sync.draft||{}).pushurl||'';
+  const b=(sync.pushUrl||typed||guessFnUrl()).replace(/\/notify\/?$/,'');
   return b?b+'/track':'';
 }
 let checking=false;
@@ -2571,7 +2577,7 @@ async function checkStatus(){
       toast(`Checked ${hits} number${hits===1?'':'s'}`);
     }else toast('The carrier had nothing to report yet.');
   }catch(e){
-    toast('Could not reach the track function.');
+    toast('No answer from the track function. It needs deploying — see track/README.md.');
   }
   checking=false;$('#dcheck').textContent='Check status';
 }
