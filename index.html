@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.15.0">
+<meta name="app-version" content="1.16.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -298,6 +298,22 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #toast button{color:#4da3ff;font-weight:700;font-size:14.5px;flex:none}
 .spark{position:fixed;width:7px;height:7px;border-radius:2px;z-index:70;pointer-events:none}
+.sailing{position:fixed;width:18px;height:18px;z-index:70;pointer-events:none;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
+/* The reading above Today's list: what is in the air right now. */
+.seastate{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:2px 6px 4px;font-size:13.5px;color:var(--label2)}
+.seastate b{font-weight:600;color:var(--label)}
+.seastate .s{display:inline-flex;align-items:center;gap:5px}
+.seastate i{width:7px;height:7px;border-radius:50%;display:block;flex:none}
+.digest{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:13px 15px;margin:8px 0 2px}
+.digest h4{margin:0 0 7px;font-family:var(--round);font-size:15px;font-weight:700;display:flex;align-items:center;gap:7px}
+.digest h4 button{margin-left:auto;color:var(--label3);font-size:12px;font-weight:600}
+.digest .d{display:flex;gap:9px;font-size:13.5px;color:var(--label2);padding:2.5px 0;align-items:baseline}
+.digest .d b{color:var(--label);font-weight:600;font-variant-numeric:tabular-nums;min-width:18px;text-align:right}
+.digest .none{font-size:13.5px;color:var(--label3)}
+/* Dropping a task on a project in the sidebar moves it there. */
+.nav.drop{background:color-mix(in srgb,var(--blue) 22%,transparent);box-shadow:inset 0 0 0 1.5px var(--blue)}
+.row.dragging{opacity:.45}
 .menu{position:absolute;right:0;top:40px;background:var(--sheet);border-radius:12px;box-shadow:var(--shadow);padding:5px;min-width:215px;z-index:70;border:.5px solid var(--sep);display:none}
 .menu.on{display:block;animation:pop .18s var(--ease)}
 .menu button{display:block;width:100%;text-align:left;padding:9px 12px;border-radius:8px;font-size:15px}
@@ -415,6 +431,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="sort" id="sortBtn"></button>
             <button data-m="group" id="groupBtn"></button>
             <button data-m="density" id="densityBtn"></button>
+            <button data-m="sfx" id="sfxBtn"></button>
+            <button data-m="digest" id="digestBtn"></button>
             <hr>
             <button data-m="undo">Undo last change</button>
             <button data-m="clearDone">Archive completed</button>
@@ -833,7 +851,7 @@ function trackInfo(t){
 let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
-let sortBy='smart',groupBy='auto',compact=false;
+let sortBy='smart',groupBy='auto',compact=false,sfx=false,digestOff=false;
 // draft holds what has been typed into the sync sheet but not turned on yet
 let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:'',pushUrl:'',draft:null};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
@@ -874,7 +892,7 @@ async function loadAll(){
   if(vr){try{const v=JSON.parse(vr);
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
     if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;
-    compact=!!v.compact;}catch(e){}}
+    compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;}catch(e){}}
   $('#app').classList.toggle('compact',compact);
 }
 function migrate(){
@@ -951,7 +969,7 @@ function saveLocal(){
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact,sfx,digestOff}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -1469,6 +1487,8 @@ function renderData(){
   $('#sortBtn').textContent='Sort: '+SORT_LABEL[sortBy];
   $('#groupBtn').textContent='Group: '+GROUP_LABEL[groupBy];
   $('#densityBtn').textContent='Rows: '+(compact?'compact':'comfortable');
+  $('#sfxBtn').textContent='Sound: '+(sfx?'on':'off');
+  $('#digestBtn').textContent='Last seven days: '+(digestOff?'hidden':'shown');
   $('#hsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
   $('#hgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
   $('#storeNote').textContent=sync.on?'Synced through your own Supabase project.'
@@ -1535,6 +1555,42 @@ function stripHTML(){
       <div class="w">${WD[d.getDay()].slice(0,2)}</div><div class="n">${d.getDate()}</div><div class="pips">${pips}</div></button>`;
   }).join('')+'</div>';
 }
+/* One line above Today: what is actually in the air. Each part is a filter you
+   can click, because "2 late" always leads to "which two". */
+function seaStateHTML(){
+  const open=S.tasks.filter(t=>!t.done&&!t.arch);
+  const ships=open.filter(t=>t.type==='shipment');
+  const bits=[];
+  const late=open.filter(t=>t.due&&diff(t.due)<0).length;
+  const transit=ships.filter(t=>t.stage===3).length;
+  const making=ships.filter(t=>t.stage===1||t.stage===2).length;
+  const week=open.filter(t=>t.due&&diff(t.due)>=0&&diff(t.due)<7).length;
+  const mLate=ships.filter(makerLate).length;
+  if(late)bits.push([`<b>${late}</b> past due`,'var(--red)','late:']);
+  if(transit)bits.push([`<b>${transit}</b> in transit`,'var(--purple)','stage:shipped']);
+  if(making)bits.push([`<b>${making}</b> being made`,'var(--orange)','stage:making']);
+  if(mLate)bits.push([`<b>${mLate}</b> over at the maker`,'var(--yellow)','is:latemaker']);
+  if(week)bits.push([`<b>${week}</b> due this week`,'var(--blue)','']);
+  if(!bits.length)return '';
+  return '<div class="seastate">'+bits.map(([l,c,q])=>
+    `<span class="s" ${q?`data-q="${q}" style="cursor:pointer"`:''}><i style="background:${c}"></i>${l}</span>`).join('')+'</div>';
+}
+/* What moved in the last seven days. The stage stamps make this free, and it is
+   the one question a weekly review always starts with. */
+function digestHTML(){
+  if(digestOff)return '';
+  const since=now()-7*864e5;
+  const done=S.tasks.filter(t=>t.completed&&t.completed>=since);
+  const shipped=S.tasks.filter(t=>t.stamps&&t.stamps[3]&&t.stamps[3]>=since);
+  const arrived=S.tasks.filter(t=>t.stamps&&t.stamps[4]&&t.stamps[4]>=since);
+  const slipped=S.tasks.filter(t=>!t.done&&!t.arch&&t.due&&diff(t.due)<0&&diff(t.due)>=-7);
+  const rows=[[done.length,'completed'],[shipped.length,'shipped'],[arrived.length,'arrived'],
+    [slipped.length,'went past due']].filter(([n])=>n);
+  if(!rows.length)return '';        // an empty card is noise, not information
+  return `<div class="digest"><h4>Last seven days<button data-m="nodigest">hide</button></h4>`
+    +rows.map(([n,l])=>`<div class="d"><b>${n}</b><span>${l}</span></div>`).join('')+'</div>';
+}
+
 function rowHTML(t){
   const p=projectOf(t),chips=[];
   if(p&&view.t!=='project')chips.push(`<span class="chip"><i style="background:${p.color}"></i>${esc(p.name)}</span>`);
@@ -1561,7 +1617,7 @@ function rowHTML(t){
     <span style="color:${SC[t.stage]}">${STAGES[t.stage]}</span></button>`);
   const n=t.due?diff(t.due):null,cls=n===null?'':n<0?'late':n<=2?'soon':'';
   return `<div class="rowwrap" data-id="${t.id}"><div class="act l">Done</div><div class="act r">Delete</div>
-    <div class="row ${t.done?'done':''}">
+    <div class="row ${t.done?'done':''}" draggable="true">
       <button class="check" data-check="${t.id}" aria-label="Complete"><svg viewBox="0 0 23 23">
         <circle class="o" cx="11.5" cy="11.5" r="10.6"/><circle class="f" cx="11.5" cy="11.5" r="11.5"/>
         <path class="k" d="M6.4 11.9 10 15.4l6.5-7.5"/></svg></button>
@@ -1755,6 +1811,7 @@ function renderList(){
   if(view.t==='project')chunk('phead',projectHead());
   if(view.t==='mfr')chunk('mhead',makerHead());
   if((view.t==='today'||view.t==='scheduled')&&!query)chunk('strip',stripHTML());
+  if(view.t==='today'&&!query&&!selDay){chunk('sea',seaStateHTML());chunk('digest',digestHTML());}
   if(query)chunk('sprojects',searchProjectsHTML());   // projects are searchable too, not just tasks
   const items=filtered();
   if(!items.length){chunk('empty',emptyHTML());patch(el,out);return;}
@@ -1860,6 +1917,7 @@ function toggleDone(id,el){
   let spawned=null;
   if(t.done&&t.rep&&t.due)spawned=repeatAfter(t);
   buzz(t.done?[6,30,10]:6);
+  if(t.done)ping(880);
   if(t.done&&el){el.closest('.row').classList.add('done');
     const s=t.projectId?stats(t.projectId):null;if(s&&s.all&&s.open===0)burst(el);}
   save();
@@ -1917,8 +1975,46 @@ function bumpStage(id){
   const prev=t.stage,prevDone=t.done;
   t.stage=(t.stage+1)%5;t.u=now();stampStage(t,t.stage);
   if(t.stage===4){t.done=true;t.completed=now();}else if(prevDone){t.done=false;t.completed=null;}
+  const bar=document.querySelector(`.rowwrap[data-id="${id}"] .stagebar`);
+  if(t.stage===3&&prev<3)sail(bar);                 // it has left the maker
+  if(t.stage===4&&prev!==4){ping(660);if(bar)burst(bar);}
   buzz();save();render();
   toast(`${STAGES[prev]} → ${STAGES[t.stage]}`,()=>{t.stage=prev;t.done=prevDone;t.u=now();save();render();});
+}
+/* Reaching Shipped is the moment the thing actually left, and the app is called
+   Shipshape. The liner runs the length of the stage bar once, on top of it, and
+   is thrown away afterwards — nothing about the row itself changes. */
+function sail(bar){
+  ping(520);
+  if(!bar||matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  const r=bar.getBoundingClientRect();
+  const s=document.createElement('img');
+  s.src='favicon.svg';s.alt='';s.className='sailing';
+  s.style.left=r.left+'px';s.style.top=(r.top+r.height/2-9)+'px';
+  document.body.appendChild(s);
+  s.animate([{transform:'translateX(-14px)',opacity:0},
+    {transform:'translateX(0)',opacity:1,offset:.18},
+    {transform:`translateX(${r.width-14}px)`,opacity:1,offset:.82},
+    {transform:`translateX(${r.width+8}px)`,opacity:0}],
+    {duration:1100,easing:'cubic-bezier(.4,0,.5,1)'}).onfinish=()=>s.remove();
+}
+/* A tick you can hear, for the same reason the phone buzzes. Built rather than
+   loaded: one oscillator is a few lines and no download, and the audio context
+   is only created once something has actually asked for a sound. */
+let actx=null;
+function ping(hz){
+  if(!sfx)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();
+    const o=actx.createOscillator(),g=actx.createGain(),t0=actx.currentTime;
+    o.type='sine';o.frequency.setValueAtTime(hz||880,t0);
+    o.frequency.exponentialRampToValueAtTime((hz||880)*1.5,t0+.09);
+    g.gain.setValueAtTime(0,t0);
+    g.gain.linearRampToValueAtTime(.07,t0+.012);
+    g.gain.exponentialRampToValueAtTime(.0001,t0+.22);
+    o.connect(g).connect(actx.destination);o.start(t0);o.stop(t0+.24);
+  }catch(e){}
 }
 function delTask(id){
   const i=S.tasks.findIndex(x=>x.id===id);if(i<0)return;
@@ -2685,6 +2781,7 @@ function doMenu(k){
   if(k==='sort'){sortBy=SORTS[(SORTS.indexOf(sortBy)+1)%SORTS.length];saveView();render();toast('Sort: '+SORT_LABEL[sortBy]);}
   if(k==='group'){groupBy=GROUPS[(GROUPS.indexOf(groupBy)+1)%GROUPS.length];saveView();render();toast('Group: '+GROUP_LABEL[groupBy]);}
   if(k==='density'){compact=!compact;$('#app').classList.toggle('compact',compact);saveView();render();}
+  if(k==='sfx'){sfx=!sfx;saveView();renderData();if(sfx)ping(880);toast('Sound '+(sfx?'on':'off'));}
   if(k==='update')checkUpdate();
   if(k==='newproj')openProject(null);
   if(k==='sample')loadSample();
@@ -2704,6 +2801,8 @@ function doMenu(k){
     toast(`Archived ${hit.length}`,()=>{hit.forEach(t=>{t.arch=null;t.u=now();});save();render();});
   }
   if(k==='archive')setView('archive');
+  if(k==='digest'){digestOff=!digestOff;saveView();render();toast('Last seven days '+(digestOff?'hidden':'shown'));}
+  if(k==='nodigest')doMenu('digest');
   if(k==='reset'&&confirm('Delete every project and task? This cannot be undone.')){
     [...S.tasks,...S.projects].forEach(x=>S.tomb[x.id]=now());
     S.tasks=[];S.projects=[];S.started=false;save();render();
@@ -2722,6 +2821,63 @@ $('#fileIn').addEventListener('change',async e=>{
 });
 function setView(t,v){view={t,v};selDay=null;$('#q').value='';query='';render();$('#scroll').scrollTop=0;}
 $('#navlists').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b)setView(b.dataset.v,b.dataset.val);});
+/* ============ drag a row onto a project ============
+   The sidebar was for navigating and nothing else. Dragging is the obvious way
+   to file something, and it is only offered where it means something: projects,
+   and the makers and destinations a shipment can be reassigned to. */
+let dragId=null;
+$('#list').addEventListener('dragstart',e=>{
+  const w=e.target.closest('.rowwrap');
+  if(!w||!w.dataset.id){e.preventDefault();return;}
+  dragId=w.dataset.id;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',dragId);
+  closeRowMenu();
+});
+$('#list').addEventListener('dragend',e=>{
+  dragId=null;
+  $$('#list .row.dragging').forEach(r=>r.classList.remove('dragging'));
+  $$('#navlists .nav.drop').forEach(n=>n.classList.remove('drop'));
+});
+const dropTarget=el=>{
+  const n=el&&el.closest('[data-v]');
+  if(!n)return null;
+  const t=dragId&&S.tasks.find(x=>x.id===dragId);
+  if(!t)return null;
+  const v=n.dataset.v;
+  if(v==='project')return n;
+  if((v==='mfr'||v==='dest')&&t.type==='shipment')return n;
+  if(v==='flagged'||v==='done')return n;
+  return null;
+};
+$('#navlists').addEventListener('dragover',e=>{
+  const n=dropTarget(e.target);
+  if(!n)return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+  $$('#navlists .nav.drop').forEach(x=>{if(x!==n)x.classList.remove('drop')});
+  n.classList.add('drop');
+});
+$('#navlists').addEventListener('dragleave',e=>{
+  const n=e.target.closest('[data-v]');if(n)n.classList.remove('drop');
+});
+$('#navlists').addEventListener('drop',e=>{
+  const n=dropTarget(e.target);if(!n)return;
+  e.preventDefault();
+  const t=S.tasks.find(x=>x.id===dragId);
+  n.classList.remove('drop');
+  if(!t)return;
+  const before=JSON.parse(JSON.stringify(t));
+  const undo=()=>{Object.assign(t,before);t.u=now();save();render();};
+  const v=n.dataset.v;
+  let msg='';
+  if(v==='project'){t.projectId=n.dataset.val;msg='Moved to '+(P(n.dataset.val)||{name:'project'}).name;}
+  else if(v==='mfr'){t.manufacturer=n.dataset.val;msg='Maker set to '+n.dataset.val;}
+  else if(v==='dest'){t.destination=n.dataset.val;msg='Shipping to '+n.dataset.val;}
+  else if(v==='flagged'){t.flagged=true;msg='Flagged';}
+  else if(v==='done'){t.done=true;t.completed=now();msg='Completed';}
+  t.u=now();save();render();buzz();ping(700);toast(msg,undo);
+});
 $('#hsort').addEventListener('change',e=>{sortBy=e.target.value;saveView();render();});
 $('#hgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();render();});
 $('#tabbar').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){setView(b.dataset.v);buzz(4);}});
@@ -2733,6 +2889,9 @@ $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-editmaker]'))return openMaker(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
   const d=e.target.closest('[data-day]');if(d){selDay=selDay===d.dataset.day?null:d.dataset.day;buzz(4);renderList();return;}
+  // a reading in the sea-state line is a question: clicking it runs the search
+  const sq=e.target.closest('[data-q]');
+  if(sq){$('#q').value=sq.dataset.q;query=sq.dataset.q;renderList();$('#q').focus();return;}
   const c=e.target.closest('[data-check]');if(c)return toggleDone(c.dataset.check,c);
   const s=e.target.closest('[data-stage]');if(s)return bumpStage(s.dataset.stage);
   const w=e.target.closest('.rowwrap');
@@ -2911,7 +3070,8 @@ function paletteRows(q){
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['Save a backup file','export'],['Load from a backup file','import'],
     ['Undo last change','undo'],['Archive completed','clearDone'],
-    ['Rows: '+(compact?'comfortable':'compact'),'density'],['Check for updates','update'],
+    ['Rows: '+(compact?'comfortable':'compact'),'density'],['Sound: '+(sfx?'off':'on'),'sfx'],['Last seven days: '+(digestOff?'show':'hide'),'digest'],
+    ['Check for updates','update'],['Archived','archive'],
     ['Load a sample setup','sample']])
     push(l,'Command',I.list,'var(--gray)',()=>k==='new'?openComposer():doMenu(k));
   // sort and group by name, so "by maker" finds the grouping
