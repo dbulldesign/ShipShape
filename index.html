@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.12.2">
-<meta name="app-build" content="2026-08-07">
+<meta name="app-version" content="1.12.3">
+<meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -251,6 +251,13 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stamp em{font-style:normal;color:var(--label3);margin-left:auto}
 .field textarea{text-align:left;resize:vertical;height:64px;font-size:15px}
 .field input.mono{font-family:var(--mono);font-size:13px}
+/* A project URL, an anon key or a VAPID key is 40-90 characters of monospace. In
+   a right-aligned row the end of it runs off the edge with nothing to say so,
+   which is no way to check something you have just pasted — so the credential
+   rows put the label above and give the value the full width. */
+.field.stack{display:block;padding:9px 14px 11px}
+.field.stack label{display:block;width:auto;margin-bottom:5px}
+.field.stack input{width:100%;text-align:left;background:var(--fill2);border-radius:8px;padding:8px 10px;font-size:12.5px}
 .fgroup{border-radius:12px;overflow:hidden;margin:12px 14px}
 .stages{display:flex;gap:6px;padding:12px 14px 2px}
 .stg{flex:1;padding:8px 2px;border-radius:9px;background:var(--fill2);font-size:11.5px;font-weight:700;text-align:center;color:var(--label2);
@@ -284,6 +291,10 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 .menu button:hover{background:var(--fill2)}
 .menu .note{padding:8px 12px 6px;font-size:12px;color:var(--label3);line-height:1.35}
 .menu hr{border:0;border-top:.5px solid var(--sep);margin:4px 0}
+/* Sync is the one sheet that is mostly credentials, and a desktop has the room
+   to show them whole. Guarded by min-width because below that the sheet becomes
+   a full-width bottom sheet, which an id selector here would otherwise beat. */
+@media (min-width:861px){#ssheet{width:min(720px,94vw)}}
 @media (max-width:860px){
   #sidebar{display:none}#tabbar{display:block}#scroll{padding-bottom:190px}h1{font-size:31px}
   .sheet{top:auto;bottom:0;left:0;width:100%;transform:translateY(100%);border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom);max-height:92vh}
@@ -440,10 +451,11 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="sheettitle">Sync<button class="x" id="sclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="blurb" id="sstatus">Off. Paste your Supabase details below to keep every device in step.</div>
   <div class="fgroup">
-    <div class="field"><label for="surl">Project URL</label><input id="surl" class="mono" placeholder="https://abc.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-    <div class="field"><label for="skey">Anon key</label><input id="skey" class="mono" placeholder="eyJhbGci…" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-    <div class="field"><label for="sws">Workspace</label><input id="sws" class="mono" placeholder="tap Generate" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field stack"><label for="surl">Project URL</label><input id="surl" class="mono" placeholder="https://abc.supabase.co" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
+    <div class="field stack"><label for="skey">Anon key</label><input id="skey" class="mono" placeholder="eyJhbGci…" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
+    <div class="field stack"><label for="sws">Workspace</label><input id="sws" class="mono" placeholder="press Generate" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
   </div>
+  <div class="blurb" id="sdraft" style="display:none;color:var(--orange);padding-bottom:8px"></div>
   <div style="padding:0 14px;display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn sec" id="sgen" style="margin:0;font-size:14px;padding:9px 14px">Generate</button>
     <button class="btn sec" id="scopy" style="margin:0;font-size:14px;padding:9px 14px">Copy settings</button>
@@ -455,8 +467,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   </div>
   <div class="trackhead" style="padding-top:14px"><span>Reminders</span><span id="pushstate" class="got"></span></div>
   <div class="fgroup" style="margin-top:0">
-    <div class="field"><label for="pushkey">Public key</label><input id="pushkey" class="mono" placeholder="VAPID public key" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-    <div class="field"><label for="pushurl">Function URL</label><input id="pushurl" class="mono" placeholder="https://….functions.supabase.co/notify" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field stack"><label for="pushkey">Public key</label><input id="pushkey" class="mono" placeholder="VAPID public key" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
+    <div class="field stack"><label for="pushurl">Function URL</label><input id="pushurl" class="mono" placeholder="https://….functions.supabase.co/notify" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
   </div>
   <div style="padding:10px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn sec" id="pushoff" style="flex:1;margin:0;text-align:center">Turn off</button>
@@ -482,8 +494,9 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
       <li>Make a free project at supabase.com.</li>
       <li>Open <b>SQL Editor</b>, paste the block below, press Run.</li>
       <li>Open <b>Project Settings → API</b>. Copy the <b>Project URL</b> and the <b>anon public</b> key into the fields above.</li>
-      <li>Tap <b>Generate</b> for a workspace key, then <b>Turn on sync</b>.</li>
-      <li>On your other devices, open the same page, tap <b>Paste settings</b> after copying from the first device, and turn sync on.</li>
+      <li>Press <b>Generate</b> for a workspace key, then <b>Turn on sync</b>.</li>
+      <li>On your other devices, open the same page, press <b>Copy settings</b> here and <b>Paste settings</b> there — or paste the copied
+      line into any of the three fields — and turn sync on. What you type is kept if you close this sheet part-way through.</li>
     </ol>
     <button class="btn sec" id="sqlcopy" style="margin:4px 0 0;font-size:14px;padding:8px 14px">Copy the SQL</button>
     <pre id="sql">create table if not exists shipshape_state (
@@ -706,7 +719,8 @@ let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
 let sortBy='smart',groupBy='auto';
-let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:'',pushUrl:''};
+// draft holds what has been typed into the sync sheet but not turned on yet
+let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:'',pushUrl:'',draft:null};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
    the last one really was. */
 function fmtAgo(ts){
@@ -845,8 +859,9 @@ const b64ToBytes=b=>{
   return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
 };
 function renderPush(){
-  $('#pushkey').value=sync.pushKey||'';
-  $('#pushurl').value=sync.pushUrl||guessFnUrl();
+  const d=sync.draft||{};
+  fillSyncField('pushkey',d.pushkey||sync.pushKey||'');
+  fillSyncField('pushurl',d.pushurl||sync.pushUrl||guessFnUrl());
   $('#pushstate').textContent=!('PushManager'in window)?'not supported here'
     :sync.push?'on for this device':'off';
   diagPush();
@@ -898,7 +913,7 @@ async function testLocalPush(){
 async function testChainPush(){
   const url=$('#pushurl').value.trim();
   if(!url)return toast('Paste the function URL first — see notify/README.md.');
-  sync.pushUrl=url;await saveSyncCfg();
+  sync.pushUrl=url;await saveSyncCfg();flushSyncDraft();
   $('#pushdiag').innerHTML='<div class="auto">Calling the function…</div>';
   try{
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
@@ -927,6 +942,7 @@ async function genVapid(){
     $('#pushpriv').value=jwk.d;
     $('#pushsecret').style.display='';
     sync.pushKey=b64url(raw);await saveSyncCfg();
+    flushSyncDraft();
     diagPush();
     toast('Key pair made — copy the private half into Supabase');
   }catch(e){toast('This browser cannot make keys here.');}
@@ -965,6 +981,7 @@ async function enablePush(){
     const j=sub.toJSON();
     await rpc('shipshape_push_sub',{k:sync.ws,endpoint:j.endpoint,keys:j.keys});
     sync.push=true;sync.pushKey=key;await saveSyncCfg();
+    flushSyncDraft();
     renderPush();toast('Reminders on');
   }catch(e){
     // a key that is not a valid P-256 point fails here rather than at send time
@@ -1666,6 +1683,8 @@ function composed(){
 }
 function closeSheets(){
   if(editing)saveDetail();
+  // half-entered credentials are worth as much as half-entered anything else
+  if($('#ssheet').classList.contains('on'))flushSyncDraft();
   // drop focus from inside the sheet first: hiding a focused field makes the
   // browser reset focus to the body, which would undo the restore below
   const a=document.activeElement;
@@ -1952,7 +1971,53 @@ function saveProject(){
   editProj=null;save();closeSheets();render();buzz();toast('Project saved');
 }
 
-/* ============ sync sheet ============ */
+/* ============ sync sheet ============
+   What is in these fields is a draft, not the live config: sync keeps running on
+   the settings it was turned on with until the button is pressed. The draft is
+   kept, because filling this in means fetching a URL and a key from the Supabase
+   dashboard in another window, and closing the sheet in between — a stray click
+   on the scrim, Escape, or a reload — used to throw away everything typed so far
+   and send you back to the dashboard for all of it again. */
+const SFIELDS={surl:'url',skey:'key',sws:'ws',pushkey:'pushKey',pushurl:'pushUrl'};
+/* A re-render mid-edit would pull the field out from under what is being typed. */
+function fillSyncField(id,v){const el=$('#'+id);if(el&&el!==document.activeElement)el.value=v;}
+/* What the field would show with no draft at all. The function URL is worked out
+   from the project URL when it has never been set, so comparing against the bare
+   config would make simply opening the sheet look like an edit. */
+const syncLive=id=>(id==='pushurl'?(sync.pushUrl||guessFnUrl()):sync[SFIELDS[id]])||'';
+function saveSyncDraft(){
+  const d={};
+  for(const id in SFIELDS){
+    const el=$('#'+id);if(!el)continue;
+    const v=el.value.trim();
+    if(v&&v!==syncLive(id))d[id]=v;           // only what has not been committed yet
+  }
+  sync.draft=Object.keys(d).length?d:null;
+  saveSyncCfg();
+  renderDraftNote();
+}
+/* Sync goes on running on the settings it was turned on with, so an edit that
+   has not been applied yet has to say so rather than pass for the live one. */
+function renderDraftNote(){
+  const d=sync.draft||{},edited=sync.on&&(d.surl||d.skey||d.sws);
+  $('#sdraft').style.display=edited?'':'none';
+  $('#sdraft').textContent=edited?'Edited but not in use yet — press Sync now to switch to these.':'';
+}
+let draftT=null;
+function draftChanged(){clearTimeout(draftT);draftT=setTimeout(saveSyncDraft,400);}
+function flushSyncDraft(){clearTimeout(draftT);saveSyncDraft();}
+/* "Paste settings" needs clipboard read permission, which a desktop browser can
+   refuse outright or bury behind a prompt. Pasting the same blob straight into a
+   field does the same job and asks for nothing. */
+function spreadSettings(v){
+  if(!/^\s*\{/.test(v))return false;
+  let d=null;try{d=JSON.parse(v);}catch(e){return false;}
+  if(!d||!d.url||!d.key||!d.ws)return false;
+  $('#surl').value=d.url;$('#skey').value=d.key;$('#sws').value=d.ws;
+  flushSyncDraft();
+  toast('Settings pasted. Now turn on sync.');
+  return true;
+}
 function renderSyncSheet(){
   const msgs={off:'Off. Everything stays on this device.',
     idle:`On. Last sync ${fmtAgo(sync.last)}.`,syncing:'Syncing…',error:'Cannot reach Supabase. Check the URL, key and workspace.'};
@@ -1961,10 +2026,12 @@ function renderSyncSheet(){
     :sync.mode==='doc'?' Sending the whole list each time — run the optional SQL below to change that.'
     :probing?' Checking which scheme this project supports…':'';
   $('#sstatus').textContent=(sync.on?msgs[syncStatus]||msgs.idle:msgs.off)+how;
-  $('#surl').value=sync.url;$('#skey').value=sync.key;$('#sws').value=sync.ws;
+  const d=sync.draft||{};
+  fillSyncField('surl',d.surl||sync.url);fillSyncField('skey',d.skey||sync.key);fillSyncField('sws',d.sws||sync.ws);
   renderPush();
   $('#soff').style.display=sync.on?'':'none';
   $('#son').textContent=sync.on?'Sync now':'Turn on sync';
+  renderDraftNote();
 }
 function openSync(){
   // Looking at this sheet is how you ask "did the optional SQL take effect", so
@@ -1975,6 +2042,13 @@ function openSync(){
 function readSyncFields(){
   sync.url=$('#surl').value.trim();sync.key=$('#skey').value.trim();sync.ws=$('#sws').value.trim();
 }
+for(const id in SFIELDS)$('#'+id).addEventListener('input',e=>{
+  if(!spreadSettings(e.target.value))draftChanged();
+});
+// On a desktop the three fields are a form, and a form ends with Return.
+['#surl','#skey','#sws'].forEach(s=>$(s).addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();$('#son').click();}
+}));
 
 /* ============ events ============ */
 $('#scroll').addEventListener('scroll',e=>$('#head').classList.toggle('stuck',e.target.scrollTop>4));
@@ -2139,6 +2213,7 @@ $('#psave').addEventListener('click',saveProject);
 $('#sgen').addEventListener('click',()=>{
   const a=new Uint8Array(16);crypto.getRandomValues(a);
   $('#sws').value=[...a].map(b=>b.toString(36).padStart(2,'0')).join('').slice(0,24);
+  flushSyncDraft();     // setting .value fires no input event, so keep it by hand
 });
 $('#scopy').addEventListener('click',async()=>{
   readSyncFields();
@@ -2148,11 +2223,8 @@ $('#scopy').addEventListener('click',async()=>{
 });
 $('#spaste').addEventListener('click',async()=>{
   try{
-    const d=JSON.parse(await navigator.clipboard.readText());
-    if(!d.url||!d.key||!d.ws)throw new Error('bad');
-    $('#surl').value=d.url;$('#skey').value=d.key;$('#sws').value=d.ws;
-    toast('Settings pasted. Now turn on sync.');
-  }catch(e){toast('No settings found on the clipboard.');}
+    if(!spreadSettings(await navigator.clipboard.readText()))throw new Error('bad');
+  }catch(e){toast('No settings found on the clipboard. You can also paste them straight into a field.');}
 });
 $('#son').addEventListener('click',async()=>{
   const prevWs=sync.ws;
@@ -2167,6 +2239,7 @@ $('#son').addEventListener('click',async()=>{
     await push();
     if(syncStatus==='error')throw new Error('push failed');
     saveLocal();render();startPolling();
+    flushSyncDraft();                       // committed, so it is no longer a draft
     toast('Sync is on');renderSyncSheet();
   }catch(e){
     setSync('error');toast('Could not connect. Check the URL, key, and that the SQL ran.');
