@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.13.0">
+<meta name="app-version" content="1.14.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -42,6 +42,9 @@
   --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px rgba(0,0,0,.5); --sheet:#1c1c1e;
 } html{color-scheme:dark}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* The icon sprite is markup, not layout. An <svg> with no size is a 300x150
+   replaced element, which pushed the whole app down the page. */
+#sprite{position:absolute;width:0;height:0;overflow:hidden}
 html,body{height:100%;margin:0}
 body{font-family:var(--sans);font-size:17px;line-height:1.35;color:var(--label);background:var(--bg);overflow:hidden;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -99,7 +102,12 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .day .pips{height:6px;display:flex;gap:2.5px;justify-content:center;margin-top:2px}
 .day .pips i{width:4px;height:4px;border-radius:50%;display:block}
 .day.weekend{background:var(--fill2);box-shadow:none}
-.grp{font-size:13px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--label2);padding:18px 6px 7px;display:flex;align-items:center;gap:7px}
+/* Group headings hold their place at the top of the scroll area, so a long list
+   never leaves you wondering which bucket the rows on screen belong to. They
+   need an opaque background for the rows to pass behind, and to sit above the
+   row separators (z-index 3) and the rows themselves (2). */
+.grp{font-size:13px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--label2);padding:18px 6px 7px;display:flex;align-items:center;gap:7px;
+  position:sticky;top:0;z-index:6;background:var(--bg)}
 .grp.late{color:var(--red)}.grp .c{font-weight:600;color:var(--label3);text-transform:none;letter-spacing:0}
 .grp button{margin-left:auto;color:var(--blue);text-transform:none;letter-spacing:0;font-size:14px;font-weight:600}
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
@@ -266,7 +274,9 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stg{flex:1;padding:8px 2px;border-radius:9px;background:var(--fill2);font-size:11.5px;font-weight:700;text-align:center;color:var(--label2);
   transition:transform .18s var(--ease),background .2s,color .2s;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stg:active{transform:scale(.94)}.stg.on{color:#fff}
-.danger{color:var(--red);font-weight:600;text-align:center;width:100%;padding:13px;background:var(--card2);border-radius:12px;margin:12px 14px 16px}
+/* 100% plus side margins was 28px wider than the sheet, which is what put a
+   horizontal scrollbar along the bottom of every sheet that has this button. */
+.danger{color:var(--red);font-weight:600;text-align:center;width:calc(100% - 28px);padding:13px;background:var(--card2);border-radius:12px;margin:12px 14px 16px}
 .swatches{display:flex;gap:9px;flex-wrap:wrap;padding:12px 14px 4px}
 .sw{width:30px;height:30px;border-radius:50%;transition:transform .18s var(--ease);border:2.5px solid transparent}
 .sw.on{transform:scale(1.14)}
@@ -298,6 +308,60 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
    to show them whole. Guarded by min-width because below that the sheet becomes
    a full-width bottom sheet, which an id selector here would otherwise beat. */
 @media (min-width:861px){#ssheet{width:min(720px,94vw)}}
+/* Sort and group live in the ⋯ menu on a phone, where there is no room for them.
+   On a desktop they are two of the most-reached-for controls in the app, so they
+   sit in the header instead of three clicks deep. */
+.hctl{display:none;gap:6px;padding-bottom:2px}
+.hctl select{background:var(--fill2);border:0;border-radius:9px;padding:6px 7px;font-size:13px;
+  font-weight:600;color:var(--label2);max-width:132px}
+@media (min-width:861px){.hctl{display:flex}}
+/* Split view: a desktop window is wide enough to show a task beside the list
+   rather than on top of it. Above this width the detail sheet docks as a real
+   column — no scrim, the list stays live, and clicking another row swaps the
+   pane instead of closing and reopening a modal. Below it, the same element is
+   the modal sheet it has always been. */
+:root{--dock:420px}
+@media (min-width:1200px){
+  #detail.dock{position:static;flex:0 0 var(--dock);width:var(--dock);max-height:none;
+    transform:none;opacity:1;pointer-events:auto;border-radius:0;box-shadow:none;
+    border-left:.5px solid var(--sep);background:var(--bg);overflow-y:auto;
+    padding-bottom:calc(24px + env(safe-area-inset-bottom));animation:dockin .3s var(--ease)}
+  #detail.dock .sheettitle{position:sticky;top:0;z-index:3;background:var(--bg);padding-bottom:8px}
+  #detail.dock .field label{width:78px}          /* the pane is narrower than the sheet was */
+}
+@media (min-width:1440px){:root{--dock:480px}}
+@keyframes dockin{from{opacity:0;transform:translateX(16px)}}
+/* A right-click menu on a row, and the command palette, both hang off .menu. */
+#rowmenu{position:fixed;top:0;left:0;max-width:250px}
+#rowmenu .head{padding:7px 12px 5px;font-size:12.5px;color:var(--label3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:226px}
+#rowmenu button.warn{color:var(--red)}
+#palette{position:fixed;left:50%;top:12vh;transform:translate(-50%,8px) scale(.99);width:min(560px,94vw);
+  background:var(--sheet);border-radius:16px;box-shadow:0 12px 48px rgba(0,0,0,.4);z-index:75;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .22s var(--ease);overflow:hidden}
+#palette.on{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1)}
+#palette input{width:100%;border:0;background:transparent;outline:none;font-size:18px;padding:15px 16px 13px}
+#palette .res{max-height:min(52vh,420px);overflow-y:auto;border-top:.5px solid var(--sep)}
+#palette .r{display:flex;align-items:center;gap:10px;padding:9px 14px;font-size:15px;cursor:pointer}
+#palette .r .k{width:20px;height:20px;flex:none;border-radius:6px;display:grid;place-items:center}
+#palette .r .k svg{width:12px;height:12px;fill:#fff}
+#palette .r .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#palette .r .h{font-size:12px;color:var(--label3);flex:none}
+#palette .r.sel{background:var(--fill)}
+#palette .none{padding:14px;color:var(--label3);font-size:14px;text-align:center}
+#palette .foot{border-top:.5px solid var(--sep);padding:7px 14px;font-size:12px;color:var(--label3);display:flex;gap:12px}
+.keys{padding:4px 14px 16px}
+.keys .kr{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:.5px solid var(--sep);font-size:14.5px}
+.keys .kr:last-child{border-bottom:0}
+.keys kbd{font-family:var(--mono);font-size:12px;background:var(--fill2);border-radius:6px;
+  padding:3px 7px;min-width:26px;text-align:center;color:var(--label)}
+.keys .kr span{color:var(--label2)}
+/* Compact rows: the same list, more of it on screen at once. */
+#app.compact .row{padding:7px 12px 8px}
+#app.compact .tt{font-size:15px}
+#app.compact .meta{margin-top:3px}
+#app.compact .grp{padding:12px 6px 5px}
+#app.compact .chip,#app.compact .stagebar span{font-size:11.5px}
 @media (max-width:860px){
   #sidebar{display:none}#tabbar{display:block}#scroll{padding-bottom:190px}h1{font-size:31px}
   .sheet{top:auto;bottom:0;left:0;width:100%;transform:translateY(100%);border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom);max-height:92vh}
@@ -333,6 +397,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <header id="head">
       <div class="hrow">
         <h1><span class="sub" id="eyebrow">Today</span><span class="nm" id="title">Today</span></h1>
+        <div class="hctl"><select id="hsort" aria-label="Sort by"></select><select id="hgroup" aria-label="Group by"></select></div>
         <button class="iconbtn" id="calBtn" aria-label="Open the calendar"><svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.5A2.5 2.5 0 0 1 21 6.5v12A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4H6V3a1 1 0 0 1 1-1ZM5 9v9.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V9H5Zm2.5 2h3v3h-3v-3Z"/></svg></button>
         <button class="iconbtn" id="syncBtn" aria-label="Sync"><svg viewBox="0 0 24 24"><path d="M6.5 19A5.5 5.5 0 0 1 5.7 8.06a6.5 6.5 0 0 1 12.34 1.6A4.5 4.5 0 0 1 17.5 19h-11Z"/></svg></button>
         <div style="position:relative">
@@ -349,6 +414,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="calendar">Calendar…</button>
             <button data-m="sort" id="sortBtn"></button>
             <button data-m="group" id="groupBtn"></button>
+            <button data-m="density" id="densityBtn"></button>
             <hr>
             <button data-m="undo">Undo last change</button>
             <button data-m="clearDone">Clear completed</button>
@@ -356,6 +422,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <hr>
             <button data-m="scan">Scan a shipping label</button>
             <hr>
+            <button data-m="keys">Keyboard shortcuts</button>
             <button data-m="update" id="updBtn">Check for updates</button>
             <div class="note" id="verNote"></div>
           </div>
@@ -369,37 +436,6 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     </header>
     <div id="scroll"><div class="wrap" id="list"></div></div>
   </div>
-</div>
-
-<nav id="tabbar"><div class="tabs">
-  <button class="tab" data-v="today"><svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.5A2.5 2.5 0 0 1 21 6.5v12A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4H6V3a1 1 0 0 1 1-1ZM5 9v9.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V9H5Z"/></svg><span>Today</span></button>
-  <button class="tab" data-v="scheduled"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm1 5a1 1 0 1 0-2 0v5.3l3.5 2.4a1 1 0 0 0 1.1-1.6L13 11.4V7Z"/></svg><span>Scheduled</span></button>
-  <button class="tab" data-v="projects"><svg viewBox="0 0 24 24"><path d="M4 4h6l1.6 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg><span>Projects</span></button>
-  <button class="tab" data-v="shipments"><svg viewBox="0 0 24 24"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h7A2.5 2.5 0 0 1 14 6.5V8h3l4 4.5V17h-2.1a2.9 2.9 0 0 1-5.8 0H9.9a2.9 2.9 0 0 1-5.8 0H2V6.5Z"/></svg><span>Shipments</span></button>
-  <button class="tab" data-v="all"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Z"/></svg><span>All</span></button>
-</div></nav>
-
-<button id="fab" aria-label="New task"><svg viewBox="0 0 24 24"><path d="M12 4a1.3 1.3 0 0 1 1.3 1.3v5.4h5.4a1.3 1.3 0 0 1 0 2.6h-5.4v5.4a1.3 1.3 0 0 1-2.6 0v-5.4H5.3a1.3 1.3 0 0 1 0-2.6h5.4V5.3A1.3 1.3 0 0 1 12 4Z"/></svg></button>
-<div id="scrim"></div>
-
-<div class="sheet" role="dialog" aria-modal="true" id="composer"><div class="grab"></div><div class="pad">
-  <div class="seg" id="ctype"><button data-t="task" class="on">Task</button><button data-t="shipment">Shipment</button></div>
-  <div class="preview" id="prev"></div>
-  <textarea id="ci" rows="2" placeholder="Approve shop drawings #Harbor Lofts fri"></textarea>
-  <div class="sugg" id="sugg"></div>
-  <div class="hint"><span><code>#</code> project</span><span><code>@</code> maker</span><span><code>&gt;</code> ship to</span><span><code>!</code> flag</span><span><code>fri</code> · <code>oct 15</code> · <code>in 2 weeks</code></span></div>
-  <div class="fgroup" id="cshipfields" style="margin:10px 0 0">
-    <div class="field"><label for="cpo">PO number</label><input id="cpo" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
-    <div class="field"><label for="ctrack">Tracking</label><input id="ctrack" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false">
-      <button class="iconbtn scanbtn" id="cscan" aria-label="Scan a shipping label"><svg viewBox="0 0 20 20"><path d="M2.6 2.6h4.2v1.8H4.4v2.4H2.6V2.6Zm10.6 0h4.2v4.2h-1.8V4.4h-2.4V2.6ZM2.6 13.2h1.8v2.4h2.4v1.8H2.6v-4.2Zm14.8 0v4.2h-4.2v-1.8h2.4v-2.4h1.8ZM5.6 6.4h1.5v7.2H5.6V6.4Zm2.6 0h1v7.2h-1V6.4Zm2 0h1.5v7.2h-1.5V6.4Zm2.6 0h1.6v7.2h-1.6V6.4Z"/></svg></button></div>
-    <div class="field" id="ccarrierrow"><label for="ccarrier">Carrier</label><select id="ccarrier"></select></div>
-  </div>
-  <div class="crow">
-    <button class="tgl" id="cflag" aria-label="Flag"><svg viewBox="0 0 20 20"><path d="M5 2.5a.9.9 0 0 1 .9.9v.3l2.6-.5 3.5.7 3.5-.7v7.2l-3.5.7-3.5-.7-2.6.5v5.7a.9.9 0 1 1-1.8 0V3.4a.9.9 0 0 1 .9-.9Z"/></svg></button>
-    <span class="sp"></span><button class="btn ghost" id="ccancel" style="margin:0">Cancel</button><button class="addbtn" id="cadd" disabled>Add</button>
-  </div>
-</div></div>
-
 <div class="sheet" role="dialog" aria-modal="true" id="detail"><div class="grab"></div>
   <div class="sheettitle"><span id="dkind">Task</span><button class="x" id="dclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div style="padding:12px 14px 0"><div class="seg" id="dtype"><button data-t="task">Task</button><button data-t="shipment">Shipment</button></div></div>
@@ -427,6 +463,50 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="dnotes">Notes</label><textarea id="dnotes" placeholder="Order numbers, contacts, next steps…"></textarea></div></div>
   <button class="danger" id="ddel">Delete</button>
 </div>
+</div>
+
+<nav id="tabbar"><div class="tabs">
+  <button class="tab" data-v="today"><svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.5A2.5 2.5 0 0 1 21 6.5v12A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4H6V3a1 1 0 0 1 1-1ZM5 9v9.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V9H5Z"/></svg><span>Today</span></button>
+  <button class="tab" data-v="scheduled"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm1 5a1 1 0 1 0-2 0v5.3l3.5 2.4a1 1 0 0 0 1.1-1.6L13 11.4V7Z"/></svg><span>Scheduled</span></button>
+  <button class="tab" data-v="projects"><svg viewBox="0 0 24 24"><path d="M4 4h6l1.6 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg><span>Projects</span></button>
+  <button class="tab" data-v="shipments"><svg viewBox="0 0 24 24"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h7A2.5 2.5 0 0 1 14 6.5V8h3l4 4.5V17h-2.1a2.9 2.9 0 0 1-5.8 0H9.9a2.9 2.9 0 0 1-5.8 0H2V6.5Z"/></svg><span>Shipments</span></button>
+  <button class="tab" data-v="all"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Z"/></svg><span>All</span></button>
+</div></nav>
+
+<div class="menu" id="rowmenu" role="menu"></div>
+<div id="palette" role="dialog" aria-modal="true" aria-label="Commands">
+  <input id="pq" type="text" placeholder="Jump to a project, maker or task — or run a command" autocomplete="off"
+    autocapitalize="off" autocorrect="off" spellcheck="false">
+  <div class="res" id="pres"></div>
+  <div class="foot"><span>↑↓ move</span><span>↵ choose</span><span>esc close</span></div>
+</div>
+
+<div class="sheet" role="dialog" aria-modal="true" id="keysheet"><div class="grab"></div>
+  <div class="sheettitle">Keyboard<button class="x" id="kclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="keys" id="keyslist"></div>
+</div>
+
+<button id="fab" aria-label="New task"><svg viewBox="0 0 24 24"><path d="M12 4a1.3 1.3 0 0 1 1.3 1.3v5.4h5.4a1.3 1.3 0 0 1 0 2.6h-5.4v5.4a1.3 1.3 0 0 1-2.6 0v-5.4H5.3a1.3 1.3 0 0 1 0-2.6h5.4V5.3A1.3 1.3 0 0 1 12 4Z"/></svg></button>
+<div id="scrim"></div>
+
+<div class="sheet" role="dialog" aria-modal="true" id="composer"><div class="grab"></div><div class="pad">
+  <div class="seg" id="ctype"><button data-t="task" class="on">Task</button><button data-t="shipment">Shipment</button></div>
+  <div class="preview" id="prev"></div>
+  <textarea id="ci" rows="2" placeholder="Approve shop drawings #Harbor Lofts fri"></textarea>
+  <div class="sugg" id="sugg"></div>
+  <div class="hint"><span><code>#</code> project</span><span><code>@</code> maker</span><span><code>&gt;</code> ship to</span><span><code>!</code> flag</span><span><code>fri</code> · <code>oct 15</code> · <code>in 2 weeks</code></span></div>
+  <div class="fgroup" id="cshipfields" style="margin:10px 0 0">
+    <div class="field"><label for="cpo">PO number</label><input id="cpo" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label for="ctrack">Tracking</label><input id="ctrack" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false">
+      <button class="iconbtn scanbtn" id="cscan" aria-label="Scan a shipping label"><svg viewBox="0 0 20 20"><path d="M2.6 2.6h4.2v1.8H4.4v2.4H2.6V2.6Zm10.6 0h4.2v4.2h-1.8V4.4h-2.4V2.6ZM2.6 13.2h1.8v2.4h2.4v1.8H2.6v-4.2Zm14.8 0v4.2h-4.2v-1.8h2.4v-2.4h1.8ZM5.6 6.4h1.5v7.2H5.6V6.4Zm2.6 0h1v7.2h-1V6.4Zm2 0h1.5v7.2h-1.5V6.4Zm2.6 0h1.6v7.2h-1.6V6.4Z"/></svg></button></div>
+    <div class="field" id="ccarrierrow"><label for="ccarrier">Carrier</label><select id="ccarrier"></select></div>
+  </div>
+  <div class="crow">
+    <button class="tgl" id="cflag" aria-label="Flag"><svg viewBox="0 0 20 20"><path d="M5 2.5a.9.9 0 0 1 .9.9v.3l2.6-.5 3.5.7 3.5-.7v7.2l-3.5.7-3.5-.7-2.6.5v5.7a.9.9 0 1 1-1.8 0V3.4a.9.9 0 0 1 .9-.9Z"/></svg></button>
+    <span class="sp"></span><button class="btn ghost" id="ccancel" style="margin:0">Cancel</button><button class="addbtn" id="cadd" disabled>Add</button>
+  </div>
+</div></div>
+
 
 <div class="sheet" role="dialog" aria-modal="true" id="psheet"><div class="grab"></div>
   <div class="sheettitle"><span id="ptitle">New project</span><button class="x" id="pclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
@@ -736,7 +816,7 @@ function trackInfo(t){
 let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
-let sortBy='smart',groupBy='auto';
+let sortBy='smart',groupBy='auto',compact=false;
 // draft holds what has been typed into the sync sheet but not turned on yet
 let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:'',pushUrl:'',draft:null};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
@@ -758,7 +838,10 @@ const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const uid=()=>Math.random().toString(36).slice(2,10);
 const now=()=>Date.now();
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const sheetOpen=()=>!!document.querySelector('.sheet.on');
+/* A docked detail pane can sit open for an hour, so unlike a modal sheet it must
+   not hold off background pulls — nothing re-renders the open sheet under you,
+   and whatever is in its fields is written back when it closes. */
+const sheetOpen=()=>$$('.sheet.on').some(s=>!s.classList.contains('dock'));
 
 async function loadAll(){
   let raw=await local.get(KEY);
@@ -773,7 +856,9 @@ async function loadAll(){
   const vr=await local.get(VKEY);
   if(vr){try{const v=JSON.parse(vr);
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
-    if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;}catch(e){}}
+    if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;
+    compact=!!v.compact;}catch(e){}}
+  $('#app').classList.toggle('compact',compact);
 }
 function migrate(){
   S.projects=S.projects||[];S.tasks=S.tasks||[];S.tomb=S.tomb||{};
@@ -836,7 +921,7 @@ function saveLocal(){
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -1345,6 +1430,9 @@ function renderData(){
   $('#l-dest').innerHTML=uniq('destination').map(v=>`<option value="${esc(v)}">`).join('');
   $('#sortBtn').textContent='Sort: '+SORT_LABEL[sortBy];
   $('#groupBtn').textContent='Group: '+GROUP_LABEL[groupBy];
+  $('#densityBtn').textContent='Rows: '+(compact?'compact':'comfortable');
+  $('#hsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
+  $('#hgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
   $('#storeNote').textContent=sync.on?'Synced through your own Supabase project.'
     :CLOUD?'Saving to your Claude account.':'Saving on this device. Turn on sync to share across devices.';
 }
@@ -1395,9 +1483,12 @@ function renderHead(){
   $('#title').textContent=name;$('#eyebrow').innerHTML=sub;
   $$('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===view.t));
 }
+/* Fifteen days is what a phone can show. A desktop has room for a month, and the
+   strip was the only way to reach a date without opening the calendar. */
+const stripDays=()=>innerWidth>=1200?28:innerWidth>=861?21:15;
 function stripHTML(){
   const t=midnight(),days=[];
-  for(let i=0;i<15;i++){const d=new Date(t);d.setDate(d.getDate()+i);days.push(d);}
+  for(let i=0;i<stripDays();i++){const d=new Date(t);d.setDate(d.getDate()+i);days.push(d);}
   return '<div class="strip">'+days.map(d=>{
     const k=iso(d),on=openT().filter(x=>x.due===k);
     const pips=on.slice(0,3).map(x=>{const p=projectOf(x);return `<i style="background:${p?p.color:'var(--gray)'}"></i>`;}).join('');
@@ -1549,27 +1640,66 @@ function rowNode(t){
   rowNodes.set(t.id,{key,sig,el});
   return el;
 }
+/* Bring a container's children to match `want` without touching the ones already
+   in the right place. Rebuilding a container detaches its children even when the
+   very same nodes go straight back in, and a node detached between pointerdown
+   and pointerup loses its click outright — which is how an edit saved on blur
+   could swallow the click that caused it, and how a background sync landing
+   mid-tap could swallow a tap. */
+function patch(parent,want){
+  let i=0;
+  for(const node of want){
+    if(parent.childNodes[i]===node){i++;continue;}
+    parent.insertBefore(node,parent.childNodes[i]||null);
+    i++;
+  }
+  while(parent.childNodes.length>i)parent.lastChild.remove();
+}
+/* The headings, cards and the day strip are kept for the same reason as the rows.
+   Each slot holds the nodes it built last time and hands them back unchanged when
+   its markup has not moved. */
+const slotNodes=new Map(),grpNodes=new Map();
+function slot(name,html){
+  const c=slotNodes.get(name);
+  if(c&&c.sig===html)return c.nodes;
+  const nodes=parseHTML(html);
+  slotNodes.set(name,{sig:html,nodes});
+  return nodes;
+}
+function groupNode(x){
+  let g=grpNodes.get(x.k);
+  if(!g){
+    g={head:document.createElement('div'),card:document.createElement('div'),sig:null};
+    g.card.className='card';
+    grpNodes.set(x.k,g);
+  }
+  const sig=x.l+'|'+x.items.length;
+  if(g.sig!==sig){
+    g.head.className='grp'+(x.k==='late'?' late':'');
+    g.head.innerHTML=`${esc(x.l)}<span class="c">${x.items.length}</span>`;
+    g.sig=sig;
+  }
+  patch(g.card,x.items.map(rowNode));
+  return g;
+}
 function renderList(){
   const el=$('#list'),out=[];
   rowCtx=view.t+'|'+iso(midnight())+'|'+S.projects.map(p=>p.id+p.u).join(',');
-  const chunk=h=>{if(h)out.push(...parseHTML(h));};
-  if(view.t==='projects'){chunk(projectsHTML());el.replaceChildren(...out);return;}
-  if(view.t==='project')chunk(projectHead());
-  if(view.t==='mfr')chunk(makerHead());
-  if((view.t==='today'||view.t==='scheduled')&&!query)chunk(stripHTML());
-  if(query)chunk(searchProjectsHTML());    // projects are searchable too, not just tasks
+  const chunk=(name,h)=>{if(h)out.push(...slot(name,h));};
+  if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
+  if(view.t==='project')chunk('phead',projectHead());
+  if(view.t==='mfr')chunk('mhead',makerHead());
+  if((view.t==='today'||view.t==='scheduled')&&!query)chunk('strip',stripHTML());
+  if(query)chunk('sprojects',searchProjectsHTML());   // projects are searchable too, not just tasks
   const items=filtered();
-  if(!items.length){chunk(emptyHTML());el.replaceChildren(...out);return;}
+  if(!items.length){chunk('empty',emptyHTML());patch(el,out);return;}
   const g=new Map();
   for(const t of items){const b=groupOf(t);if(!g.has(b.k))g.set(b.k,{...b,items:[]});g.get(b.k).items.push(t);}
   for(const x of [...g.values()].sort((a,b)=>a.o-b.o)){
-    chunk(`<div class="grp ${x.k==='late'?'late':''}">${x.l}<span class="c">${x.items.length}</span></div>`);
-    const card=document.createElement('div');
-    card.className='card';
-    card.append(...x.items.map(rowNode));
-    out.push(card);
+    const n=groupNode(x);
+    out.push(n.head,n.card);
   }
-  el.replaceChildren(...out);
+  patch(el,out);
   // Nodes for rows the current view leaves out stay cached, so switching back is
   // free; the cache is only swept when it grows past any plausible list.
   if(rowNodes.size>600)for(const [id,c] of rowNodes)if(!c.el.isConnected)rowNodes.delete(id);
@@ -1762,14 +1892,16 @@ function closeSheets(){
   const a=document.activeElement;
   if(a&&a.closest&&a.closest('.sheet'))a.blur();
   $('#scrim').classList.remove('on');
-  $$('.sheet').forEach(s=>s.classList.remove('on'));
+  $$('.sheet').forEach(s=>s.classList.remove('on','dock'));
   editing=null;editProj=null;
   if(lastFocus&&document.contains(lastFocus)){lastFocus.focus();lastFocus=null;}
 }
 /* Keyboard users could tab out of an open sheet into the list behind it. Keep
    focus inside the sheet while it is up, and give it back on close. */
 let lastFocus=null;
-const openSheet=()=>$$('.sheet.on')[0]||null;
+// A docked pane sits beside the list rather than over it, so Tab must be free to
+// leave it — trapping focus is only right for something modal.
+const openSheet=()=>$$('.sheet.on').find(s=>!s.classList.contains('dock'))||null;
 function rememberFocus(){
   const a=document.activeElement;
   if(a&&a!==document.body&&!a.closest('.sheet'))lastFocus=a;
@@ -1822,6 +1954,9 @@ function submitComposer(keep){
 /* ============ detail ============ */
 function openDetail(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  // docked, clicking another row swaps the pane without closing it, so the task
+  // being left has to be written back here rather than on close
+  if(editing&&editing!==id)saveDetail();
   editing=id;
   $('#dkind').textContent=t.type==='shipment'?'Shipment':'Task';
   $$('#dtype button').forEach(b=>b.classList.toggle('on',b.dataset.t===t.type));
@@ -1837,8 +1972,38 @@ function openDetail(id){
     +S.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
     +'<option value="__new">New project…</option>';
   $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
-  rememberFocus();$('#scrim').classList.add('on');$('#detail').classList.add('on');
+  rememberFocus();
+  if(wide()){
+    // docked: a column beside the list rather than a modal over it
+    $('#detail').classList.add('on','dock');
+    $('#detail').setAttribute('aria-modal','false');
+  }else{
+    $('#detail').classList.add('on');
+    $('#detail').setAttribute('aria-modal','true');
+    $('#scrim').classList.add('on');
+  }
 }
+const wide=()=>matchMedia('(min-width:1200px)').matches;
+const docked=()=>$('#detail').classList.contains('dock');
+/* The window can be resized across the split-view threshold with a task open, so
+   the pane has to be able to become the modal it would have been, and back. */
+function syncDock(){
+  const d=$('#detail');
+  if(!d.classList.contains('on'))return;
+  if(wide()&&!docked()){
+    d.classList.add('dock');d.setAttribute('aria-modal','false');
+    if(!$$('.sheet.on').some(s=>s!==d))$('#scrim').classList.remove('on');
+  }else if(!wide()&&docked()){
+    d.classList.remove('dock');d.setAttribute('aria-modal','true');
+    $('#scrim').classList.add('on');
+  }
+}
+let stripN=stripDays();
+addEventListener('resize',()=>{
+  syncDock();
+  const n=stripDays();
+  if(n!==stripN){stripN=n;if(!query&&(view.t==='today'||view.t==='scheduled'))renderList();}
+});
 /* ============ label scanning ============
    Safari has no BarcodeDetector, so the ZXing decoder is vendored and pulled in
    the first time the scanner is opened. Where the native detector does exist it
@@ -2170,7 +2335,16 @@ $('#calgrid').addEventListener('click',e=>{
 });
 
 /* ============ bulk actions ============ */
-let selMode=false,selected=new Set(),pressT=null;
+let selMode=false,selected=new Set(),pressT=null,lastSel=null;
+/* Shift-click means "everything between these two", so the run is taken from the
+   order the rows are actually in on screen. */
+function selectRange(fromId,toId){
+  const ids=$$('#list .rowwrap').map(w=>w.dataset.id);
+  const a=ids.indexOf(fromId),b=ids.indexOf(toId);
+  if(a<0||b<0)return toggleSel(toId);
+  for(const id of ids.slice(Math.min(a,b),Math.max(a,b)+1))selected.add(id);
+  lastSel=toId;renderBulk();
+}
 function setSelMode(on){
   selMode=on;if(!on)selected.clear();
   $('#bulkbar').classList.toggle('on',on);
@@ -2393,13 +2567,18 @@ $('#moreBtn').addEventListener('click',e=>{e.stopPropagation();$('#moreMenu').cl
 document.addEventListener('click',()=>$('#moreMenu').classList.remove('on'));
 document.addEventListener('click',e=>{
   const m=e.target.closest('[data-m]');if(!m)return;
-  const k=m.dataset.m;
+  doMenu(m.dataset.m);
+});
+/* Named so the command palette can run the same things the ⋯ menu does, rather
+   than the menu owning them behind a click handler. */
+function doMenu(k){
   if(k==='sync')openSync();
   if(k==='scan')openScanner('find');
   if(k==='undo')popUndo();
   if(k==='calendar')openCalendar();
   if(k==='sort'){sortBy=SORTS[(SORTS.indexOf(sortBy)+1)%SORTS.length];saveView();render();toast('Sort: '+SORT_LABEL[sortBy]);}
   if(k==='group'){groupBy=GROUPS[(GROUPS.indexOf(groupBy)+1)%GROUPS.length];saveView();render();toast('Group: '+GROUP_LABEL[groupBy]);}
+  if(k==='density'){compact=!compact;$('#app').classList.toggle('compact',compact);saveView();render();}
   if(k==='update')checkUpdate();
   if(k==='newproj')openProject(null);
   if(k==='sample')loadSample();
@@ -2419,7 +2598,8 @@ document.addEventListener('click',e=>{
     [...S.tasks,...S.projects].forEach(x=>S.tomb[x.id]=now());
     S.tasks=[];S.projects=[];S.started=false;save();render();
   }
-});
+  if(k==='keys')openKeys();
+}
 $('#fileIn').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
   try{
@@ -2432,6 +2612,8 @@ $('#fileIn').addEventListener('change',async e=>{
 });
 function setView(t,v){view={t,v};selDay=null;$('#q').value='';query='';render();$('#scroll').scrollTop=0;}
 $('#navlists').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b)setView(b.dataset.v,b.dataset.val);});
+$('#hsort').addEventListener('change',e=>{sortBy=e.target.value;saveView();render();});
+$('#hgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();render();});
 $('#tabbar').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){setView(b.dataset.v);buzz(4);}});
 $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-m]'))return;
@@ -2444,9 +2626,98 @@ $('#list').addEventListener('click',e=>{
   const c=e.target.closest('[data-check]');if(c)return toggleDone(c.dataset.check,c);
   const s=e.target.closest('[data-stage]');if(s)return bumpStage(s.dataset.stage);
   const w=e.target.closest('.rowwrap');
-  if(w&&w.dataset.id&&selMode)return toggleSel(w.dataset.id);
-  if(w&&w.dataset.id&&!w._moved)openDetail(w.dataset.id);
+  if(!w||!w.dataset.id)return;
+  /* Selecting on a desktop was long-press only, which a mouse cannot really do:
+     shift picks a run, cmd/ctrl picks one at a time, the way a file list does. */
+  if(e.shiftKey||e.metaKey||e.ctrlKey){
+    if(!selMode)setSelMode(true);
+    if(e.shiftKey&&lastSel)selectRange(lastSel,w.dataset.id);
+    else{toggleSel(w.dataset.id);lastSel=w.dataset.id;}
+    return;
+  }
+  if(selMode){lastSel=w.dataset.id;return toggleSel(w.dataset.id);}
+  if(!w._moved)openDetail(w.dataset.id);
 });
+/* ============ right-click on a row ============
+   A row has half a dozen things you might want to do to it, and reaching any of
+   them meant opening it first. The browser's own menu over a row offers nothing
+   worth having, so this replaces it there and only there — anywhere else on the
+   page the native menu is left alone. */
+let menuId=null;
+function closeRowMenu(){$('#rowmenu').classList.remove('on');menuId=null;}
+function openRowMenu(id,x,y){
+  const t=S.tasks.find(z=>z.id===id);if(!t)return;
+  menuId=id;
+  const items=[
+    ['open','Open'],
+    ['done',t.done?'Mark not done':'Complete'],
+    ['flag',t.flagged?'Remove flag':'Flag'],
+    t.type==='shipment'?['stage',`Advance to ${STAGES[(t.stage+1)%5]}`]:null,
+    ['today','Due today'],['tomorrow','Due tomorrow'],t.due?['nodate','Clear the date']:null,
+    ['dup','Duplicate'],
+    tracksOf(t).some(x=>clean(x.n))?['copytrack','Copy tracking number']:null,
+    ['sel','Select'],
+  ].filter(Boolean);
+  const projs=S.projects.filter(p=>p.id!==t.projectId);
+  let h=`<div class="head">${esc(t.title)}</div>`;
+  h+=items.map(([k,l])=>`<button data-rm="${k}">${esc(l)}</button>`).join('');
+  if(projs.length||t.projectId){
+    h+='<hr>';
+    if(t.projectId)h+='<button data-rm="proj:">No project</button>';
+    h+=projs.map(p=>`<button data-rm="proj:${p.id}">Move to ${esc(p.name)}</button>`).join('');
+  }
+  h+='<hr><button class="warn" data-rm="del">Delete</button>';
+  const m=$('#rowmenu');
+  m.innerHTML=h;m.classList.add('on');
+  // a click near an edge would otherwise put half the menu off screen
+  const r=m.getBoundingClientRect();
+  m.style.left=Math.max(8,Math.min(x,innerWidth-r.width-8))+'px';
+  m.style.top=Math.max(8,Math.min(y,innerHeight-r.height-8))+'px';
+}
+$('#list').addEventListener('contextmenu',e=>{
+  const w=e.target.closest('.rowwrap');
+  if(!w||!w.dataset.id)return;
+  e.preventDefault();
+  openRowMenu(w.dataset.id,e.clientX,e.clientY);
+});
+$('#rowmenu').addEventListener('click',e=>{
+  const b=e.target.closest('[data-rm]');if(!b||!menuId)return;
+  const k=b.dataset.rm,id=menuId,t=S.tasks.find(x=>x.id===id);
+  closeRowMenu();
+  if(!t)return;
+  if(k==='open')return openDetail(id);
+  if(k==='done')return toggleDone(id,document.querySelector(`.rowwrap[data-id="${id}"] .check`));
+  if(k==='stage')return bumpStage(id);
+  if(k==='sel'){if(!selMode)setSelMode(true);lastSel=id;return toggleSel(id);}
+  if(k==='del')return delTask(id);
+  if(k==='copytrack'){
+    const n=tracksOf(t).map(x=>clean(x.n)).filter(Boolean).join(' ');
+    return navigator.clipboard.writeText(n).then(()=>toast('Tracking number copied'))
+      .catch(()=>toast('Copy blocked. Open the row and copy it by hand.'));
+  }
+  if(k==='dup'){
+    const c=JSON.parse(JSON.stringify(t));
+    c.id=uid();c.created=now();c.u=now();c.done=false;c.completed=null;c.stamps={};c.stage0=null;
+    c.tracks=(c.tracks||[]).map(x=>({...x,id:uid(),got:null}));
+    c.title=t.title.replace(/ \(copy\)$/,'')+' (copy)';
+    S.tasks.push(c);save();render();
+    toast('Duplicated',()=>{S.tasks=S.tasks.filter(x=>x.id!==c.id);S.tomb[c.id]=now();save();render();});
+    return;
+  }
+  const before=JSON.parse(JSON.stringify(t));
+  const undo=()=>{Object.assign(t,before);t.u=now();save();render();};
+  const dayOff=n=>{const d=new Date(midnight());d.setDate(d.getDate()+n);return iso(d);};
+  if(k==='flag'){t.flagged=!t.flagged;t.u=now();save();render();toast(t.flagged?'Flagged':'Flag removed',undo);return;}
+  if(k==='today'||k==='tomorrow'){t.due=dayOff(k==='today'?0:1);t.u=now();save();render();toast('Due '+fmtDue(t.due),undo);return;}
+  if(k==='nodate'){t.due=null;t.u=now();save();render();toast('Date cleared',undo);return;}
+  if(k.startsWith('proj:')){
+    t.projectId=k.slice(5)||null;t.u=now();save();render();
+    const p=projectOf(t);toast(p?'Moved to '+p.name:'Removed from its project',undo);
+  }
+});
+document.addEventListener('click',e=>{if(!e.target.closest('#rowmenu'))closeRowMenu();});
+document.addEventListener('contextmenu',e=>{if(!e.target.closest('#list'))closeRowMenu();});
+addEventListener('blur',closeRowMenu);
 $('#list').addEventListener('pointerdown',e=>{
   const lw=e.target.closest('.rowwrap');
   if(lw&&lw.dataset.id){
@@ -2482,7 +2753,14 @@ $('#list').addEventListener('pointermove',()=>clearTimeout(pressT));
 $('#list').addEventListener('pointercancel',endSwipe);
 document.addEventListener('keydown',e=>{
   const typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  // the palette is reachable from anywhere, including out of a text field
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){
+    e.preventDefault();
+    return $('#palette').classList.contains('on')?closePalette():openPalette();
+  }
   if(e.key==='Escape'){
+    if($('#palette').classList.contains('on'))return closePalette();
+    if($('#rowmenu').classList.contains('on'))return closeRowMenu();
     if($('#scanner').classList.contains('on'))return closeScanner();
     const a=document.activeElement;
     closeSheets();
@@ -2493,11 +2771,95 @@ document.addEventListener('keydown',e=>{
     if(a&&a.closest&&!a.closest('.sheet')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))a.blur();
     return;}
   if(typing)return;
-  if(e.key==='n'||((e.metaKey||e.ctrlKey)&&e.key==='k')){e.preventDefault();openComposer();}
+  if(e.key==='n'){e.preventDefault();openComposer();}
   if(e.key==='p'){e.preventDefault();openProject(null);}
+  if(e.key==='?'){e.preventDefault();openKeys();}
   if((e.metaKey||e.ctrlKey)&&e.key==='z'){e.preventDefault();popUndo();}
   if(e.key==='/'){e.preventDefault();$('#q').focus();}
 });
+
+/* ============ command palette ============
+   Every view, project, maker, destination and menu action reachable by typing
+   three letters, plus the tasks themselves. ⌘K used to be a second shortcut for
+   "new task", which n already does. */
+let pitems=[],psel=0;
+function paletteRows(q){
+  const out=[],hit=s=>!q||(s||'').toLowerCase().includes(q);
+  const push=(t,h,ico,col,run)=>{if(hit(t))out.push({t,h,ico,col,run});};
+  for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],
+    ['flagged','Flagged',I.flag,'var(--orange)'],['shipments','Shipments',I.truck,'var(--purple)'],
+    ['all','All open',I.list,'var(--gray)'],['done','Completed',I.check,'var(--green)'],
+    ['projects','Projects',I.box,'var(--indigo)']])
+    push(l,'View',ico,col,()=>setView(v));
+  for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
+  for(const m of uniq('manufacturer'))push(m,'Maker',I.box,colorFor(m),()=>setView('mfr',m));
+  for(const d of uniq('destination'))push(d,'Ship to',I.truck,colorFor(d),()=>setView('dest',d));
+  for(const [l,k] of [['New task','new'],['New project','newproj'],['Scan a shipping label','scan'],
+    ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
+    ['Save a backup file','export'],['Load from a backup file','import'],
+    ['Undo last change','undo'],['Clear completed','clearDone'],
+    ['Rows: '+(compact?'comfortable':'compact'),'density'],['Check for updates','update'],
+    ['Load a sample setup','sample']])
+    push(l,'Command',I.list,'var(--gray)',()=>k==='new'?openComposer():doMenu(k));
+  // sort and group by name, so "by maker" finds the grouping
+  for(const v of SORTS)push('Sort: '+SORT_LABEL[v],'Command',I.list,'var(--gray)',()=>{sortBy=v;saveView();render();});
+  for(const v of GROUPS)push('Group: '+GROUP_LABEL[v],'Command',I.list,'var(--gray)',()=>{groupBy=v;saveView();render();});
+  if(q)for(const t of S.tasks.filter(t=>!t.done).slice(0,400)){
+    if(out.filter(r=>r.h==='Task').length>=8)break;
+    if(!haystack(t).includes(q))continue;
+    const p=projectOf(t);
+    out.push({t:t.title,h:p?p.name:(t.type==='shipment'?'Shipment':'Task'),
+      ico:t.type==='shipment'?I.truck:I.check,col:p?p.color:'var(--gray)',run:()=>openDetail(t.id)});
+  }
+  return out.slice(0,40);
+}
+function renderPalette(){
+  const q=$('#pq').value.trim().toLowerCase();
+  pitems=paletteRows(q);
+  if(psel>=pitems.length)psel=0;
+  $('#pres').innerHTML=pitems.length
+    ? pitems.map((r,i)=>`<div class="r ${i===psel?'sel':''}" data-i="${i}">
+        <span class="k" style="background:${r.col}">${r.ico}</span>
+        <span class="t">${esc(r.t)}</span><span class="h">${esc(r.h)}</span></div>`).join('')
+    : '<div class="none">Nothing matches that.</div>';
+  const s=$('#pres .r.sel');if(s)s.scrollIntoView({block:'nearest'});
+}
+function openPalette(){
+  closeSheets();closeRowMenu();
+  psel=0;$('#pq').value='';renderPalette();
+  $('#palette').classList.add('on');$('#pq').focus();
+}
+function closePalette(){$('#palette').classList.remove('on');}
+function runPalette(i){
+  const r=pitems[i];if(!r)return;
+  closePalette();r.run();
+}
+$('#pq').addEventListener('input',()=>{psel=0;renderPalette();});
+$('#pq').addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();psel=Math.min(psel+1,pitems.length-1);renderPalette();}
+  else if(e.key==='ArrowUp'){e.preventDefault();psel=Math.max(psel-1,0);renderPalette();}
+  else if(e.key==='Enter'){e.preventDefault();runPalette(psel);}
+  else if(e.key==='Escape'){e.preventDefault();closePalette();}
+});
+$('#pres').addEventListener('click',e=>{
+  const r=e.target.closest('[data-i]');if(r)runPalette(+r.dataset.i);
+});
+document.addEventListener('click',e=>{
+  if($('#palette').classList.contains('on')&&!e.target.closest('#palette'))closePalette();
+});
+
+/* ============ keyboard help ============
+   The shortcuts have been there all along with nothing to announce them. */
+const KEYS=[['n','New task'],['p','New project'],['/','Search'],['?','This list'],
+  ['⌘K / ctrl K','Command palette'],['⌘Z / ctrl Z','Undo'],['esc','Close, or clear the search'],
+  ['right-click','Actions for a row'],['shift-click','Select a run of rows'],
+  ['⌘click / ctrl click','Select rows one at a time'],['↵','In a sync field, turn sync on']];
+function openKeys(){
+  $('#keyslist').innerHTML=KEYS.map(([k,l])=>
+    `<div class="kr"><kbd>${esc(k)}</kbd><span>${esc(l)}</span></div>`).join('');
+  rememberFocus();$('#scrim').classList.add('on');$('#keysheet').classList.add('on');
+}
+$('#kclose').addEventListener('click',closeSheets);
 
 /* ============ sample ============ */
 function loadSample(){
