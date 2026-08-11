@@ -52,8 +52,20 @@ parcel status is only ever a cache on the parcel.
 Realtime is a broadcast channel, never postgres_changes: the tables have RLS with
 no policies, so the anon key cannot read them and change events would be invisible
 to it. The broadcast says only "something moved"; each device then pulls through
-the security-definer functions. Every failure path falls back to the 15-second
-poll, so this must never become load-bearing.
+the security-definer functions.
+
+**The poll stays at 15 seconds whether or not the socket says it is joined.** A
+socket can join and then deliver nothing — broadcast disabled on the project, or
+an iPhone suspending the connection without closing it — and both devices then
+believe they are live while nothing arrives. Slowing the poll on `rtJoined` turned
+a 15-second lag into a two-minute one and looked exactly like sync being broken.
+The nudge is an accelerator; it must never be what sync depends on.
+
+A push must always be retried. The only thing that asks for one is an edit, so a
+single failure used to leave those changes on the device until the next unrelated
+edit — which on a phone is most of the time. `pending()` answers "is there
+anything unsent" in either scheme, and `resume()` catches up both directions on
+regaining the network, the tab or the app.
 
 ## Icons
 

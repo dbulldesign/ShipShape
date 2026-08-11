@@ -7,7 +7,7 @@
    The page checks whether it is stale by re-fetching its own HTML with a
    ?vcheck= parameter. Those requests must never be answered from here, or the
    check would compare a cached copy against itself and always agree. */
-const CACHE = 'shipshape-1.20.1';
+const CACHE = 'shipshape-1.21.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icon.svg', './favicon.svg', './favicon.ico',

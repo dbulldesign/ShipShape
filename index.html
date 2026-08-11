@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.20.1">
+<meta name="app-version" content="1.21.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -75,6 +75,9 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #syncBtn.idle svg{fill:var(--green)}
 #syncBtn.syncing svg{fill:var(--blue);animation:pulse 1.1s ease-in-out infinite}
 #syncBtn.error svg{fill:var(--red)}
+/* Offline is not the same failure as a wrong key, and red for both sent you
+   checking credentials when the answer was to wait. */
+#syncBtn.offline svg{fill:var(--orange)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .brand{font-family:var(--round);font-weight:800;font-size:20px;letter-spacing:-.3px;padding:6px 10px 12px;display:flex;align-items:center;gap:8px}
 /* The real ship, not a stand-in gradient tile. favicon.svg is the cut drawn to
@@ -1232,6 +1235,11 @@ async function probeItemMode(){
   if($('#ssheet').classList.contains('on'))renderSyncSheet();
   return sync.mode;
 }
+/* Anything on this device the workspace has not been told about yet. The document
+   scheme sends everything every time, so advancing the same watermark after a
+   document push makes this one question answerable in either mode. */
+const pending=()=>sync.on&&itemsSince(sync.pushed||0).length>0;
+let pushFails=0,pushRetryT=null;
 async function push(){
   if(!sync.on)return;
   setSync('syncing');
@@ -1243,10 +1251,23 @@ async function push(){
       sync.pushed=Math.max(sync.pushed||0,...batch.map(x=>x.u),now()-1);
     }else{
       await rpc('shipshape_push',{k:sync.ws,d:payload()});
+      sync.pushed=now()-1;
     }
+    pushFails=0;clearTimeout(pushRetryT);
+    saveSyncCfg();                             // keep the watermark across a reload
     setSync('idle');
     nudge();                                  // tell the other devices to pull now
-  }catch(e){setSync('error');}
+  }catch(e){
+    /* A push used to fail silently and never try again: the only thing that ever
+       called for one was an edit, so a single failure — a tunnel, a lock screen
+       mid-send, a flaky 5G handover — left those changes sitting on the device
+       until you happened to edit something else. On a phone that is most of the
+       time. */
+    setSync(navigator.onLine?'error':'offline');
+    clearTimeout(pushRetryT);
+    const wait=Math.min(60000,1500*Math.pow(2,Math.min(pushFails++,5)));
+    pushRetryT=setTimeout(()=>{if(pending())push();},wait);
+  }
 }
 /* ============ live nudges over Realtime ============
    Polling every fifteen seconds is a request whether or not anything changed, and
@@ -1264,7 +1285,7 @@ async function push(){
    The socket is a best-effort optimisation. Every failure path falls back to the
    fifteen-second poll, which is exactly the behaviour that existed before, so a
    project where this does not work loses nothing. */
-let rtWS=null,rtRef=0,rtBeat=null,rtRetry=0,rtJoined=false,rtT=null;
+let rtWS=null,rtRef=0,rtBeat=null,rtRetry=0,rtJoined=false,rtT=null,rtBeatAt=0;
 const rtTopic=()=>'realtime:shipshape-'+(sync.ws||'').slice(0,32);
 function rtSend(o){try{rtWS&&rtWS.readyState===1&&rtWS.send(JSON.stringify(o));}catch(e){}}
 function rtClose(){
@@ -1287,24 +1308,27 @@ function rtConnect(){
   try{ws=new WebSocket(url.toString());}catch(e){return;}
   rtWS=ws;
   ws.onopen=()=>{
-    rtRetry=0;
+    rtRetry=0;rtBeatAt=Date.now();
     rtSend({topic:rtTopic(),event:'phx_join',ref:String(++rtRef),
       payload:{config:{broadcast:{self:false,ack:false},presence:{key:''},private:false}}});
-    rtBeat=setInterval(()=>rtSend({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++rtRef)}),25000);
+    rtBeat=setInterval(()=>{
+      // an unanswered heartbeat means the connection is open and dead, which is
+      // what a suspended phone leaves behind; drop it and start again
+      if(Date.now()-rtBeatAt>70000)return rtConnect();
+      rtSend({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++rtRef)});
+    },25000);
   };
   ws.onmessage=ev=>{
     let m=null;try{m=JSON.parse(ev.data);}catch(e){return;}
-    if(m.event==='phx_reply'&&m.topic===rtTopic()){
-      rtJoined=m.payload&&m.payload.status==='ok';
-      if(rtJoined)startPolling();            // a live socket earns the slow poll
+    if(m.event==='phx_reply'){
+      rtBeatAt=Date.now();                   // any reply proves it is still alive
+      if(m.topic===rtTopic()&&m.payload&&m.payload.status==='ok')rtJoined=true;
       return;
     }
     if(m.event==='broadcast'&&m.payload&&m.payload.event==='moved')pull(true);
   };
   ws.onclose=()=>{
-    const wasJoined=rtJoined;
     rtWS=null;rtJoined=false;clearInterval(rtBeat);
-    if(wasJoined)startPolling();             // back to the fast poll while it is down
     if(!sync.on)return;
     // back off to a minute: a project without Realtime enabled closes immediately
     const wait=Math.min(60000,2000*Math.pow(2,Math.min(rtRetry++,5)));
@@ -1336,7 +1360,11 @@ async function pull(quiet){
     }
     if(changed){saveLocal();render();}
     setSync('idle');
-  }catch(e){setSync('error');if(!quiet)toast('Could not reach Supabase. Check the URL and key.');}
+  }catch(e){
+    setSync(navigator.onLine?'error':'offline');
+    if(!quiet)toast(navigator.onLine?'Could not reach Supabase. Check the URL and key.'
+      :'No network. Your changes are saved here and will go out when you are back.');
+  }
   finally{pulling=false;}
 }
 /* One row per record, so a delete is a row with no data rather than a tombstone
@@ -1386,15 +1414,27 @@ function mergeIn(remote){
   if(changed){S.started=true;sanitizeColors();}   // remote projects are untrusted input
   return changed;
 }
-/* With a live socket the poll is only a safety net, so it slows right down; with
-   no socket it is the only thing keeping devices in step, so it stays quick. */
+/* Fifteen seconds, whether or not the socket says it is live.
+   This used to slow to two minutes on a joined socket, which was wrong: a socket
+   can join and then deliver nothing — Realtime disabled for broadcast, or an
+   iPhone suspending the connection without closing it — and then both devices
+   believe they are live while nothing arrives. The nudge is an accelerator and
+   must never be the thing sync depends on. */
 function startPolling(){
   clearInterval(pollT);
-  if(sync.on)pollT=setInterval(()=>pull(true),rtJoined?120000:15000);
+  if(sync.on)pollT=setInterval(()=>pull(true),15000);
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull(true);});
-window.addEventListener('focus',()=>pull(true));
-window.addEventListener('online',()=>pull(true));
+/* Coming back — to the network, to the tab, to the app — is exactly when a device
+   is behind in both directions, so catch up both ways rather than only pulling. */
+function resume(){
+  if(!sync.on)return;
+  pull(true);
+  if(pending())schedulePush();
+  if(!rtWS||rtWS.readyState>1)rtConnect();     // iOS drops the socket while away
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)resume();});
+window.addEventListener('focus',resume);
+window.addEventListener('online',resume);
 
 /* ============ dates ============ */
 const midnight=()=>{const d=new Date();d.setHours(0,0,0,0);return d;};
@@ -2697,7 +2737,9 @@ function spreadSettings(v){
 }
 function renderSyncSheet(){
   const msgs={off:'Off. Everything stays on this device.',
-    idle:`On. Last sync ${fmtAgo(sync.last)}.`,syncing:'Syncing…',error:'Cannot reach Supabase. Check the URL, key and workspace.'};
+    idle:`On. Last sync ${fmtAgo(sync.last)}.`,syncing:'Syncing…',
+    offline:'Offline. Changes are saved here and go out when the network is back.',
+    error:'Cannot reach Supabase. Check the URL, key and workspace.'};
   const how=(!sync.on?''
     :sync.mode==='items'?' Sending only what changed.'
     :sync.mode==='doc'?' Sending the whole list each time — run the optional SQL below to change that.'
