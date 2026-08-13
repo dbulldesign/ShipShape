@@ -33,6 +33,15 @@ and pointerup makes the browser drop the click entirely — that is why saving a
 field on blur used to swallow the click that caused it, and why a background sync
 landing mid-tap could swallow a tap. `patch()` exists to avoid it.
 
+## Gestures
+
+Anything that claims a touch must lock its axis first. The row swipe always did;
+pull-to-refresh did not, so a sideways swipe along the day strip — which drifts
+downwards a little, as they all do — started a refresh and `preventDefault()`
+then cancelled the strip's own scrolling. A gesture beginning inside a sideways
+scroller (`inHScroller`: the day strip, the suggestion row, a `pre` block) has to
+clear a higher bar before the pull claims it.
+
 ## Sheets
 
 The detail sheet doubles as a docked column above 1200px, so it lives inside
@@ -40,6 +49,11 @@ The detail sheet doubles as a docked column above 1200px, so it lives inside
 and `sheetOpen()` reports false for it so background pulls are not held off while
 it sits open. `syncDock()` handles the window being resized across that
 threshold.
+
+Sheet titles are sticky. The sync sheet is long enough to scroll, and its ✕ used
+to leave with the content — on a phone that means no visible way out. The same
+goes for the ⋯ menu, which is capped to the viewport and scrolls: it grew past
+the bottom of a phone screen and everything below the fold was unreachable.
 
 ## The two functions
 
