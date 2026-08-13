@@ -1147,6 +1147,14 @@ if (hp) {
   const sec = document.getElementById("sec-" + (proj(pid) ? pid : "none"));
   if (sec) sec.scrollIntoView({ block: "start" });
 } else setView("home");
+/* Shipshape's + menu sends "New idea" here with #new: land ready to type, which
+   on a phone means the keyboard is already up. */
+if (location.hash === "#new") {
+  history.replaceState(null, "", location.pathname + location.search);
+  const ta = document.getElementById("cap-text");
+  ta.scrollIntoView({ block: "start" });
+  setTimeout(() => ta.focus(), 60);
+}
 
 /* ————————————————————————————————————————————
    Sync · rides the Shipshape workspace

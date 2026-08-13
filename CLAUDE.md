@@ -42,6 +42,16 @@ then cancelled the strip's own scrolling. A gesture beginning inside a sideways
 scroller (`inHScroller`: the day strip, the suggestion row, a `pre` block) has to
 clear a higher bar before the pull claims it.
 
+## Settings
+
+One sheet, `#setsheet`, holds every preference: list sort/group/row height, the
+"last seven days" card, effects, sound, a hand-off to sync setup, backups and
+About. The ⋯ menu is actions only. Anything with a colon in a menu label — "Sort:
+Smart", "Rows: compact" — was a preference pretending to be a command, and enough
+of them accumulated to push the menu off the bottom of a phone. Add preferences
+here, not there. `renderSettings()` is re-run by `renderData()` while the sheet is
+open, so it never shows stale state.
+
 ## Effects
 
 Finishing something runs `celebrate()` — sparks, confetti or fireworks, all drawn
@@ -93,6 +103,13 @@ single failure used to leave those changes on the device until the next unrelate
 edit — which on a phone is most of the time. `pending()` answers "is there
 anything unsent" in either scheme, and `resume()` catches up both directions on
 regaining the network, the tab or the app.
+
+## Ideas vs tasks
+
+"New idea" in the + menu hands over to `board.html#new`, which lands with the
+capture bar focused — a thought in the van is not a task with a due date, and the
+board was otherwise reachable only through the ⋯ menu, which is not where anyone
+looks to add something.
 
 ## The board
 

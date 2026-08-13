@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.24.0">
+<meta name="app-version" content="1.25.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -410,6 +410,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 #palette .r.sel{background:var(--fill)}
 #palette .none{padding:14px;color:var(--label3);font-size:14px;text-align:center}
 #palette .foot{border-top:.5px solid var(--sep);padding:7px 14px;font-size:12px;color:var(--label3);display:flex;gap:12px}
+.sethead{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--label3);padding:18px 16px 2px}
 .fxg{padding:12px 14px 0}
 .fxg .lab2{font-size:13px;color:var(--label2);margin-bottom:6px;font-weight:500}
 .fxg .seg{width:100%;margin-bottom:0}
@@ -468,31 +470,16 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
           <button class="iconbtn" id="moreBtn" aria-label="More"><svg viewBox="0 0 20 20"><circle cx="4" cy="10" r="1.8"/><circle cx="10" cy="10" r="1.8"/><circle cx="16" cy="10" r="1.8"/></svg></button>
           <div class="menu" id="moreMenu">
             <div class="note" id="storeNote"></div>
-            <button data-m="sync">Sync setup…</button>
-            <button data-m="export">Save a backup file</button>
-            <button data-m="import">Load from a backup file</button>
+            <button data-m="settings">Settings…</button>
             <hr>
             <button data-m="newproj">New project</button>
-            <button data-m="sample" id="sampleBtn">Load a sample setup</button>
-            <hr>
             <button data-m="calendar">Calendar…</button>
-            <button data-m="sort" id="sortBtn"></button>
-            <button data-m="group" id="groupBtn"></button>
-            <button data-m="density" id="densityBtn"></button>
-            <button data-m="fx">Effects…</button>
-            <button data-m="digest" id="digestBtn"></button>
+            <button data-m="scan">Scan a shipping label</button>
+            <button data-m="board">Everything Board…</button>
             <hr>
             <button data-m="undo">Undo last change</button>
             <button data-m="clearDone">Archive completed</button>
             <button data-m="archive">Archived…</button>
-            <button data-m="reset" style="color:var(--red)">Delete everything</button>
-            <hr>
-            <button data-m="scan">Scan a shipping label</button>
-            <button data-m="board">Everything Board…</button>
-            <hr>
-            <button data-m="keys">Keyboard shortcuts</button>
-            <button data-m="update" id="updBtn">Check for updates</button>
-            <div class="note" id="verNote"></div>
           </div>
         </div>
         <button class="iconbtn" id="addTop" style="background:var(--blue)" aria-label="New task"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
@@ -554,15 +541,43 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="foot"><span>↑↓ move</span><span>↵ choose</span><span>esc close</span></div>
 </div>
 
-<div class="sheet" role="dialog" aria-modal="true" id="fxsheet"><div class="grab"></div>
-  <div class="sheettitle">Effects<button class="x" id="fxclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
-  <div class="blurb" id="fxnote">Something to mark finishing something.</div>
+<div class="sheet" role="dialog" aria-modal="true" id="setsheet"><div class="grab"></div>
+  <div class="sheettitle">Settings<button class="x" id="setclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+
+  <div class="sethead">The list</div>
+  <div class="fgroup">
+    <div class="field"><label for="setsort">Sort</label><select id="setsort"></select></div>
+    <div class="field"><label for="setgroup">Group</label><select id="setgroup"></select></div>
+  </div>
+  <div class="fxg"><div class="lab2">Row height</div><div class="seg" id="set-rows"></div></div>
+  <div class="fxg"><div class="lab2">“Last seven days” on Today</div><div class="seg" id="set-digest"></div></div>
+
+  <div class="sethead">Finishing something</div>
   <div class="fxg"><div class="lab2">Style</div><div class="seg" id="fx-style"></div></div>
   <div class="fxg"><div class="lab2">When</div><div class="seg" id="fx-when"></div></div>
   <div class="fxg"><div class="lab2">How much</div><div class="seg" id="fx-amount"></div></div>
   <div class="fxg"><div class="lab2">Sound</div><div class="seg" id="fx-sound"></div></div>
-  <div class="blurb" id="fxwhen-note" style="padding-top:10px"></div>
-  <div style="padding:14px"><button class="btn" id="fxtry" style="width:100%;margin:0;text-align:center">Try it</button></div>
+  <div class="blurb" id="fxnote" style="padding-top:10px"></div>
+  <div style="padding:10px 14px 0"><button class="btn sec" id="fxtry" style="width:100%;margin:0;text-align:center">Try it</button></div>
+
+  <div class="sethead">Syncing and reminders</div>
+  <div class="blurb" id="setsyncnote" style="padding-bottom:0"></div>
+  <div style="padding:10px 14px 0"><button class="btn sec" id="setsync" style="width:100%;margin:0;text-align:center">Sync setup…</button></div>
+
+  <div class="sethead">Your data</div>
+  <div style="padding:0 14px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sec" data-m="export" style="margin:0;font-size:14px;padding:9px 14px">Save a backup file</button>
+    <button class="btn sec" data-m="import" style="margin:0;font-size:14px;padding:9px 14px">Load from a backup file</button>
+    <button class="btn sec" data-m="sample" id="sampleBtn" style="margin:0;font-size:14px;padding:9px 14px">Load a sample setup</button>
+  </div>
+  <button class="danger" data-m="reset">Delete everything</button>
+
+  <div class="sethead">About</div>
+  <div class="blurb" id="verNote" style="padding-bottom:0"></div>
+  <div style="padding:10px 14px 20px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sec" data-m="update" id="updBtn" style="margin:0;font-size:14px;padding:9px 14px">Check for updates</button>
+    <button class="btn sec" data-m="keys" id="keysBtn" style="margin:0;font-size:14px;padding:9px 14px">Keyboard shortcuts</button>
+  </div>
 </div>
 
 <div class="sheet" role="dialog" aria-modal="true" id="keysheet"><div class="grab"></div>
@@ -1680,13 +1695,9 @@ function render(){renderNav();renderHead();renderList();renderData();
 function renderData(){
   $('#l-mfr').innerHTML=uniq('manufacturer').map(v=>`<option value="${esc(v)}">`).join('');
   $('#l-dest').innerHTML=uniq('destination').map(v=>`<option value="${esc(v)}">`).join('');
-  $('#sortBtn').textContent='Sort: '+SORT_LABEL[sortBy];
-  $('#groupBtn').textContent='Group: '+GROUP_LABEL[groupBy];
-  $('#densityBtn').textContent='Rows: '+(compact?'compact':'comfortable');
-  $('#sampleBtn').style.display=(S.tasks.length||S.projects.length)?'none':'';
-  $('#digestBtn').textContent='Last seven days: '+(digestOff?'hidden':'shown');
   $('#hsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
   $('#hgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
+  if($('#setsheet').classList.contains('on'))renderSettings();
   $('#storeNote').textContent=sync.on?'Synced through your own Supabase project.'
     :CLOUD?'Saving to your Claude account.':'Saving on this device. Turn on sync to share across devices.';
 }
@@ -2932,12 +2943,17 @@ function addOptions(){
     +(p?` in ${p.name}`:view.t==='mfr'?` from ${view.v}`:view.t==='dest'?` to ${view.v}`:''),
     ico:I.truck,col:'var(--purple)'};
   const proj={k:'project',l:'New project',ico:I.box,col:'var(--indigo)'};
+  /* An idea is not a task with a date — it is the thing you think of in the van
+     and would otherwise lose. It belongs on the board, so this hands over to it
+     with the capture bar already waiting. Without this the board was reachable
+     only through the ⋯ menu, which is not where anyone looks to add something. */
+  const idea={k:'idea',l:'New idea',ico:I.check,col:'var(--yellow)',sep:true};
   const order=view.t==='projects'?[proj,task,ship]
     :['shipments','mfr','dest'].includes(view.t)?[ship,task,proj]
     :[task,ship,proj];
   // scanning is an add too, but it stays last wherever you are: the first entry
   // moving around is helpful, everything moving around is not
-  return [...order,{k:'scan',l:'Scan a shipping label',ico:I.box,col:'var(--gray)',sep:true}];
+  return [...order,idea,{k:'scan',l:'Scan a shipping label',ico:I.box,col:'var(--gray)'}];
 }
 function closeAddMenu(){$('#addmenu').classList.remove('on');}
 function openAddMenu(anchor){
@@ -2971,6 +2987,7 @@ $('#addmenu').addEventListener('click',e=>{
   const k=b.dataset.add;
   closeAddMenu();
   if(k==='project')return openProject(null);
+  if(k==='idea'){location.href='board.html#new';return;}
   if(k==='scan')return openScanner('find');
   openComposer(k);
 });
@@ -3265,6 +3282,7 @@ function doMenu(k){
   if(k==='sort'){sortBy=SORTS[(SORTS.indexOf(sortBy)+1)%SORTS.length];saveView();render();toast('Sort: '+SORT_LABEL[sortBy]);}
   if(k==='group'){groupBy=GROUPS[(GROUPS.indexOf(groupBy)+1)%GROUPS.length];saveView();render();toast('Group: '+GROUP_LABEL[groupBy]);}
   if(k==='density'){compact=!compact;$('#app').classList.toggle('compact',compact);saveView();render();}
+  if(k==='idea')location.href='board.html#new';
   if(k==='sfx'){sfx=!sfx;saveView();renderData();if(sfx)ping(880);toast('Sound '+(sfx?'on':'off'));}
   if(k==='update')checkUpdate();
   if(k==='newproj')openProject(null);
@@ -3293,7 +3311,8 @@ function doMenu(k){
     S.tasks=[];S.projects=[];S.started=false;save();render();
   }
   if(k==='keys')openKeys();
-  if(k==='fx')openFx();
+  if(k==='settings')openSettings();
+  if(k==='fx')openSettings();
 }
 $('#fileIn').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
@@ -3635,7 +3654,8 @@ function paletteRows(q){
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['Save a backup file','export'],['Load from a backup file','import'],
     ['Undo last change','undo'],['Archive completed','clearDone'],
-    ['Rows: '+(compact?'comfortable':'compact'),'density'],['Effects','fx'],['Sound: '+(sfx?'off':'on'),'sfx'],['Last seven days: '+(digestOff?'show':'hide'),'digest'],
+    ['Settings','settings'],['New idea on the board','idea'],
+    ['Rows: '+(compact?'comfortable':'compact'),'density'],['Sound: '+(sfx?'off':'on'),'sfx'],
     ['Check for updates','update'],['Archived','archive'],
     ['Load a sample setup','sample']])
     push(l,'Command',I.list,'var(--gray)',()=>k==='new'?openComposer():doMenu(k));
@@ -3686,39 +3706,51 @@ document.addEventListener('click',e=>{
   if($('#palette').classList.contains('on')&&!e.target.closest('#palette'))closePalette();
 });
 
-/* ============ effects sheet ============ */
-function renderFx(){
-  const seg=(id,opts,cur)=>{$('#'+id).innerHTML=opts.map(([v,l])=>
-    `<button data-fx="${id}:${v}" class="${cur===v?'on':''}">${l}</button>`).join('');};
+/* ============ settings ============
+   One page. Everything that was a line in the ⋯ menu with a colon in it —
+   Sort:, Group:, Rows:, Sound:, Last seven days: — was a preference pretending to
+   be a command, and the menu had grown long enough to need scrolling because of
+   it. The menu is actions now; this is where choices live. */
+function renderSettings(){
+  const seg=(id,opts,cur)=>{const el=$('#'+id);if(el)el.innerHTML=opts.map(([v,l])=>
+    `<button data-fx="${id}:${v}" class="${cur===v?'on':''}">${esc(l)}</button>`).join('');};
+  $('#setsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
+  $('#setgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
+  seg('set-rows',[['comfortable','Comfortable'],['compact','Compact']],compact?'compact':'comfortable');
+  seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');
   seg('fx-style',FX_STYLES,fx.style);
   seg('fx-when',FX_WHEN,fx.when);
   seg('fx-amount',FX_AMOUNT,fx.amount);
   seg('fx-sound',[['on','On'],['off','Off']],sfx?'on':'off');
-  $('#fxwhen-note').textContent=fx.when==='milestone'
-    ? 'Milestones are a project finished and a shipment delivered — not every task.'
-    : fx.when==='never' ? 'Ticking things off stays quiet. Sound is separate.' : '';
   $('#fxnote').textContent=reduced()
     ? 'This device asks for reduced motion, so effects stay off however this is set.'
-    : 'Something to mark finishing something.';
+    : fx.when==='milestone' ? 'Milestones are a project finished and a shipment delivered — not every task.'
+    : fx.when==='never' ? 'Ticking things off stays quiet. Sound is set separately.'
+    : 'Sparks, confetti or fireworks when you tick something off.';
+  $('#setsyncnote').textContent=sync.on
+    ? (rtJoined?'On, and live — changes arrive as they happen.':'On, checking every 15 seconds.')
+    : 'Off — everything stays on this device. Turn it on to share with your other devices.';
+  $('#keysBtn').style.display=matchMedia('(min-width:861px)').matches?'':'none';
 }
-function openFx(){renderFx();rememberFocus();$('#scrim').classList.add('on');$('#fxsheet').classList.add('on');}
-$('#fxclose').addEventListener('click',closeSheets);
-$('#fxsheet').addEventListener('click',e=>{
+function openSettings(){renderSettings();rememberFocus();$('#scrim').classList.add('on');$('#setsheet').classList.add('on');}
+$('#setclose').addEventListener('click',closeSheets);
+$('#setsync').addEventListener('click',()=>{closeSheets();openSync();});
+$('#setsort').addEventListener('change',e=>{sortBy=e.target.value;saveView();render();});
+$('#setgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();render();});
+$('#setsheet').addEventListener('click',e=>{
   const b=e.target.closest('[data-fx]');if(!b)return;
   const [id,v]=b.dataset.fx.split(':');
   if(id==='fx-sound'){sfx=v==='on';if(sfx)ping(880);}
-  else if(id==='fx-style'){fx.style=v;}
-  else if(id==='fx-when'){fx.when=v;}
-  else if(id==='fx-amount'){fx.amount=v;}
-  saveView();renderFx();renderData();
+  else if(id==='fx-style')fx.style=v;
+  else if(id==='fx-when')fx.when=v;
+  else if(id==='fx-amount')fx.amount=v;
+  else if(id==='set-rows'){compact=v==='compact';$('#app').classList.toggle('compact',compact);render();}
+  else if(id==='set-digest'){digestOff=v==='hidden';render();}
+  saveView();renderSettings();
   // show what was just chosen, from the button that chose it
-  if(id!=='fx-sound'&&fx.when!=='never')celebrate(b,{force:true});
+  if(id.startsWith('fx-')&&id!=='fx-sound'&&fx.when!=='never')celebrate(b,{force:true});
 });
-$('#fxtry').addEventListener('click',()=>{
-  celebrate($('#fxtry'),{force:true});
-  if(sfx)ping(880);
-  buzz([6,30,10]);
-});
+$('#fxtry').addEventListener('click',()=>{celebrate($('#fxtry'),{force:true});if(sfx)ping(880);buzz([6,30,10]);});
 
 /* ============ keyboard help ============
    The shortcuts have been there all along with nothing to announce them. */
