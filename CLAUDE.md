@@ -114,8 +114,13 @@ looks to add something.
 ## The board
 
 `board.html` is the Everything Board — a capture-anything companion page (notes,
-links, images, #tags, [[wiki links]], kanban, mind map). It is deliberately its
-own file with its own look; the integration points are exactly four: it reads
+links, images, #tags, [[wiki links]], kanban, mind map). It is its own file but
+shares Shipshape's design system wholesale: same tokens, fonts, light/dark, sheet
+behaviour, and on the phone the same six-tab bottom bar (Board is the sixth tab on
+both pages; cross-page tabs use `index.html#view=<t>`). Its type/project palettes
+are constant iOS hexes, not var() — the code builds `${color}22` alpha variants,
+which a var() reference cannot survive. The integration points beyond the look
+are four: it reads
 `shipshape:sync` from localStorage (never writes it), it syncs as one document in
 `shipshape_state` under `<workspace>:board` — beside, never touching, Shipshape's
 own row — it is in the service worker shell, and a card's `projectId` may be

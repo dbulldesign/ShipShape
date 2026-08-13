@@ -3,234 +3,253 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F3F5F7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#10151A" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Everything Board</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317242F'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%23E4F222' font-family='sans-serif' font-weight='bold'%3E%E2%88%97%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
-  /* ————— tokens —————
-     paper #F3F5F7 · dots #C9D2DA · ink #17242F · muted #5C6B77
-     card #FFF · border #E2E8ED · highlighter #E4F222
-     note #E8A33D · link #3D7BE8 · image #8B5CF6 · email #12A594 · thought #E85D75 */
-  :root{
-    --paper:#F3F5F7; --ink:#17242F; --muted:#5C6B77; --faint:#8A97A2;
-    --card:#fff; --line:#E2E8ED; --hi:#E4F222; --col:#EBEFF2;
-  }
-  *{box-sizing:border-box; margin:0}
-  /* an explicit root background: the header's backdrop blur composites against
-     the root, and a transparent root leaves that undefined (black, in headless) */
-  html{ -webkit-text-size-adjust:100%; background:var(--paper) }
-  body{
-    background:var(--paper); color:var(--ink); min-height:100vh;
-    font-family:'Gabarito', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    font-size:15px; line-height:1.45;
-  }
-  button,input,textarea,select{font-family:inherit; font-size:inherit; color:inherit}
-  button{background:none; border:none; cursor:pointer; padding:0}
-  img{max-width:100%; display:block}
-  a{color:#3D7BE8}
-  ::selection{background:var(--hi)}
-  mark{background:var(--hi); padding:0 2px; border-radius:2px}
-  input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--ink); outline-offset:1px}
-  .dotgrid{background-image:radial-gradient(#C9D2DA 1.1px, transparent 1.1px); background-size:22px 22px}
-  @keyframes pop{from{transform:scale(.97); opacity:.4}to{transform:scale(1); opacity:1}}
-  .card-enter{animation:pop .18s ease-out}
-  @media (prefers-reduced-motion: reduce){.card-enter{animation:none}}
+/* ————— Shipshape's design system, applied to the board —————
+   Same tokens, same fonts, same light and dark, same sheet behaviour. The class
+   names are the board's own so its script needs no changes; only what they look
+   like moved house. */
+:root{
+  --blue:#007aff; --green:#34c759; --orange:#ff9500; --red:#ff3b30;
+  --purple:#af52de; --pink:#ff375f; --teal:#32ade6; --indigo:#5856d6; --yellow:#ffcc00;
+  --gray:#8e8e93;
+  --bg:#f2f2f7; --card:#fff; --card2:#fff; --elev:rgba(255,255,255,.72);
+  --label:#000; --label2:#3c3c4399; --label3:#3c3c434d; --sep:#3c3c4326;
+  --fill:#78788033; --fill2:#7878801f;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.06);
+  --sheet:#fff; --r:14px;
+  --ease:cubic-bezier(.32,.72,0,1);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --round:ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --blue:#0a84ff; --green:#30d158; --orange:#ff9f0a; --red:#ff453a;
+  --purple:#bf5af2; --pink:#ff375f; --teal:#64d2ff; --indigo:#5e5ce6; --yellow:#ffd60a; --gray:#98989d;
+  --bg:#000; --card:#1c1c1e; --card2:#2c2c2e; --elev:rgba(30,30,32,.76);
+  --label:#fff; --label2:#ebebf599; --label3:#ebebf54d; --sep:#54545899;
+  --fill:#7878805c; --fill2:#78788033;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px rgba(0,0,0,.5); --sheet:#1c1c1e;
+} html{color-scheme:dark}}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;background:var(--bg)}
+body{background:var(--bg);color:var(--label);min-height:100vh;font-family:var(--sans);
+  font-size:16px;line-height:1.4;-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer;padding:0}
+img{max-width:100%;display:block}
+a{color:var(--blue)}
+::selection{background:color-mix(in srgb,var(--yellow) 45%,transparent)}
+mark{background:color-mix(in srgb,var(--yellow) 55%,transparent);color:var(--label);padding:0 2px;border-radius:3px}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--blue);outline-offset:1px;border-radius:6px}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--fill);border-radius:8px}
+.dotgrid{background-image:radial-gradient(color-mix(in srgb,var(--label3) 60%,transparent) 1.1px,transparent 1.1px);background-size:22px 22px}
+@keyframes pop{from{transform:scale(.97);opacity:.4}to{transform:scale(1);opacity:1}}
+.card-enter{animation:pop .18s ease-out}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
-  .wrap{max-width:1100px; margin:0 auto; padding:0 16px}
+.wrap{max-width:1100px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-left))}
 
-  /* header */
-  /* No backdrop blur here: this header is a direct child of the root scroller,
-     where compositors are allowed to sample an undefined backdrop — headless
-     Chrome paints it black. At 97% opacity over flat paper it earned nothing. */
-  header{position:sticky; top:0; z-index:40; background:#F3F5F7F7; border-bottom:1px solid var(--line); padding:10px 0}
-  .hrow{display:flex; flex-wrap:wrap; align-items:center; gap:10px}
-  .logo{display:flex; align-items:center; gap:8px; font-weight:800; letter-spacing:-.02em; font-size:18px}
-  .logo .glyph{width:26px; height:26px; border-radius:8px; background:var(--ink); color:var(--hi); display:grid; place-items:center; font-weight:800; font-size:15px}
-  .searchbox{flex:1; min-width:170px; position:relative}
-  .searchbox input{width:100%; border:1.5px solid var(--line); background:#fff; border-radius:12px; padding:8px 12px; font-size:14px}
-  .hits{position:absolute; right:8px; top:50%; transform:translateY(-50%); background:var(--hi); font-weight:700; font-size:11px; padding:2px 6px; border-radius:6px}
-  nav.tabs{display:flex; flex-wrap:wrap; gap:4px; background:#E7EBEF; border-radius:12px; padding:4px}
-  nav.tabs button{padding:6px 10px; border-radius:8px; font-size:14px; color:var(--muted); font-weight:500}
-  nav.tabs button.on{background:var(--ink); color:#fff; font-weight:600}
-  .menu-wrap{position:relative}
-  .menu-btn{border:1.5px solid var(--line); background:#fff; border-radius:10px; padding:5px 9px; font-size:17px; line-height:1}
-  .menu{position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 8px 24px rgba(23,36,47,.14); padding:4px; min-width:200px; z-index:50}
-  .menu button{display:block; width:100%; text-align:left; padding:8px 12px; font-size:14px; border-radius:8px}
-  .menu button:hover{background:#F0F3F5}
-  .savestate{font-size:11px; color:var(--faint); min-width:52px; text-align:right}
-  .savestate.err{color:#C0392B}
+/* ————— header, the Shipshape way ————— */
+header{position:sticky;top:0;z-index:40;background:var(--elev);
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:.5px solid var(--sep);padding:8px 0 10px}
+.hrow{display:flex;align-items:flex-end;gap:8px;padding-top:4px}
+.backship{display:grid;place-items:center;flex:none;margin-bottom:2px}
+.backship img{display:block;border-radius:8px;width:30px;height:30px}
+h1.bh{font-family:var(--round);font-size:28px;line-height:1.1;letter-spacing:-.5px;font-weight:800;flex:1;min-width:0}
+h1.bh .sub{display:block;font-size:12px;font-weight:600;letter-spacing:.2px;color:var(--label2);text-transform:uppercase;margin-bottom:2px;font-family:var(--sans)}
+.iconbtn{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--fill2);transition:transform .15s var(--ease);position:relative}
+.iconbtn:active{transform:scale(.9)}
+.iconbtn svg{width:17px;height:17px;fill:var(--label2)}
+#sync-btn .dot{position:absolute;right:2px;bottom:2px;width:9px;height:9px;border-radius:99px;border:2px solid var(--bg)}
+.savestate{font-size:11px;color:var(--label3);min-width:48px;text-align:right;margin-bottom:8px}
+.savestate.err{color:var(--red)}
+.searchbox{position:relative;margin-top:8px}
+.searchbox svg{position:absolute;left:10px;top:10px;width:16px;height:16px;fill:var(--label2)}
+.searchbox input{width:100%;background:var(--fill2);border:0;border-radius:10px;padding:8px 60px 8px 34px;font-size:16px}
+.hits{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--yellow);color:#000;font-weight:700;font-size:11px;padding:2px 7px;border-radius:7px}
+nav.tabs{display:flex;gap:2px;background:var(--fill2);border-radius:10px;padding:2px;margin-top:8px;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs button{flex:1;padding:6px 10px;border-radius:8px;font-size:13.5px;color:var(--label2);font-weight:600;white-space:nowrap;transition:background .2s,color .2s}
+nav.tabs button.on{background:var(--card);color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.menu-wrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--sheet);border:.5px solid var(--sep);border-radius:12px;box-shadow:var(--shadow);padding:5px;min-width:210px;z-index:50;max-height:min(64vh,560px);overflow-y:auto}
+.menu button{display:block;width:100%;text-align:left;padding:9px 12px;font-size:15px;border-radius:8px}
+.menu button:hover{background:var(--fill2)}
 
-  /* capture */
-  .capture{background:#fff; border:1.5px solid var(--line); border-radius:16px; padding:12px; box-shadow:0 1px 2px rgba(23,36,47,.04); margin:14px 0 12px}
-  .capture textarea{width:100%; resize:none; border:none; background:#F7F9FA; border-radius:10px; padding:9px; font-size:14px; min-height:52px}
-  .caprow{display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin-top:8px}
-  .chip{border:1.5px solid var(--line); background:#fff; color:var(--muted); border-radius:999px; padding:4px 10px; font-size:12px; font-weight:500}
-  .chip.on{font-weight:700; color:var(--ink)}
-  .spacer{flex:1}
-  select.mini, .btn-mini{border:1.5px solid var(--line); background:#fff; border-radius:10px; padding:6px 8px; font-size:12px; color:var(--muted)}
-  .btn-add{background:var(--ink); color:var(--hi); font-weight:700; border-radius:10px; padding:7px 16px; font-size:14px}
-  .cap-msg{font-size:12px; margin-top:8px; background:#FDF6D8; color:#8A6D00; padding:6px 9px; border-radius:10px}
+/* ————— capture ————— */
+.capture{background:var(--card);border-radius:var(--r);padding:12px;box-shadow:var(--shadow);margin:14px 0 12px}
+.capture textarea{width:100%;resize:none;border:none;background:var(--fill2);border-radius:10px;padding:10px 11px;font-size:16px;min-height:56px;outline:none}
+.capture textarea::placeholder{color:var(--label3)}
+.caprow{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:9px}
+.chip{background:var(--fill2);color:var(--label2);border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600;border:1.5px solid transparent;transition:transform .15s var(--ease)}
+.chip:active{transform:scale(.94)}
+.chip.on{font-weight:700;color:var(--label);background:var(--card2);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.spacer{flex:1}
+select.mini,.btn-mini{background:var(--fill2);border:0;border-radius:10px;padding:7px 10px;font-size:12.5px;font-weight:600;color:var(--label2)}
+.btn-add{background:var(--blue);color:#fff;font-weight:600;border-radius:11px;padding:8px 18px;font-size:15px;transition:transform .15s var(--ease)}
+.btn-add:active{transform:scale(.95)}
+.cap-msg{font-size:12.5px;margin-top:8px;background:color-mix(in srgb,var(--orange) 16%,transparent);color:var(--orange);padding:7px 10px;border-radius:10px}
 
-  /* cards */
-  .card{position:relative; background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:11px 11px 11px 13px; box-shadow:0 1px 2px rgba(23,36,47,.05); cursor:pointer; text-align:left; width:100%}
-  .card .bar{position:absolute; left:0; top:8px; bottom:8px; width:4px; border-radius:99px}
-  .card .meta{display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:11px; color:var(--faint); margin-bottom:3px}
-  .card .meta .t{font-weight:700}
-  .pchip{padding:1px 7px; border-radius:999px; font-weight:700}
-  .card h3{font-size:14px; font-weight:700; line-height:1.25}
-  .card .url{font-size:12px; color:#3D7BE8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  .card .body{font-size:12px; color:var(--muted); margin-top:4px; white-space:pre-wrap; max-height:74px; overflow:hidden}
-  .card img{border-radius:8px; margin:4px 0; max-height:130px; object-fit:cover; width:100%}
-  .pin-ind{position:absolute; right:8px; top:6px; font-size:11px}
-  .tagbtn{color:#7A8A00; font-weight:700}
-  .wikibtn{color:#3D7BE8; font-weight:700; text-decoration:underline dotted}
-  .wikibtn.dead{color:var(--faint); text-decoration:none}
+/* ————— cards ————— */
+.card{position:relative;background:var(--card);border-radius:12px;padding:11px 11px 11px 14px;box-shadow:var(--shadow);cursor:pointer;text-align:left;width:100%}
+.card .bar{position:absolute;left:0;top:9px;bottom:9px;width:4px;border-radius:99px}
+.card .meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--label3);margin-bottom:3px}
+.card .meta .t{font-weight:700}
+.pchip{padding:1.5px 7px;border-radius:999px;font-weight:700}
+.card h3{font-size:15px;font-weight:600;line-height:1.3;letter-spacing:-.1px}
+.card .url{font-size:12.5px;color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .body{font-size:12.5px;color:var(--label2);margin-top:4px;white-space:pre-wrap;max-height:74px;overflow:hidden}
+.card img{border-radius:8px;margin:4px 0;max-height:130px;object-fit:cover;width:100%}
+.pin-ind{position:absolute;right:8px;top:6px;font-size:11px}
+.tagbtn{color:var(--orange);font-weight:700}
+.wikibtn{color:var(--blue);font-weight:700;text-decoration:underline dotted}
+.wikibtn.dead{color:var(--label3);text-decoration:none}
+.grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+h2.sec{font-size:13px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--label2);margin-bottom:8px}
+.hint{font-size:12.5px;color:var(--label3)}
 
-  .grid{display:grid; gap:8px; grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
-  h2.sec{font-size:14px; font-weight:800; margin-bottom:8px}
-  .hint{font-size:12px; color:var(--faint)}
+/* ————— dashboard ————— */
+.dash{display:flex;flex-direction:column;gap:20px}
+.dash-top h1{font-family:var(--round);font-weight:800;font-size:24px;letter-spacing:-.4px}
+.dash-top p{font-size:13px;color:var(--label2);margin-top:2px}
+.tiles{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(105px,1fr))}
+.tile{background:var(--card);border-radius:12px;padding:10px 12px;text-align:left;box-shadow:var(--shadow);transition:transform .15s var(--ease)}
+.tile:active{transform:scale(.96)}
+.tile b{font-size:22px;font-weight:800;display:block;font-family:var(--round)}
+.tile span{font-size:12px;color:var(--label2);font-weight:600}
+.panel{background:var(--card);border-radius:var(--r);padding:13px;box-shadow:var(--shadow)}
+.two-col{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.cloud{display:flex;flex-wrap:wrap;gap:6px}
+.cloud button{background:color-mix(in srgb,var(--yellow) 22%,transparent);color:var(--label);font-weight:600;border-radius:999px;padding:3px 10px}
+.proj-row{display:block;width:100%;text-align:left;margin-bottom:8px}
+.proj-row .top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px}
+.track{height:6px;background:var(--fill2);border-radius:99px}
+.fill{height:6px;border-radius:99px;transition:width .3s}
+.link-quiet{color:var(--orange);font-weight:700}
+.empty-hero{border:1.5px dashed var(--label3);border-radius:var(--r);padding:36px 20px;text-align:center}
+.empty-hero p:first-child{font-family:var(--round);font-weight:800;font-size:20px}
+.empty-hero p+p{font-size:14px;color:var(--label2);margin-top:6px}
 
-  /* dashboard */
-  .dash{display:flex; flex-direction:column; gap:20px}
-  .dash-top{display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:8px}
-  .dash-top h1{font-weight:800; font-size:24px; letter-spacing:-.02em}
-  .dash-top p{font-size:13px; color:var(--muted)}
-  .tiles{display:grid; gap:8px; grid-template-columns:repeat(auto-fit,minmax(105px,1fr))}
-  .tile{background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; text-align:left}
-  .tile b{font-size:22px; font-weight:800; display:block}
-  .tile span{font-size:12px; color:var(--muted); font-weight:600}
-  .panel{background:#fff; border:1.5px solid var(--line); border-radius:16px; padding:12px}
-  .two-col{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-  .cloud{display:flex; flex-wrap:wrap; gap:6px}
-  .cloud button{background:#F0F3D0; color:#5C6B00; font-weight:700; border-radius:999px; padding:3px 9px}
-  .proj-row{display:block; width:100%; text-align:left; margin-bottom:8px}
-  .proj-row .top{display:flex; justify-content:space-between; font-size:12px; margin-bottom:2px}
-  .track{height:6px; background:#EEF1F4; border-radius:99px}
-  .fill{height:6px; border-radius:99px; transition:width .3s}
-  .link-quiet{color:#7A8A00; font-weight:700}
-  .empty-hero{border:1.5px dashed #C9D2DA; border-radius:16px; padding:36px 20px; text-align:center}
-  .empty-hero p:first-child{font-weight:800; font-size:20px}
-  .empty-hero p+p{font-size:14px; color:var(--muted); margin-top:6px}
+/* ————— feed ————— */
+.feed{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.dayline{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.daypill{font-size:11px;background:var(--fill);color:var(--label);font-weight:700;border-radius:999px;padding:3px 10px;text-transform:uppercase;letter-spacing:.3px}
+.dayline .rule{flex:1;height:.5px;background:var(--sep)}
+.frow{display:flex;gap:10px;background:var(--card);border-radius:12px;padding:11px;cursor:pointer;box-shadow:var(--shadow)}
+.frow .ic{width:28px;height:28px;border-radius:14px;display:grid;place-items:center;font-weight:800;flex-shrink:0}
+.frow .fx{min-width:0;flex:1}
+.frow .fm{display:flex;gap:8px;font-size:11px;color:var(--label3)}
+.frow h3{font-size:15px;font-weight:600;letter-spacing:-.1px}
+.frow .body{font-size:12.5px;color:var(--label2);white-space:pre-wrap}
+.frow img{border-radius:8px;margin:4px 0;max-height:170px;object-fit:cover}
+.pinbtn{align-self:flex-start;opacity:.35}
+.pinbtn.on{opacity:1}
 
-  /* feed */
-  .feed{max-width:640px; margin:0 auto; display:flex; flex-direction:column; gap:16px}
-  .dayline{display:flex; align-items:center; gap:8px; margin-bottom:8px}
-  .daypill{font-size:11px; background:var(--ink); color:var(--hi); font-weight:800; border-radius:999px; padding:2px 9px}
-  .dayline .rule{flex:1; height:1px; background:var(--line)}
-  .frow{display:flex; gap:10px; background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:11px; cursor:pointer}
-  .frow .ic{width:28px; height:28px; border-radius:14px; display:grid; place-items:center; font-weight:800; flex-shrink:0}
-  .frow .fx{min-width:0; flex:1}
-  .frow .fm{display:flex; gap:8px; font-size:11px; color:var(--faint)}
-  .frow h3{font-size:14px; font-weight:700}
-  .frow .body{font-size:12px; color:var(--muted); white-space:pre-wrap}
-  .frow img{border-radius:8px; margin:4px 0; max-height:170px; object-fit:cover}
-  .pinbtn{align-self:flex-start; opacity:.35}
-  .pinbtn.on{opacity:1}
+/* ————— kanban ————— */
+.board{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));align-items:start}
+.colu{background:var(--fill2);border-radius:var(--r);padding:8px;min-height:120px;transition:background .12s}
+.colu.over{background:color-mix(in srgb,var(--blue) 16%,transparent)}
+.colu .chead{display:flex;justify-content:space-between;align-items:baseline;padding:4px 8px 8px}
+.colu .chead b{font-size:12.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--label2)}
+.colu .chead span{font-size:12px;color:var(--label3);font-variant-numeric:tabular-nums}
+.colu .stack{display:flex;flex-direction:column;gap:8px}
 
-  /* board */
-  .board{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); align-items:start}
-  .colu{background:var(--col); border-radius:16px; padding:8px; min-height:140px; transition:background .12s}
-  .colu.over{background:#E9F5D3}
-  .colu .chead{display:flex; justify-content:space-between; align-items:baseline; padding:2px 6px 6px}
-  .colu .chead b{font-size:14px; font-weight:800}
-  .colu .chead span{font-size:12px; color:var(--faint)}
-  .colu .stack{display:flex; flex-direction:column; gap:8px}
+/* ————— projects ————— */
+.psec h2{font-family:var(--round);font-size:17px;font-weight:700;letter-spacing:-.2px}
+.psec .phead{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.btn-dash{border:1.5px dashed var(--label3);color:var(--label2);font-weight:600;border-radius:11px;padding:7px 14px;font-size:14px}
+.newproj{display:inline-flex;align-items:center;gap:4px}
+.newproj input{background:var(--fill2);border:0;border-radius:10px;padding:7px 10px;font-size:13px;width:150px;outline:2px solid var(--blue)}
+.newproj .ok{background:var(--blue);color:#fff;font-weight:700;border-radius:10px;padding:7px 10px;font-size:12.5px}
+.newproj .no{color:var(--label3);padding:7px 4px;font-size:12.5px}
 
-  /* projects */
-  .psec h2{font-size:17px; font-weight:800; letter-spacing:-.01em}
-  .psec .phead{display:flex; align-items:center; gap:8px; margin:0 0 8px}
-  .sw{width:10px; height:10px; border-radius:3px; display:inline-block}
-  .btn-dash{border:1.5px dashed #B8C4CD; color:var(--muted); font-weight:600; border-radius:10px; padding:6px 12px; font-size:14px}
-  .newproj{display:inline-flex; align-items:center; gap:4px}
-  .newproj input{border:1.5px solid var(--ink); border-radius:10px; padding:6px 8px; font-size:12px; width:140px}
-  .newproj .ok{background:var(--ink); color:var(--hi); font-weight:700; border-radius:10px; padding:6px 9px; font-size:12px}
-  .newproj .no{color:var(--faint); padding:6px 4px; font-size:12px}
+/* ————— mind map ————— */
+.maptools{display:flex;flex-wrap:wrap;align-items:center;gap:7px;font-size:12px;color:var(--label2);margin-bottom:8px}
+.maptools .z{background:var(--fill2);border-radius:10px;padding:5px 11px;font-weight:600}
+.mapbox{position:relative;overflow:hidden;border-radius:var(--r);background:var(--card);box-shadow:var(--shadow);height:min(68vh,640px);touch-action:none;cursor:grab}
+.mapbox.linking{cursor:crosshair}
+.plane{position:absolute;left:0;top:0;transform-origin:0 0}
+.node{position:absolute;width:168px;background:var(--card2);border-radius:14px;padding:8px 10px;box-shadow:var(--shadow);user-select:none;-webkit-user-select:none;cursor:pointer}
+.node .nhead{display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:800}
+.node .connect{width:22px;height:22px;border-radius:11px;background:var(--fill2);color:var(--label);font-size:11px;line-height:1}
+.node .connect.on{background:var(--yellow);color:#000}
+.node h3{font-size:12.5px;font-weight:600;line-height:1.3;margin-top:2px;word-break:break-word}
+.node .np{font-size:10px;font-weight:700;margin-top:3px}
+.node img{border-radius:8px;margin:4px 0;max-height:80px;object-fit:cover;width:100%;pointer-events:none}
+.map-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--label3);font-size:14px;text-align:center;padding:0 24px}
 
-  /* map */
-  .maptools{display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-size:12px; color:var(--muted); margin-bottom:8px}
-  .maptools .z{border:1.5px solid var(--line); background:#fff; border-radius:10px; padding:4px 9px}
-  .mapbox{position:relative; overflow:hidden; border:1.5px solid var(--line); border-radius:16px; background:#FAFBFC; height:min(70vh,640px); touch-action:none; cursor:grab}
-  .mapbox.linking{cursor:crosshair}
-  .plane{position:absolute; left:0; top:0; transform-origin:0 0}
-  .node{position:absolute; width:168px; background:#fff; border-radius:14px; padding:8px 10px; box-shadow:0 2px 8px rgba(23,36,47,.10); user-select:none; -webkit-user-select:none; cursor:pointer}
-  .node .nhead{display:flex; justify-content:space-between; align-items:center; font-size:10px; font-weight:800}
-  .node .connect{width:20px; height:20px; border-radius:10px; border:1.5px solid #DDE4E9; background:#F7F9FA; color:var(--ink); font-size:11px; line-height:1}
-  .node .connect.on{background:var(--hi); border-color:var(--ink)}
-  .node h3{font-size:12px; font-weight:700; line-height:1.25; margin-top:2px; word-break:break-word}
-  .node .np{font-size:10px; font-weight:700; margin-top:3px}
-  .node img{border-radius:8px; margin:4px 0; max-height:80px; object-fit:cover; width:100%; pointer-events:none}
-  .map-empty{position:absolute; inset:0; display:grid; place-items:center; color:var(--faint); font-size:14px}
+/* ————— the item sheet (was a centered modal) ————— */
+.overlay{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.34)}
+.modal{position:fixed;z-index:61;background:var(--sheet);left:0;right:0;bottom:0;width:100%;
+  max-height:92vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:0 16px calc(16px + env(safe-area-inset-bottom));
+  box-shadow:0 -8px 40px rgba(0,0,0,.22);animation:sheetup .32s var(--ease)}
+@keyframes sheetup{from{transform:translateY(40px);opacity:.3}}
+@media (min-width:640px){
+  .modal{left:50%;right:auto;bottom:auto;top:8vh;width:min(600px,94vw);transform:translateX(-50%);
+    border-radius:18px;max-height:84vh;animation:sheetin .3s var(--ease)}
+  @keyframes sheetin{from{transform:translateX(-50%) translateY(10px);opacity:0}}
+}
+.mrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:5;
+  background:var(--sheet);padding:14px 0 10px;margin-bottom:6px}
+.lab{display:block;font-size:11px;font-weight:700;color:var(--label3);margin:0 0 4px;letter-spacing:.04em}
+.field{width:100%;background:var(--fill2);border:0;border-radius:10px;padding:9px 12px;font-size:16px;margin-bottom:12px;outline:none}
+textarea.field{resize:vertical;min-height:100px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.cchip{background:var(--fill2);border-radius:999px;padding:4px 10px;font-size:12.5px;display:inline-flex;gap:5px;align-items:center}
+.cchip .x{color:var(--label3)}
+.wchip{background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue);font-weight:700;border-radius:999px;padding:4px 10px;font-size:12.5px}
+.bchip{background:var(--fill2);border:1px dashed var(--label3);font-weight:600;border-radius:999px;padding:4px 10px;font-size:12.5px}
+.tchip{background:color-mix(in srgb,var(--yellow) 22%,transparent);color:var(--label);font-weight:700;border-radius:999px;padding:3px 10px;font-size:12.5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.danger{color:var(--red);font-weight:600;font-size:15px;padding:8px 12px;border-radius:10px}
+.danger.armed{background:var(--red);color:#fff;font-weight:700}
+.btn-done{background:var(--blue);color:#fff;font-weight:600;border-radius:11px;padding:8px 18px;font-size:15px}
+.mfoot{display:flex;justify-content:space-between;align-items:center;border-top:.5px solid var(--sep);padding-top:12px;margin-top:6px}
+.openlink{background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue);font-weight:700;border-radius:10px;padding:9px 12px;font-size:13.5px;text-decoration:none;white-space:nowrap;margin-bottom:12px}
+.banner{font-size:13px;background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red);padding:8px 12px;border-radius:10px;margin-bottom:12px}
+main{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
 
-  /* modal */
-  .overlay{position:fixed; inset:0; z-index:60; background:rgba(23,36,47,.45); display:flex; align-items:flex-end; justify-content:center; padding:0}
-  @media (min-width:640px){.overlay{align-items:center; padding:24px}}
-  .modal{background:#fff; width:100%; max-width:600px; max-height:88vh; overflow-y:auto; border-radius:18px 18px 0 0; padding:16px}
-  @media (min-width:640px){.modal{border-radius:18px}}
-  .mrow{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px}
-  .lab{display:block; font-size:11px; font-weight:700; color:var(--faint); margin:0 0 4px; letter-spacing:.03em}
-  .field{width:100%; border:1.5px solid var(--line); border-radius:10px; padding:8px 11px; font-size:14px; margin-bottom:12px}
-  textarea.field{resize:vertical; min-height:100px}
-  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px}
-  .cchip{background:#F0F3F5; border:1px solid var(--line); border-radius:999px; padding:4px 9px; font-size:12px; display:inline-flex; gap:5px; align-items:center}
-  .cchip .x{color:var(--faint)}
-  .wchip{background:#EAF1FD; color:#3D7BE8; font-weight:700; border-radius:999px; padding:4px 9px; font-size:12px}
-  .bchip{background:#F0F3F5; border:1px dashed #B8C4CD; font-weight:600; border-radius:999px; padding:4px 9px; font-size:12px}
-  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
-  .danger{color:#C0392B; font-weight:600; font-size:14px; padding:6px 10px; border-radius:10px}
-  .danger.armed{background:#C0392B; color:#fff; font-weight:700}
-  .btn-done{background:var(--ink); color:#fff; font-weight:700; border-radius:10px; padding:7px 16px; font-size:14px}
-  .mfoot{display:flex; justify-content:space-between; align-items:center; border-top:1px solid #EEF1F4; padding-top:10px; margin-top:4px}
-  .openlink{background:#EAF1FD; color:#3D7BE8; font-weight:700; border-radius:10px; padding:8px 11px; font-size:13px; text-decoration:none; white-space:nowrap}
-  .banner{font-size:13px; background:#FDECEA; color:#C0392B; padding:8px 12px; border-radius:10px; margin-bottom:12px}
-  main{padding-bottom:90px}
-
-  .backship{display:grid;place-items:center;flex:none}
-  .backship img{display:block;border-radius:8px}
-  mark{color:#17242F}
-  /* ————— dark, following the system like the rest of Shipshape —————
-     The highlighter yellow stays; where the ink was used as a background it
-     becomes the highlighter, since near-white ink tiles would glare. */
-  @media (prefers-color-scheme: dark){
-    :root{
-      --paper:#10151A; --ink:#E8EDF1; --muted:#9AA7B1; --faint:#6B7883;
-      --card:#1A2129; --line:#2A333C; --col:#171E25;
-    }
-    html{color-scheme:dark}
-    header{background:#10151AF7}
-    .dotgrid{background-image:radial-gradient(#2A343E 1.1px, transparent 1.1px)}
-    .searchbox input,.menu-btn,.menu,.capture,.chip,select.mini,.btn-mini,.card,.frow,
-    .tile,.panel,.node,.modal,.maptools .z{background:var(--card)}
-    .capture textarea{background:#12181E}
-    nav.tabs{background:#1E262E}
-    .logo .glyph,nav.tabs button.on,.daypill,.btn-add,.btn-done{background:var(--hi);color:#17242F}
-    .menu button:hover{background:#232C35}
-    .mapbox{background:#131920}
-    .node .connect{background:#232C35;border-color:#2A333C}
-    .colu.over{background:#2A3110}
-    .cchip,.bchip{background:#232C35}
-    .wchip,.openlink{background:#1D2A3E}
-    .cloud button{background:#2A3110;color:#C9D65A}
-    .tagbtn,.link-quiet{color:#C9D65A}
-    .track{background:#232C35}
-    .cap-msg{background:#33290D;color:#E0C36A}
-    .banner{background:#3A1D1A;color:#F0938A}
-    .empty-hero{border-color:#3A444E}
-    .overlay{background:rgba(0,0,0,.55)}
-    .card,.frow,.tile,.panel,.capture{box-shadow:0 1px 2px rgba(0,0,0,.4)}
-  }
+/* ————— the shared bottom tab bar, same as the main app ————— */
+#tabbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--elev);
+  backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
+  border-top:.5px solid var(--sep);padding-bottom:env(safe-area-inset-bottom)}
+#tabbar .tabs2{display:flex}
+.tab{flex:1;padding:7px 0 5px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--label3);text-decoration:none}
+.tab svg{width:24px;height:24px;fill:currentColor}
+.tab span{font-size:9.5px;font-weight:600}
+.tab.on{color:var(--blue)}
+@media (max-width:860px){#tabbar{display:block}}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="wrap hrow">
-    <a class="backship" href="index.html" title="Back to Shipshape" aria-label="Back to Shipshape"><img src="favicon.svg" width="26" height="26" alt=""></a>
-    <div class="logo"><span class="glyph">∗</span><span>Everything Board</span></div>
+  <div class="wrap">
+    <div class="hrow">
+      <a class="backship" href="index.html" title="Back to Shipshape" aria-label="Back to Shipshape"><img src="favicon.svg" alt=""></a>
+      <h1 class="bh"><span class="sub">Everything</span>Board</h1>
+      <span class="savestate" id="savestate"></span>
+      <button class="iconbtn" id="sync-btn" aria-label="Sync"><svg viewBox="0 0 24 24"><path d="M6.5 19A5.5 5.5 0 0 1 5.7 8.06a6.5 6.5 0 0 1 12.34 1.6A4.5 4.5 0 0 1 17.5 19h-11Z"/></svg><span class="dot" style="background:#B8C4CD"></span></button>
+      <div class="menu-wrap">
+        <button class="iconbtn" id="menu-btn" aria-label="More"><svg viewBox="0 0 20 20"><circle cx="4" cy="10" r="1.8"/><circle cx="10" cy="10" r="1.8"/><circle cx="16" cy="10" r="1.8"/></svg></button>
+        <div class="menu" id="menu" hidden>
+          <button id="m-export">Save a backup file</button>
+          <button id="m-import">Load from a backup file</button>
+          <button id="m-erase" style="color:var(--red)">Erase all data</button>
+        </div>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+    </div>
     <div class="searchbox">
-      <input id="search" type="search" placeholder="Search everything — words, #tags, links, projects…" autocomplete="off">
+      <svg viewBox="0 0 20 20"><path d="M8.5 2a6.5 6.5 0 1 0 4.03 11.6l3.94 3.93a1 1 0 0 0 1.41-1.41l-3.93-3.94A6.5 6.5 0 0 0 8.5 2Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"/></svg>
+      <input id="search" type="search" placeholder="Search everything — words, #tags, links…" autocomplete="off">
       <button class="hits" id="hits" hidden></button>
     </div>
     <nav class="tabs" id="tabs">
@@ -240,17 +259,6 @@
       <button data-view="projects">Projects</button>
       <button data-view="map">Mind map</button>
     </nav>
-    <button class="menu-btn" id="sync-btn" aria-label="Sync across devices" style="display:flex;align-items:center;gap:5px;font-size:14px">☁<span class="dot" style="width:8px;height:8px;border-radius:99px;background:#B8C4CD;display:inline-block"></span></button>
-    <div class="menu-wrap">
-      <button class="menu-btn" id="menu-btn" aria-label="More options">⋯</button>
-      <div class="menu" id="menu" hidden>
-        <button id="m-export">Download backup (JSON)</button>
-        <button id="m-import">Import backup…</button>
-        <button id="m-erase" class="danger-item" style="color:#C0392B">Erase all data</button>
-      </div>
-      <input type="file" id="import-file" accept="application/json,.json" hidden>
-    </div>
-    <span class="savestate" id="savestate"></span>
   </div>
 </header>
 
@@ -263,6 +271,15 @@
   <main id="main"></main>
 </div>
 
+<nav id="tabbar"><div class="tabs2">
+  <a class="tab" href="index.html#view=today"><svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.5A2.5 2.5 0 0 1 21 6.5v12A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4H6V3a1 1 0 0 1 1-1ZM5 9v9.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V9H5Z"/></svg><span>Today</span></a>
+  <a class="tab" href="index.html#view=scheduled"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm1 5a1 1 0 1 0-2 0v5.3l3.5 2.4a1 1 0 0 0 1.1-1.6L13 11.4V7Z"/></svg><span>Scheduled</span></a>
+  <a class="tab" href="index.html#view=projects"><svg viewBox="0 0 24 24"><path d="M4 4h6l1.6 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg><span>Projects</span></a>
+  <a class="tab" href="index.html#view=shipments"><svg viewBox="0 0 24 24"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h7A2.5 2.5 0 0 1 14 6.5V8h3l4 4.5V17h-2.1a2.9 2.9 0 0 1-5.8 0H9.9a2.9 2.9 0 0 1-5.8 0H2V6.5Z"/></svg><span>Shipments</span></a>
+  <a class="tab" href="index.html#view=all"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Z"/></svg><span>All</span></a>
+  <a class="tab on" href="board.html"><svg viewBox="0 0 24 24"><path d="M5 4h5.5v7H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8.5 0H19a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1h-5.5V4ZM5 13.5h5.5V20H5a1 1 0 0 1-1-1v-4.5a1 1 0 0 1 1-1Zm8.5-1H19a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-5.5v-7.5Z"/></svg><span>Board</span></a>
+</div></nav>
+
 <div id="modal-root"></div>
 <div id="sync-root"></div>
 
@@ -270,12 +287,15 @@
 "use strict";
 /* ————— Everything Board · standalone ————— */
 
+/* iOS palette, as constant hexes: the code builds `${color}22` alpha variants,
+   which a var() reference cannot survive. The dark-scheme values read well on
+   both themes. */
 const TYPE_META = {
-  note:    { label: "Note",    color: "#E8A33D", icon: "✎" },
-  link:    { label: "Link",    color: "#3D7BE8", icon: "⌘" },
-  image:   { label: "Image",   color: "#8B5CF6", icon: "▣" },
-  email:   { label: "Email",   color: "#12A594", icon: "✉" },
-  thought: { label: "Thought", color: "#E85D75", icon: "◌" },
+  note:    { label: "Note",    color: "#FF9F0A", icon: "✎" },
+  link:    { label: "Link",    color: "#0A84FF", icon: "⌘" },
+  image:   { label: "Image",   color: "#BF5AF2", icon: "▣" },
+  email:   { label: "Email",   color: "#64D2FF", icon: "✉" },
+  thought: { label: "Thought", color: "#FF375F", icon: "◌" },
 };
 const STATUSES = [
   { id: "inbox", label: "Inbox" },
@@ -283,7 +303,7 @@ const STATUSES = [
   { id: "doing", label: "In progress" },
   { id: "done",  label: "Done" },
 ];
-const PROJECT_COLORS = ["#3D7BE8","#12A594","#E8A33D","#E85D75","#8B5CF6","#4B8A3C","#C05621","#17242F"];
+const PROJECT_COLORS = ["#0A84FF","#BF5AF2","#FF375F","#FF9F0A","#64D2FF","#30D158","#5E5CE6","#FFD60A"];
 const KEY = "everything-board:v1";
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
@@ -586,7 +606,7 @@ function homeHtml() {
             const done = list.filter(i => i.status === "done").length;
             const pct = list.length ? Math.round(done/list.length*100) : 0;
             return `<button class="proj-row" data-act="view" data-view="projects">
-              <span class="top"><span style="color:${p.color};font-weight:700">● ${esc(p.name)}</span><span style="color:var(--faint)">${done}/${list.length} done</span></span>
+              <span class="top"><span style="color:${p.color};font-weight:700">● ${esc(p.name)}</span><span style="color:var(--label3)">${done}/${list.length} done</span></span>
               <span class="track" style="display:block"><span class="fill" style="display:block;width:${pct}%;background:${p.color}"></span></span>
             </button>`;
           }).join("")
@@ -596,7 +616,7 @@ function homeHtml() {
     <section>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <h2 class="sec" style="margin:0">Recently captured</h2>
-        <button style="color:#3D7BE8;font-weight:700;font-size:12px" data-act="view" data-view="feed">Full feed →</button>
+        <button style="color:var(--blue);font-weight:700;font-size:12px" data-act="view" data-view="feed">Full feed →</button>
       </div>
       <div class="grid">${recent.map(i => cardHtml(i)).join("")}</div>
     </section>
@@ -668,7 +688,7 @@ function projectsHtml(list) {
           <span class="sw" style="background:${p ? p.color : "#B8C4CD"}"></span>
           <h2>${p ? esc(p.name) : "Not in a project"}</h2>
           <span class="hint">${pl.length}</span>
-          ${p && p.ss ? `<a class="hint" style="color:#3D7BE8;font-weight:700;text-decoration:none" href="index.html#project=${esc(p.ssId)}">Open in Shipshape →</a>` : ""}
+          ${p && p.ss ? `<a class="hint" style="color:var(--blue);font-weight:700;text-decoration:none" href="index.html#project=${esc(p.ssId)}">Open in Shipshape →</a>` : ""}
           ${p && !p.ss ? `<button class="hint" data-act="del-proj" data-id="${p.id}" data-armed="0" style="padding:2px 6px;border-radius:6px">✕</button>` : ""}
         </div>
         ${pl.length ? `<div class="grid">${pl.map(i => cardHtml(i)).join("")}</div>`
@@ -789,8 +809,8 @@ function renderMapContents() {
     const hit = visSet.has(i.id), dim = query && !hit, glow = query && hit;
     const linking = connectFrom === i.id;
     const img = itemImg(i);
-    const border = linking ? "#17242F" : glow ? "#B9C700" : m.color;
-    const shadow = glow ? "0 0 0 4px #E4F22288, 0 2px 8px rgba(23,36,47,.12)" : "0 2px 8px rgba(23,36,47,.10)";
+    const border = linking ? "var(--label)" : glow ? "var(--yellow)" : m.color;
+    const shadow = glow ? "0 0 0 4px color-mix(in srgb,var(--yellow) 45%,transparent), var(--shadow)" : "var(--shadow)";
     return `<div class="node" data-id="${i.id}" style="left:${i.x}px;top:${i.y}px;transform:translate(-50%,-50%);border:2px solid ${border};box-shadow:${shadow};opacity:${dim ? .35 : 1}">
       <div class="nhead" style="color:${m.color}">
         <span>${m.icon} ${m.label.toUpperCase()}</span>
@@ -817,7 +837,7 @@ function drawEdges() {
     const dim = query && !(visSet.has(a.id) && visSet.has(b.id));
     const wiki = kind === "wiki";
     return `<path d="M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}" fill="none"
-      stroke="${dim ? "#DCE3E8" : wiki ? "#8FB3E8" : "#9FB0BC"}" stroke-width="2"
+      style="stroke:${dim ? "var(--sep)" : wiki ? "var(--blue)" : "var(--label3)"}" stroke-width="2"
       ${wiki ? "" : 'stroke-dasharray="1 7"'} stroke-linecap="round" opacity="${wiki && !dim ? .85 : 1}"/>`;
   }).join("");
 }
@@ -899,23 +919,23 @@ function renderModal() {
         <span style="color:${m.color};font-weight:800;font-size:13px">${m.icon} ${m.label}</span>
         <select class="mini" id="md-type">${Object.entries(TYPE_META).map(([id,t]) =>
           `<option value="${id}"${i.type === id ? " selected" : ""}>${t.label}</option>`).join("")}</select>
-        <button class="btn-mini" id="md-pin" style="${i.pinned ? "background:var(--hi);font-weight:700;color:var(--ink)" : ""}">📌 ${i.pinned ? "Pinned" : "Pin"}</button>
+        <button class="btn-mini" id="md-pin" style="${i.pinned ? "background:var(--yellow);font-weight:700;color:#000" : ""}">📌 ${i.pinned ? "Pinned" : "Pin"}</button>
         <span class="spacer"></span>
         <span class="hint">${new Date(i.createdAt).toLocaleDateString()}</span>
         <button class="btn-mini" id="md-close" aria-label="Close">✕</button>
       </div>
-      ${img ? `<img src="${esc(img)}" alt="" style="border-radius:12px;margin-bottom:12px;max-height:260px;object-fit:contain;background:var(--paper);width:100%">` : ""}
+      ${img ? `<img src="${esc(img)}" alt="" style="border-radius:12px;margin-bottom:12px;max-height:260px;object-fit:contain;background:var(--bg);width:100%">` : ""}
       <label class="lab" for="md-title">TITLE</label>
       <input class="field" id="md-title" value="${esc(i.title)}" placeholder="Give it a name — other ideas can [[link]] to it by this title">
       <label class="lab" for="md-url">LINK / URL</label>
       <div style="display:flex;gap:8px">
-        <input class="field" id="md-url" style="flex:1;color:#3D7BE8" value="${esc(i.url)}" placeholder="https://…">
+        <input class="field" id="md-url" style="flex:1;color:var(--blue)" value="${esc(i.url)}" placeholder="https://…">
         ${i.url ? `<a class="openlink" href="${esc(i.url)}" target="_blank" rel="noreferrer">Open ↗</a>` : ""}
       </div>
       <label class="lab" for="md-content">CONTENT — supports #tags and [[Idea title]] links</label>
       <textarea class="field" id="md-content" rows="5" placeholder="Notes, pasted email, the thought itself…">${esc(i.content)}</textarea>
       ${tags.length ? `<div class="chips">${tags.map(t =>
-        `<button data-act="tag" data-tag="${esc(t)}" style="background:#F0F3D0;color:#5C6B00;font-weight:700;border-radius:999px;padding:3px 9px;font-size:12px">${esc(t)}</button>`).join("")}</div>` : ""}
+        `<button class="tchip" data-act="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>` : ""}
       <div class="grid2" style="margin-bottom:12px">
         <div>
           <span class="lab">PROJECT</span>
@@ -934,7 +954,7 @@ function renderModal() {
         ${outgoing.map(c => `<button class="wchip" data-act="open" data-id="${c.id}">[[${esc(c.title)}]]</button>`).join("")}
         ${manual.length + outgoing.length ? "" : `<span class="hint">No threads yet — type [[Another idea's title]] in the content, or pick one below.</span>`}
       </div>
-      ${connectable.length ? `<select class="field" id="md-connect" style="border-style:dashed;color:var(--muted)">
+      ${connectable.length ? `<select class="field" id="md-connect" style="border-style:dashed;color:var(--label2)">
         <option value="">⟡ Connect to another idea…</option>
         ${connectable.map(c => `<option value="${c.id}">${esc(itemName(c))}</option>`).join("")}
       </select>` : ""}
@@ -1028,7 +1048,7 @@ document.addEventListener("click", (e) => {
       persist(); renderMain();
     } else {
       b.dataset.armed = "1"; b.textContent = "Remove project? (items stay)";
-      b.style.cssText = "background:#C0392B;color:#fff;font-weight:700;padding:2px 8px;border-radius:6px";
+      b.style.cssText = "background:var(--red);color:#fff;font-weight:700;padding:2px 8px;border-radius:6px";
       setTimeout(() => { if (b.isConnected) renderMain(); }, 3000);
     }
     return;
@@ -1221,7 +1241,7 @@ function setSyncStatus(st, detail) {
   const btn = document.getElementById("sync-btn");
   if (btn) {
     btn.querySelector(".dot").style.background =
-      { off:"#B8C4CD", syncing:"#3D7BE8", synced:"#4B8A3C", offline:"#E8A33D", error:"#C0392B" }[st] || "#B8C4CD";
+      { off:"#98989d", syncing:"#0A84FF", synced:"#30D158", offline:"#FF9F0A", error:"#FF453A" }[st] || "#98989d";
     btn.title = { off:"Sync is off — set it up in Shipshape", syncing:"Syncing…", synced:"Synced through your Shipshape workspace",
       offline:"Offline — the board is saved here and goes out when the network is back",
       error:"Cannot reach Supabase" }[st] || "Sync";
@@ -1320,13 +1340,13 @@ function renderSyncPanel() {
     error:"Cannot reach Supabase." + (ss.detail ? " (" + ss.detail + ")" : "") }[ss.status] || "";
   const body = cfg
     ? `<p style="font-size:13px;margin-bottom:4px">Synced through your <b>Shipshape workspace</b> — same project, same key, nothing extra to set up.</p>
-       <p style="font-size:13px;color:${ss.status === "error" ? "#C0392B" : "var(--muted)"};margin-bottom:12px">${esc(nice)}</p>
+       <p style="font-size:13px;color:${ss.status === "error" ? "var(--red)" : "var(--label2)"};margin-bottom:12px">${esc(nice)}</p>
        <div style="display:flex;gap:8px;flex-wrap:wrap">
          <button class="btn-done" id="sy-now">Sync now</button>
          <a class="btn-mini" href="index.html#sync" style="text-decoration:none;display:inline-flex;align-items:center">Sync settings…</a>
        </div>
        <p class="hint" style="margin-top:10px">The board travels as its own document beside your tasks — turning either off never touches the other's data.</p>`
-    : `<p style="font-size:13px;color:var(--muted);margin-bottom:12px">The board follows Shipshape's sync. Turn sync on there — cloud button, top right — and the board rides the same workspace with nothing else to configure.</p>
+    : `<p style="font-size:13px;color:var(--label2);margin-bottom:12px">The board follows Shipshape's sync. Turn sync on there — cloud button, top right — and the board rides the same workspace with nothing else to configure.</p>
        <a class="btn-done" href="index.html#sync" style="text-decoration:none;display:inline-block">Open Shipshape sync setup</a>`;
   root.innerHTML = `<div class="overlay" id="sy-overlay">
     <div class="modal" role="dialog" aria-modal="true" style="max-width:460px">
