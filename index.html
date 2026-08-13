@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.27.0">
+<meta name="app-version" content="1.27.1">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -73,12 +73,13 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .iconbtn svg{width:17px;height:17px;fill:var(--blue)}
 #syncBtn svg{width:19px;height:19px;fill:var(--label3);transition:fill .3s}
 #syncBtn.idle svg{fill:var(--green)}
-#syncBtn.syncing svg{fill:var(--blue);animation:pulse 1.1s ease-in-out infinite}
+/* colour only, no animation: the poll runs every 15 seconds, and an opacity
+   pulse on that schedule reads as the header strobing */
+#syncBtn.syncing svg{fill:var(--blue)}
 #syncBtn.error svg{fill:var(--red)}
 /* Offline is not the same failure as a wrong key, and red for both sent you
    checking credentials when the answer was to wait. */
 #syncBtn.offline svg{fill:var(--orange)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .brand{font-family:var(--round);font-weight:800;font-size:20px;letter-spacing:-.3px;padding:6px 10px 12px;display:flex;align-items:center;gap:8px}
 /* The real ship, not a stand-in gradient tile. favicon.svg is the cut drawn to
    stay legible small, and the service worker already precaches it. Its rounding
