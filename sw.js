@@ -7,12 +7,14 @@
    The page checks whether it is stale by re-fetching its own HTML with a
    ?vcheck= parameter. Those requests must never be answered from here, or the
    check would compare a cached copy against itself and always agree. */
-const CACHE = 'shipshape-1.23.0';
+const CACHE = 'shipshape-1.23.1';
 const SHELL = [
   './', './index.html', './board.html', './manifest.webmanifest',
   './icon.svg', './favicon.svg', './favicon.ico',
   './favicon-16.png', './favicon-32.png', './apple-touch-icon.png',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png',
+  // the barcode decoder, so the first offline scan is not also the first fetch
+  './vendor/zxing.min.js',
 ];
 
 self.addEventListener('install', e => {

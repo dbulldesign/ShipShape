@@ -1118,7 +1118,15 @@ document.getElementById("import-file").addEventListener("change", (e) => {
 document.getElementById("m-erase").addEventListener("click", (e) => {
   const b = e.currentTarget;
   if (b.dataset.armed === "1") {
-    state = { items: [], projects: [] }; persist(); renderCaptureRow(); renderMain(); menu.hidden = true;
+    /* Erasing has to say so, not just forget: without tombstones the next pull
+       merges the workspace copy straight back in, and the erase undoes itself
+       within fifteen seconds. Existing tombstones are kept — dropping them would
+       resurrect long-deleted cards the same way. */
+    const tombs = { ...state.tombstones }, at = Date.now();
+    state.items.forEach(i => tombs[i.id] = at);
+    state.projects.forEach(pr => tombs["p:" + pr.id] = at);
+    state = { items: [], projects: [], tombstones: tombs };
+    persist(); renderCaptureRow(); renderMain(); menu.hidden = true;
     b.dataset.armed = "0"; b.textContent = "Erase all data";
   } else {
     b.dataset.armed = "1"; b.textContent = "Tap again to erase everything";
@@ -1160,6 +1168,10 @@ function mergeStates(a, b) {
   const tombs = {};
   for (const [k, v] of Object.entries({ ...(a.tombstones||{}), ...(b.tombstones||{}) }))
     tombs[k] = Math.max((a.tombstones||{})[k] || 0, (b.tombstones||{})[k] || 0);
+  // sixty days on, every live copy has long since dropped the record itself,
+  // so the marker has nothing left to defeat — same convention as the main app
+  const cut = Date.now() - 60 * 864e5;
+  for (const k of Object.keys(tombs)) if (tombs[k] < cut) delete tombs[k];
   const pick = (list) => {
     const m = new Map();
     list.forEach(x => {
