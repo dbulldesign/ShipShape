@@ -225,7 +225,15 @@ main{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
 .tab svg{width:24px;height:24px;fill:currentColor}
 .tab span{font-size:9.5px;font-weight:600}
 .tab.on{color:var(--blue)}
-@media (max-width:860px){#tabbar{display:block}}
+@media (max-width:860px){
+  #tabbar{display:block}
+  /* The mind map is a desktop view: panning a 4000px plane and threading nodes
+     wants a big pointer surface, not a thumb on 390px. Connections still happen
+     on the phone — [[wiki links]] and the sheet's "Connect to another idea" —
+     only the picture of them waits for a desktop. Hides the nudge that points
+     at the map, too, since both carry data-view="map". */
+  [data-view="map"]{display:none}
+}
 </style>
 </head>
 <body>
@@ -1167,6 +1175,18 @@ if (hp) {
   const sec = document.getElementById("sec-" + (proj(pid) ? pid : "none"));
   if (sec) sec.scrollIntoView({ block: "start" });
 } else setView("home");
+/* the map tab does not exist on a phone, so the view must not linger there when
+   the window shrinks across the threshold */
+function ensureViewFits() {
+  if (view === "map" && matchMedia("(max-width:860px)").matches) setView("home");
+}
+addEventListener("resize", ensureViewFits);
+ensureViewFits();
+/* a keyboard shortcut in the placeholder is noise on a screen with no keyboard */
+if (matchMedia("(pointer:coarse)").matches) {
+  const ta = document.getElementById("cap-text");
+  ta.placeholder = "Throw anything in — thoughts, links, pasted emails. #tags and [[other idea]] connect.";
+}
 /* Shipshape's + menu sends "New idea" here with #new: land ready to type, which
    on a phone means the keyboard is already up. */
 if (location.hash === "#new") {

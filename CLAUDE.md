@@ -136,6 +136,11 @@ the capture bar holds text (`uiBusy()`), or it steals the gesture. Both pages
 flush their debounced localStorage write on pagehide — without that, an edit
 followed within ~300ms by a hop to the other page silently lost the write.
 
+The mind map is desktop-only: the tab and the dashboard nudge that point at it
+hide below 861px (one `[data-view="map"]` rule catches both), and the view falls
+back to home if the window shrinks while on it. Threading still works on a phone
+through [[wiki links]] and the sheet's "Connect to another idea".
+
 The mind map handles node taps in `pointerup`, not `click`: pointerdown captures
 the pointer to the box, and with capture held Chrome retargets the click at the
 box, so a click listener never learns which node was tapped. Version lives in
