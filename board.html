@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#10151A" media="(prefers-color-scheme: dark)">
+<title>Everything Board</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317242F'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%23E4F222' font-family='sans-serif' font-weight='bold'%3E%E2%88%97%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<style>
+  /* ————— tokens —————
+     paper #F3F5F7 · dots #C9D2DA · ink #17242F · muted #5C6B77
+     card #FFF · border #E2E8ED · highlighter #E4F222
+     note #E8A33D · link #3D7BE8 · image #8B5CF6 · email #12A594 · thought #E85D75 */
+  :root{
+    --paper:#F3F5F7; --ink:#17242F; --muted:#5C6B77; --faint:#8A97A2;
+    --card:#fff; --line:#E2E8ED; --hi:#E4F222; --col:#EBEFF2;
+  }
+  *{box-sizing:border-box; margin:0}
+  /* an explicit root background: the header's backdrop blur composites against
+     the root, and a transparent root leaves that undefined (black, in headless) */
+  html{ -webkit-text-size-adjust:100%; background:var(--paper) }
+  body{
+    background:var(--paper); color:var(--ink); min-height:100vh;
+    font-family:'Gabarito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size:15px; line-height:1.45;
+  }
+  button,input,textarea,select{font-family:inherit; font-size:inherit; color:inherit}
+  button{background:none; border:none; cursor:pointer; padding:0}
+  img{max-width:100%; display:block}
+  a{color:#3D7BE8}
+  ::selection{background:var(--hi)}
+  mark{background:var(--hi); padding:0 2px; border-radius:2px}
+  input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--ink); outline-offset:1px}
+  .dotgrid{background-image:radial-gradient(#C9D2DA 1.1px, transparent 1.1px); background-size:22px 22px}
+  @keyframes pop{from{transform:scale(.97); opacity:.4}to{transform:scale(1); opacity:1}}
+  .card-enter{animation:pop .18s ease-out}
+  @media (prefers-reduced-motion: reduce){.card-enter{animation:none}}
+
+  .wrap{max-width:1100px; margin:0 auto; padding:0 16px}
+
+  /* header */
+  /* No backdrop blur here: this header is a direct child of the root scroller,
+     where compositors are allowed to sample an undefined backdrop — headless
+     Chrome paints it black. At 97% opacity over flat paper it earned nothing. */
+  header{position:sticky; top:0; z-index:40; background:#F3F5F7F7; border-bottom:1px solid var(--line); padding:10px 0}
+  .hrow{display:flex; flex-wrap:wrap; align-items:center; gap:10px}
+  .logo{display:flex; align-items:center; gap:8px; font-weight:800; letter-spacing:-.02em; font-size:18px}
+  .logo .glyph{width:26px; height:26px; border-radius:8px; background:var(--ink); color:var(--hi); display:grid; place-items:center; font-weight:800; font-size:15px}
+  .searchbox{flex:1; min-width:170px; position:relative}
+  .searchbox input{width:100%; border:1.5px solid var(--line); background:#fff; border-radius:12px; padding:8px 12px; font-size:14px}
+  .hits{position:absolute; right:8px; top:50%; transform:translateY(-50%); background:var(--hi); font-weight:700; font-size:11px; padding:2px 6px; border-radius:6px}
+  nav.tabs{display:flex; flex-wrap:wrap; gap:4px; background:#E7EBEF; border-radius:12px; padding:4px}
+  nav.tabs button{padding:6px 10px; border-radius:8px; font-size:14px; color:var(--muted); font-weight:500}
+  nav.tabs button.on{background:var(--ink); color:#fff; font-weight:600}
+  .menu-wrap{position:relative}
+  .menu-btn{border:1.5px solid var(--line); background:#fff; border-radius:10px; padding:5px 9px; font-size:17px; line-height:1}
+  .menu{position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 8px 24px rgba(23,36,47,.14); padding:4px; min-width:200px; z-index:50}
+  .menu button{display:block; width:100%; text-align:left; padding:8px 12px; font-size:14px; border-radius:8px}
+  .menu button:hover{background:#F0F3F5}
+  .savestate{font-size:11px; color:var(--faint); min-width:52px; text-align:right}
+  .savestate.err{color:#C0392B}
+
+  /* capture */
+  .capture{background:#fff; border:1.5px solid var(--line); border-radius:16px; padding:12px; box-shadow:0 1px 2px rgba(23,36,47,.04); margin:14px 0 12px}
+  .capture textarea{width:100%; resize:none; border:none; background:#F7F9FA; border-radius:10px; padding:9px; font-size:14px; min-height:52px}
+  .caprow{display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin-top:8px}
+  .chip{border:1.5px solid var(--line); background:#fff; color:var(--muted); border-radius:999px; padding:4px 10px; font-size:12px; font-weight:500}
+  .chip.on{font-weight:700; color:var(--ink)}
+  .spacer{flex:1}
+  select.mini, .btn-mini{border:1.5px solid var(--line); background:#fff; border-radius:10px; padding:6px 8px; font-size:12px; color:var(--muted)}
+  .btn-add{background:var(--ink); color:var(--hi); font-weight:700; border-radius:10px; padding:7px 16px; font-size:14px}
+  .cap-msg{font-size:12px; margin-top:8px; background:#FDF6D8; color:#8A6D00; padding:6px 9px; border-radius:10px}
+
+  /* cards */
+  .card{position:relative; background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:11px 11px 11px 13px; box-shadow:0 1px 2px rgba(23,36,47,.05); cursor:pointer; text-align:left; width:100%}
+  .card .bar{position:absolute; left:0; top:8px; bottom:8px; width:4px; border-radius:99px}
+  .card .meta{display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:11px; color:var(--faint); margin-bottom:3px}
+  .card .meta .t{font-weight:700}
+  .pchip{padding:1px 7px; border-radius:999px; font-weight:700}
+  .card h3{font-size:14px; font-weight:700; line-height:1.25}
+  .card .url{font-size:12px; color:#3D7BE8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .card .body{font-size:12px; color:var(--muted); margin-top:4px; white-space:pre-wrap; max-height:74px; overflow:hidden}
+  .card img{border-radius:8px; margin:4px 0; max-height:130px; object-fit:cover; width:100%}
+  .pin-ind{position:absolute; right:8px; top:6px; font-size:11px}
+  .tagbtn{color:#7A8A00; font-weight:700}
+  .wikibtn{color:#3D7BE8; font-weight:700; text-decoration:underline dotted}
+  .wikibtn.dead{color:var(--faint); text-decoration:none}
+
+  .grid{display:grid; gap:8px; grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  h2.sec{font-size:14px; font-weight:800; margin-bottom:8px}
+  .hint{font-size:12px; color:var(--faint)}
+
+  /* dashboard */
+  .dash{display:flex; flex-direction:column; gap:20px}
+  .dash-top{display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:8px}
+  .dash-top h1{font-weight:800; font-size:24px; letter-spacing:-.02em}
+  .dash-top p{font-size:13px; color:var(--muted)}
+  .tiles{display:grid; gap:8px; grid-template-columns:repeat(auto-fit,minmax(105px,1fr))}
+  .tile{background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; text-align:left}
+  .tile b{font-size:22px; font-weight:800; display:block}
+  .tile span{font-size:12px; color:var(--muted); font-weight:600}
+  .panel{background:#fff; border:1.5px solid var(--line); border-radius:16px; padding:12px}
+  .two-col{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  .cloud{display:flex; flex-wrap:wrap; gap:6px}
+  .cloud button{background:#F0F3D0; color:#5C6B00; font-weight:700; border-radius:999px; padding:3px 9px}
+  .proj-row{display:block; width:100%; text-align:left; margin-bottom:8px}
+  .proj-row .top{display:flex; justify-content:space-between; font-size:12px; margin-bottom:2px}
+  .track{height:6px; background:#EEF1F4; border-radius:99px}
+  .fill{height:6px; border-radius:99px; transition:width .3s}
+  .link-quiet{color:#7A8A00; font-weight:700}
+  .empty-hero{border:1.5px dashed #C9D2DA; border-radius:16px; padding:36px 20px; text-align:center}
+  .empty-hero p:first-child{font-weight:800; font-size:20px}
+  .empty-hero p+p{font-size:14px; color:var(--muted); margin-top:6px}
+
+  /* feed */
+  .feed{max-width:640px; margin:0 auto; display:flex; flex-direction:column; gap:16px}
+  .dayline{display:flex; align-items:center; gap:8px; margin-bottom:8px}
+  .daypill{font-size:11px; background:var(--ink); color:var(--hi); font-weight:800; border-radius:999px; padding:2px 9px}
+  .dayline .rule{flex:1; height:1px; background:var(--line)}
+  .frow{display:flex; gap:10px; background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:11px; cursor:pointer}
+  .frow .ic{width:28px; height:28px; border-radius:14px; display:grid; place-items:center; font-weight:800; flex-shrink:0}
+  .frow .fx{min-width:0; flex:1}
+  .frow .fm{display:flex; gap:8px; font-size:11px; color:var(--faint)}
+  .frow h3{font-size:14px; font-weight:700}
+  .frow .body{font-size:12px; color:var(--muted); white-space:pre-wrap}
+  .frow img{border-radius:8px; margin:4px 0; max-height:170px; object-fit:cover}
+  .pinbtn{align-self:flex-start; opacity:.35}
+  .pinbtn.on{opacity:1}
+
+  /* board */
+  .board{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); align-items:start}
+  .colu{background:var(--col); border-radius:16px; padding:8px; min-height:140px; transition:background .12s}
+  .colu.over{background:#E9F5D3}
+  .colu .chead{display:flex; justify-content:space-between; align-items:baseline; padding:2px 6px 6px}
+  .colu .chead b{font-size:14px; font-weight:800}
+  .colu .chead span{font-size:12px; color:var(--faint)}
+  .colu .stack{display:flex; flex-direction:column; gap:8px}
+
+  /* projects */
+  .psec h2{font-size:17px; font-weight:800; letter-spacing:-.01em}
+  .psec .phead{display:flex; align-items:center; gap:8px; margin:0 0 8px}
+  .sw{width:10px; height:10px; border-radius:3px; display:inline-block}
+  .btn-dash{border:1.5px dashed #B8C4CD; color:var(--muted); font-weight:600; border-radius:10px; padding:6px 12px; font-size:14px}
+  .newproj{display:inline-flex; align-items:center; gap:4px}
+  .newproj input{border:1.5px solid var(--ink); border-radius:10px; padding:6px 8px; font-size:12px; width:140px}
+  .newproj .ok{background:var(--ink); color:var(--hi); font-weight:700; border-radius:10px; padding:6px 9px; font-size:12px}
+  .newproj .no{color:var(--faint); padding:6px 4px; font-size:12px}
+
+  /* map */
+  .maptools{display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-size:12px; color:var(--muted); margin-bottom:8px}
+  .maptools .z{border:1.5px solid var(--line); background:#fff; border-radius:10px; padding:4px 9px}
+  .mapbox{position:relative; overflow:hidden; border:1.5px solid var(--line); border-radius:16px; background:#FAFBFC; height:min(70vh,640px); touch-action:none; cursor:grab}
+  .mapbox.linking{cursor:crosshair}
+  .plane{position:absolute; left:0; top:0; transform-origin:0 0}
+  .node{position:absolute; width:168px; background:#fff; border-radius:14px; padding:8px 10px; box-shadow:0 2px 8px rgba(23,36,47,.10); user-select:none; -webkit-user-select:none; cursor:pointer}
+  .node .nhead{display:flex; justify-content:space-between; align-items:center; font-size:10px; font-weight:800}
+  .node .connect{width:20px; height:20px; border-radius:10px; border:1.5px solid #DDE4E9; background:#F7F9FA; color:var(--ink); font-size:11px; line-height:1}
+  .node .connect.on{background:var(--hi); border-color:var(--ink)}
+  .node h3{font-size:12px; font-weight:700; line-height:1.25; margin-top:2px; word-break:break-word}
+  .node .np{font-size:10px; font-weight:700; margin-top:3px}
+  .node img{border-radius:8px; margin:4px 0; max-height:80px; object-fit:cover; width:100%; pointer-events:none}
+  .map-empty{position:absolute; inset:0; display:grid; place-items:center; color:var(--faint); font-size:14px}
+
+  /* modal */
+  .overlay{position:fixed; inset:0; z-index:60; background:rgba(23,36,47,.45); display:flex; align-items:flex-end; justify-content:center; padding:0}
+  @media (min-width:640px){.overlay{align-items:center; padding:24px}}
+  .modal{background:#fff; width:100%; max-width:600px; max-height:88vh; overflow-y:auto; border-radius:18px 18px 0 0; padding:16px}
+  @media (min-width:640px){.modal{border-radius:18px}}
+  .mrow{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+  .lab{display:block; font-size:11px; font-weight:700; color:var(--faint); margin:0 0 4px; letter-spacing:.03em}
+  .field{width:100%; border:1.5px solid var(--line); border-radius:10px; padding:8px 11px; font-size:14px; margin-bottom:12px}
+  textarea.field{resize:vertical; min-height:100px}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px}
+  .cchip{background:#F0F3F5; border:1px solid var(--line); border-radius:999px; padding:4px 9px; font-size:12px; display:inline-flex; gap:5px; align-items:center}
+  .cchip .x{color:var(--faint)}
+  .wchip{background:#EAF1FD; color:#3D7BE8; font-weight:700; border-radius:999px; padding:4px 9px; font-size:12px}
+  .bchip{background:#F0F3F5; border:1px dashed #B8C4CD; font-weight:600; border-radius:999px; padding:4px 9px; font-size:12px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .danger{color:#C0392B; font-weight:600; font-size:14px; padding:6px 10px; border-radius:10px}
+  .danger.armed{background:#C0392B; color:#fff; font-weight:700}
+  .btn-done{background:var(--ink); color:#fff; font-weight:700; border-radius:10px; padding:7px 16px; font-size:14px}
+  .mfoot{display:flex; justify-content:space-between; align-items:center; border-top:1px solid #EEF1F4; padding-top:10px; margin-top:4px}
+  .openlink{background:#EAF1FD; color:#3D7BE8; font-weight:700; border-radius:10px; padding:8px 11px; font-size:13px; text-decoration:none; white-space:nowrap}
+  .banner{font-size:13px; background:#FDECEA; color:#C0392B; padding:8px 12px; border-radius:10px; margin-bottom:12px}
+  main{padding-bottom:90px}
+
+  .backship{display:grid;place-items:center;flex:none}
+  .backship img{display:block;border-radius:8px}
+  mark{color:#17242F}
+  /* ————— dark, following the system like the rest of Shipshape —————
+     The highlighter yellow stays; where the ink was used as a background it
+     becomes the highlighter, since near-white ink tiles would glare. */
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#10151A; --ink:#E8EDF1; --muted:#9AA7B1; --faint:#6B7883;
+      --card:#1A2129; --line:#2A333C; --col:#171E25;
+    }
+    html{color-scheme:dark}
+    header{background:#10151AF7}
+    .dotgrid{background-image:radial-gradient(#2A343E 1.1px, transparent 1.1px)}
+    .searchbox input,.menu-btn,.menu,.capture,.chip,select.mini,.btn-mini,.card,.frow,
+    .tile,.panel,.node,.modal,.maptools .z{background:var(--card)}
+    .capture textarea{background:#12181E}
+    nav.tabs{background:#1E262E}
+    .logo .glyph,nav.tabs button.on,.daypill,.btn-add,.btn-done{background:var(--hi);color:#17242F}
+    .menu button:hover{background:#232C35}
+    .mapbox{background:#131920}
+    .node .connect{background:#232C35;border-color:#2A333C}
+    .colu.over{background:#2A3110}
+    .cchip,.bchip{background:#232C35}
+    .wchip,.openlink{background:#1D2A3E}
+    .cloud button{background:#2A3110;color:#C9D65A}
+    .tagbtn,.link-quiet{color:#C9D65A}
+    .track{background:#232C35}
+    .cap-msg{background:#33290D;color:#E0C36A}
+    .banner{background:#3A1D1A;color:#F0938A}
+    .empty-hero{border-color:#3A444E}
+    .overlay{background:rgba(0,0,0,.55)}
+    .card,.frow,.tile,.panel,.capture{box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hrow">
+    <a class="backship" href="index.html" title="Back to Shipshape" aria-label="Back to Shipshape"><img src="favicon.svg" width="26" height="26" alt=""></a>
+    <div class="logo"><span class="glyph">∗</span><span>Everything Board</span></div>
+    <div class="searchbox">
+      <input id="search" type="search" placeholder="Search everything — words, #tags, links, projects…" autocomplete="off">
+      <button class="hits" id="hits" hidden></button>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-view="home">Home</button>
+      <button data-view="feed">Feed</button>
+      <button data-view="board">Board</button>
+      <button data-view="projects">Projects</button>
+      <button data-view="map">Mind map</button>
+    </nav>
+    <button class="menu-btn" id="sync-btn" aria-label="Sync across devices" style="display:flex;align-items:center;gap:5px;font-size:14px">☁<span class="dot" style="width:8px;height:8px;border-radius:99px;background:#B8C4CD;display:inline-block"></span></button>
+    <div class="menu-wrap">
+      <button class="menu-btn" id="menu-btn" aria-label="More options">⋯</button>
+      <div class="menu" id="menu" hidden>
+        <button id="m-export">Download backup (JSON)</button>
+        <button id="m-import">Import backup…</button>
+        <button id="m-erase" class="danger-item" style="color:#C0392B">Erase all data</button>
+      </div>
+      <input type="file" id="import-file" accept="application/json,.json" hidden>
+    </div>
+    <span class="savestate" id="savestate"></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="capture">
+    <textarea id="cap-text" rows="2" placeholder="Throw anything in — thoughts, links, pasted emails. Use #tags and [[other idea]] to connect. (Ctrl/⌘+Enter)"></textarea>
+    <div class="caprow" id="cap-types"></div>
+    <div class="cap-msg" id="cap-msg" hidden></div>
+  </section>
+  <main id="main"></main>
+</div>
+
+<div id="modal-root"></div>
+<div id="sync-root"></div>
+
+<script>
+"use strict";
+/* ————— Everything Board · standalone ————— */
+
+const TYPE_META = {
+  note:    { label: "Note",    color: "#E8A33D", icon: "✎" },
+  link:    { label: "Link",    color: "#3D7BE8", icon: "⌘" },
+  image:   { label: "Image",   color: "#8B5CF6", icon: "▣" },
+  email:   { label: "Email",   color: "#12A594", icon: "✉" },
+  thought: { label: "Thought", color: "#E85D75", icon: "◌" },
+};
+const STATUSES = [
+  { id: "inbox", label: "Inbox" },
+  { id: "todo",  label: "To do" },
+  { id: "doing", label: "In progress" },
+  { id: "done",  label: "Done" },
+];
+const PROJECT_COLORS = ["#3D7BE8","#12A594","#E8A33D","#E85D75","#8B5CF6","#4B8A3C","#C05621","#17242F"];
+const KEY = "everything-board:v1";
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ————— storage (localStorage with in-memory fallback) ————— */
+let memoryOnly = false, memoryStore = null;
+function normalize(d) {
+  d.items = Array.isArray(d.items) ? d.items : [];
+  d.projects = Array.isArray(d.projects) ? d.projects : [];
+  d.tombstones = d.tombstones && typeof d.tombstones === "object" ? d.tombstones : {};
+  return d;
+}
+function loadData() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const d = JSON.parse(raw); if (d && Array.isArray(d.items)) return normalize(d); }
+  } catch (e) { memoryOnly = true; }
+  return normalize({});
+}
+let saveTimer = null;
+function persist() {
+  setSave("saving");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      if (memoryOnly) { memoryStore = JSON.stringify(state); setSave("saved"); schedulePush(); return; }
+      localStorage.setItem(KEY, JSON.stringify(state));
+      setSave("saved");
+    } catch (e) { setSave("err"); }
+    schedulePush();
+  }, 350);
+}
+function setSave(s) {
+  const el = document.getElementById("savestate");
+  el.className = "savestate" + (s === "err" ? " err" : "");
+  el.textContent = s === "saving" ? "Saving…" : s === "saved" ? "Saved ✓" : s === "err" ? "Save failed" : "";
+  if (s === "saved") setTimeout(() => { if (el.textContent === "Saved ✓") el.textContent = ""; }, 1500);
+}
+
+/* ————— app state ————— */
+let state = loadData();
+let view = "home";
+let query = "";
+let openId = null;
+let connectFrom = null;
+let mapPan = null, mapZoom = 1;
+const W = 4000, H = 3000;
+
+/* ————— helpers ————— */
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const isUrl = (s) => /^https?:\/\/\S+$/i.test((s || "").trim());
+const isImageUrl = (s) => /\.(png|jpe?g|gif|webp|svg|avif)(\?.*)?$/i.test((s || "").trim());
+const looksLikeEmail = (s) => /^(from|to|subject|fwd|re):/i.test((s || "").trim()) || /^-{2,}\s*forwarded/i.test((s || "").trim());
+function detectType(t) {
+  t = (t || "").trim();
+  if (!t) return "note";
+  if (isUrl(t)) return isImageUrl(t) ? "image" : "link";
+  if (looksLikeEmail(t)) return "email";
+  return "note";
+}
+const extractTags = (i) => [...new Set(((i.title||"")+" "+(i.content||"")).match(/#[\p{L}\d_-]+/gu) || [])];
+const wikiRefs = (i) => ((i.content||"").match(/\[\[([^\]]+)\]\]/g) || []).map(m => m.slice(2,-2).trim().toLowerCase());
+const itemName = (i) => i.title || i.url || (i.content||"").slice(0,40) || "Untitled";
+const byId = (id) => state.items.find(i => i.id === id);
+const proj = (id) => state.projects.find(p => p.id === id);
+const itemImg = (i) => i.imageData || (i.type === "image" && i.url ? i.url : null);
+
+function getEdges(items) {
+  const byTitle = new Map(items.filter(i => i.title).map(i => [i.title.trim().toLowerCase(), i]));
+  const edges = [], seen = new Set();
+  const push = (a, b, kind) => {
+    if (!a || !b || a.id === b.id) return;
+    const k = [a.id, b.id].sort().join("|");
+    if (seen.has(k)) return;
+    seen.add(k); edges.push({ a, b, kind });
+  };
+  items.forEach(it => (it.links||[]).forEach(id => push(it, items.find(x => x.id === id), "manual")));
+  items.forEach(it => wikiRefs(it).forEach(t => push(it, byTitle.get(t), "wiki")));
+  return edges;
+}
+
+function matches(i, q) {
+  if (!q) return true;
+  const p = proj(i.projectId);
+  const st = STATUSES.find(s => s.id === i.status);
+  const hay = [i.title, i.content, i.url, i.type, p && p.name, st && st.label, extractTags(i).join(" ")]
+    .filter(Boolean).join(" ").toLowerCase();
+  return q.toLowerCase().split(/\s+/).every(w => hay.includes(w));
+}
+const visibleItems = () => state.items.filter(i => matches(i, query));
+
+/* highlight + rich text (all output is escaped) */
+function markHtml(text, q) {
+  const safe = esc(text);
+  if (!q) return safe;
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean).map(w => esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!words.length) return safe;
+  return safe.replace(new RegExp("(" + words.join("|") + ")", "ig"), "<mark>$1</mark>");
+}
+function richHtml(text, q) {
+  if (!text) return "";
+  return String(text).split(/(#[\p{L}\d_-]+|\[\[[^\]]+\]\])/gu).map(part => {
+    if (/^#[\p{L}\d_-]+$/u.test(part))
+      return `<button class="tagbtn" data-act="tag" data-tag="${esc(part)}">${esc(part)}</button>`;
+    const wm = part.match(/^\[\[([^\]]+)\]\]$/);
+    if (wm) {
+      const name = wm[1].trim();
+      const t = state.items.find(x => (x.title||"").trim().toLowerCase() === name.toLowerCase());
+      return t
+        ? `<button class="wikibtn" data-act="open" data-id="${t.id}">${esc(name)}</button>`
+        : `<span class="wikibtn dead">${esc(name)}</span>`;
+    }
+    return markHtml(part, q);
+  }).join("");
+}
+
+/* ————— mutations ————— */
+function addItem(partial) {
+  state.items.unshift(Object.assign({
+    id: uid(), type: "note", title: "", content: "", url: "", imageData: "",
+    projectId: null, status: "inbox", createdAt: Date.now(), updatedAt: Date.now(), pinned: false,
+    links: [], x: null, y: null,
+  }, partial));
+  persist(); renderMain();
+}
+function patchItem(id, patch, rerender = true) {
+  const it = byId(id);
+  if (!it) return;
+  Object.assign(it, patch, { updatedAt: Date.now() });
+  persist();
+  if (rerender) renderMain();
+}
+function deleteItem(id) {
+  state.items = state.items.filter(i => i.id !== id);
+  state.items.forEach(i => i.links = (i.links||[]).filter(l => l !== id));
+  state.tombstones[id] = Date.now();
+  persist(); renderMain();
+}
+function toggleLink(a, b) {
+  const ia = byId(a), ib = byId(b);
+  if (!ia || !ib || a === b) return;
+  ia.links = ia.links || []; ib.links = ib.links || [];
+  if (ia.links.includes(b) || ib.links.includes(a)) {
+    ia.links = ia.links.filter(x => x !== b);
+    ib.links = ib.links.filter(x => x !== a);
+  } else ia.links.push(b);
+  ia.updatedAt = Date.now(); ib.updatedAt = Date.now();
+  persist(); renderMain();
+}
+function addProject(name) {
+  const id = uid();
+  state.projects.push({ id, name, color: PROJECT_COLORS[state.projects.length % PROJECT_COLORS.length], updatedAt: Date.now() });
+  persist();
+  return id;
+}
+function goTag(tag) {
+  query = tag;
+  document.getElementById("search").value = tag;
+  setView("feed");
+}
+function setView(v) {
+  view = v; connectFrom = null;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  renderMain();
+}
+
+/* ————— shared card html ————— */
+function projChip(i) {
+  const p = proj(i.projectId);
+  return p ? `<span class="pchip" style="background:${p.color}1E;color:${p.color}">${esc(p.name)}</span>` : "";
+}
+function cardHtml(i, { draggable = false } = {}) {
+  const m = TYPE_META[i.type] || TYPE_META.note;
+  const img = itemImg(i);
+  const nLinks = (i.links||[]).length + wikiRefs(i).length;
+  const body = i.content && i.content !== i.title
+    ? `<div class="body">${richHtml(i.content.length > 220 ? i.content.slice(0,220) + "…" : i.content, query)}</div>` : "";
+  return `<div class="card card-enter" role="button" tabindex="0" data-act="open" data-id="${i.id}" ${draggable ? 'draggable="true"' : ""}>
+    <span class="bar" style="background:${m.color}"></span>
+    ${i.pinned ? '<span class="pin-ind" title="Pinned">📌</span>' : ""}
+    <div class="meta"><span class="t" style="color:${m.color}">${m.icon} ${m.label}</span>${projChip(i)}${nLinks ? `<span>⟡ ${nLinks}</span>` : ""}</div>
+    ${img ? `<img src="${esc(img)}" alt="">` : ""}
+    ${i.title ? `<h3>${markHtml(i.title, query)}</h3>` : ""}
+    ${i.url && !img ? `<div class="url">${markHtml(i.url, query)}</div>` : ""}
+    ${body}
+  </div>`;
+}
+
+/* ————— views ————— */
+function renderMain() {
+  const main = document.getElementById("main");
+  const hits = document.getElementById("hits");
+  const vis = visibleItems();
+  hits.hidden = !query;
+  if (query) hits.textContent = `${vis.length} hit${vis.length === 1 ? "" : "s"} ✕`;
+  if (memoryOnly && !document.getElementById("mem-banner")) {
+    main.insertAdjacentHTML("beforebegin",
+      `<p class="banner" id="mem-banner">This browser is blocking local storage (private mode?). Your data will vanish when you close the tab — use Download backup to keep it.</p>`);
+  }
+  if (view === "home") main.innerHTML = homeHtml();
+  else if (view === "feed") main.innerHTML = feedHtml(vis);
+  else if (view === "board") main.innerHTML = boardHtml(vis);
+  else if (view === "projects") main.innerHTML = projectsHtml(vis);
+  else if (view === "map") { main.innerHTML = mapHtml(); mountMap(); }
+}
+
+function homeHtml() {
+  const all = state.items;
+  if (!all.length)
+    return `<div class="empty-hero dotgrid">
+      <p>Your brain, one box up ↑</p>
+      <p>Type anything into the capture bar. Add <b>#tags</b> to group ideas and <b>[[Idea title]]</b> to link one idea to another — the mind map draws the threads for you.</p>
+    </div>`;
+  const edges = getEdges(all);
+  const connected = new Set(edges.flatMap(e => [e.a.id, e.b.id]));
+  const orphans = all.filter(i => !connected.has(i.id)).length;
+  const pinned = all.filter(i => i.pinned);
+  const recent = [...all].sort((a,b) => b.createdAt - a.createdAt).slice(0, 6);
+  const tagCounts = {};
+  all.forEach(i => extractTags(i).forEach(t => tagCounts[t] = (tagCounts[t]||0) + 1));
+  const tags = Object.entries(tagCounts).sort((a,b) => b[1]-a[1]).slice(0, 18);
+  const h = new Date().getHours();
+  const greet = h < 5 ? "Late-night brain, welcome" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+
+  return `<div class="dash">
+    <div class="dash-top">
+      <h1>${greet}.</h1>
+      <p>${all.length} idea${all.length===1?"":"s"} · ${edges.length} connection${edges.length===1?"":"s"} · ${state.projects.length} project${state.projects.length===1?"":"s"}${
+        orphans ? ` · <button class="link-quiet" data-act="view" data-view="map">${orphans} floating free ⟶ connect them</button>` : ""}</p>
+    </div>
+    <div class="tiles">${Object.entries(TYPE_META).map(([t,m]) => {
+      const n = all.filter(i => i.type === t).length;
+      return `<button class="tile" style="border-top:3px solid ${m.color}" data-act="tag" data-tag="${t}"><b>${n}</b><span>${m.icon} ${m.label}s</span></button>`;
+    }).join("")}</div>
+    <section>
+      <h2 class="sec">📌 Pinned</h2>
+      ${pinned.length ? `<div class="grid">${pinned.map(i => cardHtml(i)).join("")}</div>`
+        : `<p class="hint">Open any idea and hit the pin to keep it on your dashboard.</p>`}
+    </section>
+    <div class="two-col">
+      <section class="panel">
+        <h2 class="sec"># Tags</h2>
+        ${tags.length ? `<div class="cloud">${tags.map(([t,n]) =>
+            `<button data-act="tag" data-tag="${esc(t)}" style="font-size:${11 + Math.min(4,n)}px">${esc(t)} <span style="opacity:.6">${n}</span></button>`).join("")}</div>`
+          : `<p class="hint">Type #anything inside an idea and it becomes a tag here.</p>`}
+      </section>
+      <section class="panel">
+        <h2 class="sec">Projects</h2>
+        ${state.projects.length ? state.projects.map(p => {
+            const list = all.filter(i => i.projectId === p.id);
+            const done = list.filter(i => i.status === "done").length;
+            const pct = list.length ? Math.round(done/list.length*100) : 0;
+            return `<button class="proj-row" data-act="view" data-view="projects">
+              <span class="top"><span style="color:${p.color};font-weight:700">● ${esc(p.name)}</span><span style="color:var(--faint)">${done}/${list.length} done</span></span>
+              <span class="track" style="display:block"><span class="fill" style="display:block;width:${pct}%;background:${p.color}"></span></span>
+            </button>`;
+          }).join("")
+          : `<p class="hint">No projects yet — create one from the capture bar.</p>`}
+      </section>
+    </div>
+    <section>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h2 class="sec" style="margin:0">Recently captured</h2>
+        <button style="color:#3D7BE8;font-weight:700;font-size:12px" data-act="view" data-view="feed">Full feed →</button>
+      </div>
+      <div class="grid">${recent.map(i => cardHtml(i)).join("")}</div>
+    </section>
+  </div>`;
+}
+
+function feedHtml(list) {
+  const sorted = [...list].sort((a,b) => b.createdAt - a.createdAt);
+  if (!sorted.length)
+    return `<p class="hint" style="text-align:center;padding:36px 0">${query ? "No matches — try fewer words." : "Nothing captured yet. The feed fills newest-first as you add ideas."}</p>`;
+  const groups = [];
+  sorted.forEach(i => {
+    const day = new Date(i.createdAt).toDateString();
+    const g = groups[groups.length-1];
+    if (g && g.day === day) g.list.push(i); else groups.push({ day, list: [i] });
+  });
+  const today = new Date().toDateString(), yest = new Date(Date.now()-864e5).toDateString();
+  const label = d => d === today ? "Today" : d === yest ? "Yesterday"
+    : new Date(d).toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+  return `<div class="feed">${groups.map(g => `
+    <section>
+      <div class="dayline"><span class="daypill">${label(g.day)}</span><span class="rule"></span></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${g.list.map(i => {
+          const m = TYPE_META[i.type] || TYPE_META.note;
+          const img = itemImg(i);
+          return `<div class="frow card-enter" role="button" tabindex="0" data-act="open" data-id="${i.id}">
+            <div class="ic" style="background:${m.color}22;color:${m.color}">${m.icon}</div>
+            <div class="fx">
+              <div class="fm"><span>${new Date(i.createdAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</span>${
+                proj(i.projectId) ? `<span style="color:${proj(i.projectId).color};font-weight:700">● ${esc(proj(i.projectId).name)}</span>` : ""}${i.pinned ? "<span>📌</span>" : ""}</div>
+              ${i.title ? `<h3>${markHtml(i.title, query)}</h3>` : ""}
+              ${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noreferrer" data-act="noop" style="font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${markHtml(i.url, query)}</a>` : ""}
+              ${img ? `<img src="${esc(img)}" alt="">` : ""}
+              ${i.content && i.content !== i.title ? `<div class="body">${richHtml(i.content.length > 400 ? i.content.slice(0,400)+"…" : i.content, query)}</div>` : ""}
+            </div>
+            <button class="pinbtn${i.pinned ? " on" : ""}" data-act="pin" data-id="${i.id}" title="${i.pinned ? "Unpin" : "Pin to dashboard"}">📌</button>
+          </div>`;
+        }).join("")}
+      </div>
+    </section>`).join("")}</div>`;
+}
+
+function boardHtml(list) {
+  return `<div class="board">${STATUSES.map(s => {
+    const col = list.filter(i => (i.status || "inbox") === s.id);
+    return `<div class="colu" data-status="${s.id}">
+      <div class="chead"><b>${s.label}</b><span>${col.length}</span></div>
+      <div class="stack">
+        ${col.map(i => cardHtml(i, { draggable: true })).join("")}
+        ${col.length ? "" : `<p class="hint" style="text-align:center;padding:16px 0">Drag cards here</p>`}
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function projectsHtml(list) {
+  const groups = state.projects.map(p => ({ p, list: list.filter(i => i.projectId === p.id) }));
+  groups.push({ p: null, list: list.filter(i => !i.projectId || !proj(i.projectId)) });
+  return `<div style="display:flex;flex-direction:column;gap:20px">
+    <div id="np-slot"><button class="btn-dash" data-act="np-open">＋ New project</button></div>
+    ${groups.map(({ p, list: pl }) => `
+      <section class="psec">
+        <div class="phead">
+          <span class="sw" style="background:${p ? p.color : "#B8C4CD"}"></span>
+          <h2>${p ? esc(p.name) : "Not in a project"}</h2>
+          <span class="hint">${pl.length}</span>
+          ${p ? `<button class="hint" data-act="del-proj" data-id="${p.id}" data-armed="0" style="padding:2px 6px;border-radius:6px">✕</button>` : ""}
+        </div>
+        ${pl.length ? `<div class="grid">${pl.map(i => cardHtml(i)).join("")}</div>`
+          : `<p class="hint">Nothing here yet — assign items from a card, or pick this project when capturing.</p>`}
+      </section>`).join("")}
+  </div>`;
+}
+
+/* ————— mind map ————— */
+function ensurePlaced() {
+  let k = state.items.filter(i => i.x != null && i.y != null).length;
+  let changed = false;
+  state.items.forEach(i => {
+    if (i.x == null || i.y == null) {
+      const angle = k * 2.4, r = 90 + 34 * Math.sqrt(k);
+      i.x = W/2 + r * Math.cos(angle);
+      i.y = H/2 + r * Math.sin(angle);
+      k++; changed = true;
+    }
+  });
+  if (changed) persist();
+}
+function mapHtml() {
+  return `
+  <div class="maptools">
+    <span id="map-hint" style="font-weight:600">Drag ideas · drag canvas to pan · tap ⟡ then another node to thread them. Solid blue threads come from [[wiki links]] in your text.</span>
+    <span class="spacer"></span>
+    <button class="z" data-act="zoom" data-d="1">＋</button>
+    <button class="z" data-act="zoom" data-d="-1">－</button>
+    <button class="z" data-act="center">Center</button>
+  </div>
+  <div class="mapbox dotgrid" id="mapbox">
+    <div class="plane" id="plane" style="width:${W}px;height:${H}px">
+      <svg id="edges" width="${W}" height="${H}" style="position:absolute;inset:0;pointer-events:none"></svg>
+      <div id="nodes"></div>
+    </div>
+    ${state.items.length ? "" : `<div class="map-empty">Capture a few ideas above and they'll appear here as a constellation.</div>`}
+  </div>`;
+}
+function mountMap() {
+  ensurePlaced();
+  if (!mapPan) mapPan = { x: -W/2 + 200, y: -H/2 + 200 };
+  const box = document.getElementById("mapbox");
+  renderMapContents();
+  applyPan();
+
+  let drag = null, justDragged = false;
+  box.addEventListener("pointerdown", (e) => {
+    const nodeEl = e.target.closest(".node");
+    if (e.target.closest(".connect")) return;
+    if (nodeEl) {
+      const it = byId(nodeEl.dataset.id);
+      drag = { mode: "node", id: it.id, sx: e.clientX, sy: e.clientY, ox: it.x, oy: it.y, moved: false, el: nodeEl };
+    } else {
+      drag = { mode: "pan", sx: e.clientX, sy: e.clientY, ox: mapPan.x, oy: mapPan.y, moved: false };
+    }
+    box.setPointerCapture(e.pointerId);
+  });
+  box.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    if (drag.mode === "pan") { mapPan = { x: drag.ox + dx, y: drag.oy + dy }; applyPan(); }
+    else {
+      const it = byId(drag.id);
+      it.x = drag.ox + dx / mapZoom; it.y = drag.oy + dy / mapZoom;
+      drag.el.style.left = it.x + "px"; drag.el.style.top = it.y + "px";
+      drawEdges();
+    }
+  });
+  box.addEventListener("pointerup", () => {
+    if (drag && drag.mode === "node" && drag.moved) persist();
+    if (drag && drag.mode === "pan" && !drag.moved && connectFrom) { connectFrom = null; renderMapContents(); }
+    justDragged = !!(drag && drag.moved);
+    drag = null;
+  });
+  box.addEventListener("click", (e) => {
+    if (justDragged) { justDragged = false; return; }
+    const cbtn = e.target.closest(".connect");
+    if (cbtn) {
+      const id = cbtn.closest(".node").dataset.id;
+      connectFrom = connectFrom === id ? null : id;
+      renderMapContents();
+      return;
+    }
+    const nodeEl = e.target.closest(".node");
+    if (!nodeEl) return;
+    const id = nodeEl.dataset.id;
+    if (connectFrom && connectFrom !== id) { const from = connectFrom; connectFrom = null; toggleLink(from, id); return; }
+    if (connectFrom === id) { connectFrom = null; renderMapContents(); return; }
+    openModal(id);
+  });
+}
+function applyPan() {
+  const plane = document.getElementById("plane");
+  if (plane) plane.style.transform = `translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapZoom})`;
+  const box = document.getElementById("mapbox");
+  if (box) box.classList.toggle("linking", !!connectFrom);
+  const hint = document.getElementById("map-hint");
+  if (hint) hint.textContent = connectFrom
+    ? "Now tap another idea to connect — tap again to unlink. Tap the canvas to cancel."
+    : "Drag ideas · drag canvas to pan · tap ⟡ then another node to thread them. Solid blue threads come from [[wiki links]] in your text.";
+}
+function renderMapContents() {
+  const nodes = document.getElementById("nodes");
+  if (!nodes) return;
+  const visSet = new Set(visibleItems().map(i => i.id));
+  nodes.innerHTML = state.items.map(i => {
+    const m = TYPE_META[i.type] || TYPE_META.note;
+    const p = proj(i.projectId);
+    const hit = visSet.has(i.id), dim = query && !hit, glow = query && hit;
+    const linking = connectFrom === i.id;
+    const img = itemImg(i);
+    const border = linking ? "#17242F" : glow ? "#B9C700" : m.color;
+    const shadow = glow ? "0 0 0 4px #E4F22288, 0 2px 8px rgba(23,36,47,.12)" : "0 2px 8px rgba(23,36,47,.10)";
+    return `<div class="node" data-id="${i.id}" style="left:${i.x}px;top:${i.y}px;transform:translate(-50%,-50%);border:2px solid ${border};box-shadow:${shadow};opacity:${dim ? .35 : 1}">
+      <div class="nhead" style="color:${m.color}">
+        <span>${m.icon} ${m.label.toUpperCase()}</span>
+        <button class="connect${linking ? " on" : ""}" title="Connect this idea">⟡</button>
+      </div>
+      ${img ? `<img src="${esc(img)}" alt="" draggable="false">` : ""}
+      <h3>${markHtml(itemName(i), query)}</h3>
+      ${p ? `<div class="np" style="color:${p.color}">● ${esc(p.name)}</div>` : ""}
+    </div>`;
+  }).join("");
+  applyPan();
+  drawEdges();
+}
+function drawEdges() {
+  const svg = document.getElementById("edges");
+  if (!svg) return;
+  const visSet = new Set(visibleItems().map(i => i.id));
+  const placed = state.items.filter(i => i.x != null && i.y != null);
+  svg.innerHTML = getEdges(placed).map(({ a, b, kind }) => {
+    const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+    const dx = b.x-a.x, dy = b.y-a.y, len = Math.hypot(dx,dy) || 1;
+    const cx = mx - (dy/len) * Math.min(60, len*.18);
+    const cy = my + (dx/len) * Math.min(60, len*.18);
+    const dim = query && !(visSet.has(a.id) && visSet.has(b.id));
+    const wiki = kind === "wiki";
+    return `<path d="M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}" fill="none"
+      stroke="${dim ? "#DCE3E8" : wiki ? "#8FB3E8" : "#9FB0BC"}" stroke-width="2"
+      ${wiki ? "" : 'stroke-dasharray="1 7"'} stroke-linecap="round" opacity="${wiki && !dim ? .85 : 1}"/>`;
+  }).join("");
+}
+
+/* ————— capture bar ————— */
+let capType = null, capProject = "";
+function renderCaptureRow() {
+  const row = document.getElementById("cap-types");
+  const text = document.getElementById("cap-text").value;
+  const eff = capType || detectType(text);
+  row.innerHTML = Object.entries(TYPE_META).map(([id, m]) => {
+    const on = eff === id;
+    return `<button class="chip${on ? " on" : ""}" data-cap-type="${id}"
+      style="${on ? `border-color:${m.color};background:${m.color}22` : ""}">
+      <span style="color:${m.color}">${m.icon}</span> ${m.label}${on && !capType ? " · auto" : ""}</button>`;
+  }).join("")
+  + `<span class="spacer"></span>
+     <span id="cap-proj-slot">${capProjectSelect()}</span>
+     <button class="btn-mini" id="cap-img-btn">▣ Add image</button>
+     <input type="file" id="cap-file" accept="image/*" hidden>
+     <button class="btn-add" id="cap-add">Add it</button>`;
+}
+function capProjectSelect() {
+  return `<select class="mini" id="cap-proj">
+    <option value="">No project</option>
+    ${state.projects.map(p => `<option value="${p.id}"${p.id === capProject ? " selected" : ""}>${esc(p.name)}</option>`).join("")}
+    <option value="__new">＋ New project…</option>
+  </select>`;
+}
+function newProjectInline(onCreate, onCancel) {
+  const span = document.createElement("span");
+  span.className = "newproj";
+  span.innerHTML = `<input type="text" placeholder="Project name"><button class="ok">✓</button><button class="no">✕</button>`;
+  const inp = span.querySelector("input");
+  span.querySelector(".ok").addEventListener("click", () => inp.value.trim() && onCreate(inp.value.trim()));
+  span.querySelector(".no").addEventListener("click", onCancel);
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && inp.value.trim()) onCreate(inp.value.trim());
+    if (e.key === "Escape") onCancel();
+  });
+  setTimeout(() => inp.focus(), 0);
+  return span;
+}
+function capSubmit(extra = {}) {
+  const ta = document.getElementById("cap-text");
+  const t = ta.value.trim();
+  if (!t && !extra.imageData) return;
+  const first = t.split("\n")[0].slice(0, 90);
+  addItem(Object.assign({
+    type: extra.imageData ? "image" : (capType || detectType(t)),
+    title: isUrl(first) ? "" : first,
+    content: isUrl(t) ? "" : t,
+    url: isUrl(first) ? first : "",
+    projectId: capProject || null,
+  }, extra));
+  ta.value = ""; capType = null;
+  renderCaptureRow();
+}
+function capMsg(m) {
+  const el = document.getElementById("cap-msg");
+  el.hidden = !m; el.textContent = m || "";
+}
+
+/* ————— modal ————— */
+function openModal(id) { openId = id; renderModal(); }
+function closeModal() { openId = null; document.getElementById("modal-root").innerHTML = ""; renderMain(); }
+function renderModal() {
+  const i = byId(openId);
+  const root = document.getElementById("modal-root");
+  if (!i) { root.innerHTML = ""; return; }
+  const m = TYPE_META[i.type] || TYPE_META.note;
+  const img = itemImg(i);
+  const tags = extractTags(i);
+  const manual = state.items.filter(x => (i.links||[]).includes(x.id) || (x.links||[]).includes(i.id));
+  const myTitle = (i.title||"").trim().toLowerCase();
+  const outgoing = wikiRefs(i).map(t => state.items.find(x => (x.title||"").trim().toLowerCase() === t)).filter(Boolean);
+  const backlinks = state.items.filter(x => x.id !== i.id && myTitle && wikiRefs(x).includes(myTitle));
+  const connectable = state.items.filter(x => x.id !== i.id && !manual.some(c => c.id === x.id));
+
+  root.innerHTML = `<div class="overlay" id="overlay">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="mrow">
+        <span style="color:${m.color};font-weight:800;font-size:13px">${m.icon} ${m.label}</span>
+        <select class="mini" id="md-type">${Object.entries(TYPE_META).map(([id,t]) =>
+          `<option value="${id}"${i.type === id ? " selected" : ""}>${t.label}</option>`).join("")}</select>
+        <button class="btn-mini" id="md-pin" style="${i.pinned ? "background:var(--hi);font-weight:700;color:var(--ink)" : ""}">📌 ${i.pinned ? "Pinned" : "Pin"}</button>
+        <span class="spacer"></span>
+        <span class="hint">${new Date(i.createdAt).toLocaleDateString()}</span>
+        <button class="btn-mini" id="md-close" aria-label="Close">✕</button>
+      </div>
+      ${img ? `<img src="${esc(img)}" alt="" style="border-radius:12px;margin-bottom:12px;max-height:260px;object-fit:contain;background:var(--paper);width:100%">` : ""}
+      <label class="lab" for="md-title">TITLE</label>
+      <input class="field" id="md-title" value="${esc(i.title)}" placeholder="Give it a name — other ideas can [[link]] to it by this title">
+      <label class="lab" for="md-url">LINK / URL</label>
+      <div style="display:flex;gap:8px">
+        <input class="field" id="md-url" style="flex:1;color:#3D7BE8" value="${esc(i.url)}" placeholder="https://…">
+        ${i.url ? `<a class="openlink" href="${esc(i.url)}" target="_blank" rel="noreferrer">Open ↗</a>` : ""}
+      </div>
+      <label class="lab" for="md-content">CONTENT — supports #tags and [[Idea title]] links</label>
+      <textarea class="field" id="md-content" rows="5" placeholder="Notes, pasted email, the thought itself…">${esc(i.content)}</textarea>
+      ${tags.length ? `<div class="chips">${tags.map(t =>
+        `<button data-act="tag" data-tag="${esc(t)}" style="background:#F0F3D0;color:#5C6B00;font-weight:700;border-radius:999px;padding:3px 9px;font-size:12px">${esc(t)}</button>`).join("")}</div>` : ""}
+      <div class="grid2" style="margin-bottom:12px">
+        <div>
+          <span class="lab">PROJECT</span>
+          <span id="md-proj-slot"><select class="field" id="md-proj" style="margin:0">
+            <option value="">No project</option>
+            ${state.projects.map(p => `<option value="${p.id}"${i.projectId === p.id ? " selected" : ""}>${esc(p.name)}</option>`).join("")}
+            <option value="__new">＋ New project…</option>
+          </select></span>
+        </div>
+        <div>
+          <span class="lab">STATUS</span>
+          <select class="field" id="md-status" style="margin:0">
+            ${STATUSES.map(s => `<option value="${s.id}"${(i.status||"inbox") === s.id ? " selected" : ""}>${s.label}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <span class="lab">CONNECTED IDEAS</span>
+      <div class="chips">
+        ${manual.map(c => `<span class="cchip"><button data-act="open" data-id="${c.id}" style="font-weight:600">${esc(itemName(c))}</button><button class="x" data-act="unlink" data-id="${c.id}" aria-label="Unlink">✕</button></span>`).join("")}
+        ${outgoing.map(c => `<button class="wchip" data-act="open" data-id="${c.id}">[[${esc(c.title)}]]</button>`).join("")}
+        ${manual.length + outgoing.length ? "" : `<span class="hint">No threads yet — type [[Another idea's title]] in the content, or pick one below.</span>`}
+      </div>
+      ${connectable.length ? `<select class="field" id="md-connect" style="border-style:dashed;color:var(--muted)">
+        <option value="">⟡ Connect to another idea…</option>
+        ${connectable.map(c => `<option value="${c.id}">${esc(itemName(c))}</option>`).join("")}
+      </select>` : ""}
+      ${backlinks.length ? `<span class="lab">LINKED MENTIONS — ideas that reference this one</span>
+        <div class="chips">${backlinks.map(c => `<button class="bchip" data-act="open" data-id="${c.id}">← ${esc(itemName(c))}</button>`).join("")}</div>` : ""}
+      <div class="mfoot">
+        <button class="danger" id="md-del" data-armed="0">Delete</button>
+        <button class="btn-done" id="md-done">Done</button>
+      </div>
+    </div>
+  </div>`;
+
+  const $m = (s) => root.querySelector(s);
+  $m("#overlay").addEventListener("click", (e) => { if (e.target.id === "overlay") closeModal(); });
+  $m("#md-close").addEventListener("click", closeModal);
+  $m("#md-done").addEventListener("click", closeModal);
+  $m("#md-type").addEventListener("change", (e) => patchItem(i.id, { type: e.target.value }, false));
+  $m("#md-pin").addEventListener("click", () => { patchItem(i.id, { pinned: !i.pinned }, false); renderModal(); });
+  $m("#md-title").addEventListener("input", (e) => patchItem(i.id, { title: e.target.value }, false));
+  $m("#md-url").addEventListener("input", (e) => patchItem(i.id, { url: e.target.value }, false));
+  $m("#md-content").addEventListener("input", (e) => patchItem(i.id, { content: e.target.value }, false));
+  $m("#md-status").addEventListener("change", (e) => patchItem(i.id, { status: e.target.value }, false));
+  $m("#md-proj").addEventListener("change", (e) => {
+    if (e.target.value === "__new") {
+      const slot = $m("#md-proj-slot");
+      slot.innerHTML = "";
+      slot.appendChild(newProjectInline(
+        (name) => { patchItem(i.id, { projectId: addProject(name) }, false); renderModal(); },
+        () => renderModal()
+      ));
+    } else patchItem(i.id, { projectId: e.target.value || null }, false);
+  });
+  const conn = $m("#md-connect");
+  if (conn) conn.addEventListener("change", (e) => { if (e.target.value) { toggleLink(i.id, e.target.value); renderModal(); } });
+  $m("#md-del").addEventListener("click", (e) => {
+    const b = e.currentTarget;
+    if (b.dataset.armed === "1") { closeModal(); deleteItem(i.id); }
+    else {
+      b.dataset.armed = "1"; b.classList.add("armed"); b.textContent = "Tap again to delete";
+      setTimeout(() => { if (b.isConnected) { b.dataset.armed = "0"; b.classList.remove("armed"); b.textContent = "Delete"; } }, 3000);
+    }
+  });
+}
+
+/* ————— export / import ————— */
+function exportJson() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "everything-board-backup.json"; a.click();
+  URL.revokeObjectURL(url);
+}
+function importJson(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!d || !Array.isArray(d.items) || !Array.isArray(d.projects)) throw new Error("bad shape");
+      state = normalize(d); persist(); renderCaptureRow(); renderMain();
+    } catch (e) { capMsg("That file doesn't look like an Everything Board backup."); }
+  };
+  r.readAsText(file);
+}
+
+/* ————— global events ————— */
+document.addEventListener("click", (e) => {
+  const act = e.target.closest("[data-act]");
+  if (!act) return;
+  const a = act.dataset.act;
+  if (a === "noop") { e.stopPropagation(); return; }
+  if (a === "tag") { e.stopPropagation(); goTag(act.dataset.tag); return; }
+  if (a === "view") { setView(act.dataset.view); return; }
+  if (a === "open") { e.stopPropagation(); openModal(act.dataset.id); return; }
+  if (a === "pin") { e.stopPropagation(); const it = byId(act.dataset.id); patchItem(it.id, { pinned: !it.pinned }); return; }
+  if (a === "unlink") { e.stopPropagation(); toggleLink(openId, act.dataset.id); renderModal(); return; }
+  if (a === "zoom") { mapZoom = Math.min(1.6, Math.max(0.4, +(mapZoom + 0.15 * (+act.dataset.d)).toFixed(2))); applyPan(); return; }
+  if (a === "center") { mapPan = { x: -W/2 + 200, y: -H/2 + 200 }; mapZoom = 1; applyPan(); return; }
+  if (a === "np-open") {
+    const slot = document.getElementById("np-slot");
+    slot.innerHTML = "";
+    slot.appendChild(newProjectInline((name) => { addProject(name); renderMain(); }, () => renderMain()));
+    return;
+  }
+  if (a === "del-proj") {
+    const b = act;
+    if (b.dataset.armed === "1") {
+      const pid = b.dataset.id;
+      state.projects = state.projects.filter(p => p.id !== pid);
+      state.items.forEach(i => { if (i.projectId === pid) { i.projectId = null; i.updatedAt = Date.now(); } });
+      state.tombstones["p:" + pid] = Date.now();
+      persist(); renderMain();
+    } else {
+      b.dataset.armed = "1"; b.textContent = "Remove project? (items stay)";
+      b.style.cssText = "background:#C0392B;color:#fff;font-weight:700;padding:2px 8px;border-radius:6px";
+      setTimeout(() => { if (b.isConnected) renderMain(); }, 3000);
+    }
+    return;
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches(".card,.frow")) { openModal(e.target.dataset.id); }
+  if (e.key === "Escape" && openId) closeModal();
+});
+
+/* board drag & drop */
+document.addEventListener("dragstart", (e) => {
+  const card = e.target.closest(".card[draggable]");
+  if (card) e.dataTransfer.setData("text/plain", card.dataset.id);
+});
+document.addEventListener("dragover", (e) => {
+  const col = e.target.closest(".colu");
+  if (col) { e.preventDefault(); col.classList.add("over"); }
+});
+document.addEventListener("dragleave", (e) => {
+  const col = e.target.closest(".colu");
+  if (col) col.classList.remove("over");
+});
+document.addEventListener("drop", (e) => {
+  const col = e.target.closest(".colu");
+  if (!col) return;
+  e.preventDefault(); col.classList.remove("over");
+  const id = e.dataTransfer.getData("text/plain");
+  if (id) patchItem(id, { status: col.dataset.status });
+});
+
+/* capture bar wiring */
+document.getElementById("cap-text").addEventListener("input", () => { if (!capType) renderCaptureRow(); });
+document.getElementById("cap-text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) capSubmit();
+});
+document.getElementById("cap-types").addEventListener("click", (e) => {
+  const tbtn = e.target.closest("[data-cap-type]");
+  if (tbtn) { const t = tbtn.dataset.capType; capType = capType === t ? null : t; renderCaptureRow(); return; }
+  if (e.target.closest("#cap-img-btn")) { document.getElementById("cap-file").click(); return; }
+  if (e.target.closest("#cap-add")) { capSubmit(); return; }
+});
+document.getElementById("cap-types").addEventListener("change", (e) => {
+  if (e.target.id === "cap-proj") {
+    if (e.target.value === "__new") {
+      const slot = document.getElementById("cap-proj-slot");
+      slot.innerHTML = "";
+      slot.appendChild(newProjectInline(
+        (name) => { capProject = addProject(name); renderCaptureRow(); },
+        () => renderCaptureRow()
+      ));
+    } else capProject = e.target.value;
+  }
+  if (e.target.id === "cap-file") {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { capMsg("That image is over 2 MB — resize it or paste an image URL instead."); e.target.value = ""; return; }
+    capMsg("");
+    const r = new FileReader();
+    r.onload = () => capSubmit({ imageData: r.result, title: document.getElementById("cap-text").value.trim().split("\n")[0] || f.name });
+    r.readAsDataURL(f);
+    e.target.value = "";
+  }
+});
+
+/* header wiring */
+document.getElementById("search").addEventListener("input", (e) => { query = e.target.value; renderMain(); });
+document.getElementById("hits").addEventListener("click", () => {
+  query = ""; document.getElementById("search").value = ""; renderMain();
+});
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-view]");
+  if (b) setView(b.dataset.view);
+});
+const menuBtn = document.getElementById("menu-btn"), menu = document.getElementById("menu");
+menuBtn.addEventListener("click", (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+document.addEventListener("click", (e) => { if (!e.target.closest(".menu-wrap")) menu.hidden = true; });
+document.getElementById("m-export").addEventListener("click", () => { exportJson(); menu.hidden = true; });
+document.getElementById("m-import").addEventListener("click", () => { document.getElementById("import-file").click(); menu.hidden = true; });
+document.getElementById("import-file").addEventListener("change", (e) => {
+  if (e.target.files && e.target.files[0]) importJson(e.target.files[0]);
+  e.target.value = "";
+});
+document.getElementById("m-erase").addEventListener("click", (e) => {
+  const b = e.currentTarget;
+  if (b.dataset.armed === "1") {
+    state = { items: [], projects: [] }; persist(); renderCaptureRow(); renderMain(); menu.hidden = true;
+    b.dataset.armed = "0"; b.textContent = "Erase all data";
+  } else {
+    b.dataset.armed = "1"; b.textContent = "Tap again to erase everything";
+    setTimeout(() => { b.dataset.armed = "0"; b.textContent = "Erase all data"; }, 3000);
+  }
+});
+
+/* ————— boot ————— */
+renderCaptureRow();
+setView("home");
+
+/* ————————————————————————————————————————————
+   Sync · rides the Shipshape workspace
+   ————————————————————————————————————————————
+   The board syncs through the same Supabase project, anon key and workspace the
+   main app is already set up with — read straight from Shipshape's saved config,
+   since both pages live on one origin. Nothing new to configure, no sign-in, no
+   extra SQL: the whole board travels as one document in shipshape_state under
+   the key `<workspace>:board`, beside (never touching) Shipshape's own row, and
+   merges last-write-wins per item using the timestamps every mutation here
+   already stamps.
+
+   The rules from the main app's hard lessons apply unchanged: the poll stays at
+   15 seconds, a failed push always retries, and coming back — to the network,
+   the tab or the app — catches up in both directions. */
+/* merge two states: per-item/project newest-updatedAt wins; tombstones beat older records */
+function mergeStates(a, b) {
+  const ts = (x) => x.updatedAt || x.createdAt || 0;
+  const tombs = {};
+  for (const [k, v] of Object.entries({ ...(a.tombstones||{}), ...(b.tombstones||{}) }))
+    tombs[k] = Math.max((a.tombstones||{})[k] || 0, (b.tombstones||{})[k] || 0);
+  const pick = (list) => {
+    const m = new Map();
+    list.forEach(x => {
+      if (!x || !x.id) return;
+      const prev = m.get(x.id);
+      if (!prev || ts(x) > ts(prev)) m.set(x.id, x);
+    });
+    return m;
+  };
+  const items = [...pick([...(a.items||[]), ...(b.items||[])]).values()]
+    .filter(i => !(tombs[i.id] && tombs[i.id] >= ts(i)))
+    .sort((x, y) => (y.createdAt||0) - (x.createdAt||0));
+  const projects = [...pick([...(a.projects||[]), ...(b.projects||[])]).values()]
+    .filter(p => !(tombs["p:" + p.id] && tombs["p:" + p.id] >= ts(p)));
+  return { items, projects, tombstones: tombs };
+}
+const SS_KEY = "shipshape:sync";
+const ss = { status:"off", lastPushed:"", pushT:null, retryT:null, fails:0, pulling:false };
+function ssCfg() {
+  try {
+    const raw = localStorage.getItem(SS_KEY);
+    if (raw) { const c = JSON.parse(raw); if (c && c.on && c.url && c.key && c.ws) return c; }
+  } catch (e) {}
+  return null;
+}
+const boardKey = (c) => c.ws + ":board";
+async function ssRpc(c, fn, body) {
+  const r = await fetch(c.url.replace(/\/+$/,"") + "/rest/v1/rpc/" + fn, {
+    method: "POST",
+    headers: { "Content-Type":"application/json", apikey:c.key, Authorization:"Bearer "+c.key },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+function setSyncStatus(st, detail) {
+  ss.status = st; ss.detail = detail || "";
+  const btn = document.getElementById("sync-btn");
+  if (btn) {
+    btn.querySelector(".dot").style.background =
+      { off:"#B8C4CD", syncing:"#3D7BE8", synced:"#4B8A3C", offline:"#E8A33D", error:"#C0392B" }[st] || "#B8C4CD";
+    btn.title = { off:"Sync is off — set it up in Shipshape", syncing:"Syncing…", synced:"Synced through your Shipshape workspace",
+      offline:"Offline — the board is saved here and goes out when the network is back",
+      error:"Cannot reach Supabase" }[st] || "Sync";
+  }
+  const panel = document.getElementById("sync-root");
+  if (panel && panel.innerHTML) renderSyncPanel();
+}
+async function pullBoard(quiet) {
+  const cfg = ssCfg();
+  if (!cfg) { setSyncStatus("off"); return; }
+  if (ss.pulling) return;
+  ss.pulling = true; setSyncStatus("syncing");
+  try {
+    const remote = await ssRpc(cfg, "shipshape_pull", { k: boardKey(cfg) });
+    const merged = normalize(mergeStates(state, normalize(remote || {})));
+    const mergedStr = JSON.stringify(merged);
+    if (mergedStr !== JSON.stringify(state)) {
+      state = merged;
+      try { if (!memoryOnly) localStorage.setItem(KEY, mergedStr); } catch (e) {}
+      renderCaptureRow(); renderMain();
+      if (openId && byId(openId)) renderModal(); else if (openId) closeModal();
+    }
+    if (!remote || mergedStr !== JSON.stringify(normalize(remote))) await pushBoard(true);
+    else { ss.lastPushed = mergedStr; setSyncStatus("synced"); }
+  } catch (e) {
+    setSyncStatus(navigator.onLine ? "error" : "offline", String(e.message || e));
+  } finally { ss.pulling = false; }
+}
+async function pushBoard(force) {
+  const cfg = ssCfg();
+  if (!cfg) { setSyncStatus("off"); return; }
+  const snap = JSON.stringify(state);
+  if (!force && snap === ss.lastPushed) { setSyncStatus("synced"); return; }
+  setSyncStatus("syncing");
+  try {
+    await ssRpc(cfg, "shipshape_push", { k: boardKey(cfg), d: state });
+    ss.lastPushed = snap; ss.fails = 0; clearTimeout(ss.retryT);
+    setSyncStatus("synced");
+  } catch (e) {
+    /* a push is never dropped: back off and try again until it lands */
+    setSyncStatus(navigator.onLine ? "error" : "offline", String(e.message || e));
+    clearTimeout(ss.retryT);
+    const wait = Math.min(60000, 1500 * Math.pow(2, Math.min(ss.fails++, 5)));
+    ss.retryT = setTimeout(() => pushBoard(), wait);
+  }
+}
+function schedulePush() {
+  if (!ssCfg()) return;
+  clearTimeout(ss.pushT);
+  ss.pushT = setTimeout(() => pushBoard(), 900);
+}
+const boardPending = () => !!ssCfg() && JSON.stringify(state) !== ss.lastPushed;
+function ssResume() {
+  if (!ssCfg()) { setSyncStatus("off"); return; }
+  pullBoard(true);
+  if (boardPending()) schedulePush();
+}
+window.addEventListener("focus", ssResume);
+window.addEventListener("online", ssResume);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) ssResume(); });
+/* fifteen seconds, same as the main app — see its working notes for why this
+   never slows down on any "live" signal */
+setInterval(() => { if (ssCfg() && !document.hidden) pullBoard(true); }, 15000);
+
+/* ————— sync panel ————— */
+function openSyncPanel() { renderSyncPanel(); }
+function closeSyncPanel() { document.getElementById("sync-root").innerHTML = ""; }
+function renderSyncPanel() {
+  const root = document.getElementById("sync-root");
+  const cfg = ssCfg();
+  const nice = { syncing:"Syncing…", synced:"Synced ✓",
+    offline:"Offline — the board is saved on this device and goes out when the network is back.",
+    error:"Cannot reach Supabase." + (ss.detail ? " (" + ss.detail + ")" : "") }[ss.status] || "";
+  const body = cfg
+    ? `<p style="font-size:13px;margin-bottom:4px">Synced through your <b>Shipshape workspace</b> — same project, same key, nothing extra to set up.</p>
+       <p style="font-size:13px;color:${ss.status === "error" ? "#C0392B" : "var(--muted)"};margin-bottom:12px">${esc(nice)}</p>
+       <div style="display:flex;gap:8px;flex-wrap:wrap">
+         <button class="btn-done" id="sy-now">Sync now</button>
+         <a class="btn-mini" href="index.html#sync" style="text-decoration:none;display:inline-flex;align-items:center">Sync settings…</a>
+       </div>
+       <p class="hint" style="margin-top:10px">The board travels as its own document beside your tasks — turning either off never touches the other's data.</p>`
+    : `<p style="font-size:13px;color:var(--muted);margin-bottom:12px">The board follows Shipshape's sync. Turn sync on there — cloud button, top right — and the board rides the same workspace with nothing else to configure.</p>
+       <a class="btn-done" href="index.html#sync" style="text-decoration:none;display:inline-block">Open Shipshape sync setup</a>`;
+  root.innerHTML = `<div class="overlay" id="sy-overlay">
+    <div class="modal" role="dialog" aria-modal="true" style="max-width:460px">
+      <div class="mrow"><span style="font-weight:800">☁ Sync</span><span class="spacer"></span>
+        <button class="btn-mini" id="sy-close" aria-label="Close">✕</button></div>
+      ${body}
+    </div></div>`;
+  root.querySelector("#sy-overlay").addEventListener("click", (e) => { if (e.target.id === "sy-overlay") closeSyncPanel(); });
+  root.querySelector("#sy-close").addEventListener("click", closeSyncPanel);
+  const now = root.querySelector("#sy-now");
+  if (now) now.addEventListener("click", () => pullBoard());
+}
+document.getElementById("sync-btn").addEventListener("click", openSyncPanel);
+pullBoard(true);
+
+/* Offline support comes from the same service worker as the rest of Shipshape;
+   registered here too so landing on the board first still installs it. */
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+</script>
+</body>
+</html>

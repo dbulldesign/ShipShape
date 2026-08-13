@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.21.0">
+<meta name="app-version" content="1.22.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -470,6 +470,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="reset" style="color:var(--red)">Delete everything</button>
             <hr>
             <button data-m="scan">Scan a shipping label</button>
+            <button data-m="board">Everything Board…</button>
             <hr>
             <button data-m="keys">Keyboard shortcuts</button>
             <button data-m="update" id="updBtn">Check for updates</button>
@@ -1664,6 +1665,7 @@ function renderNav(){
   h+=navItem(I.list,'var(--gray)','All open',openT().length,view.t==='all','data-v="all"');
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
   if(S.tasks.some(t=>t.arch))h+=navItem(I.box,'var(--label3)','Archived','',view.t==='archive','data-v="archive"');
+  h+=navItem(I.list,'var(--yellow)','Everything Board','',false,'data-href="board.html"');
   h+='<div class="navsec">Projects<button data-m="newproj">+ New</button></div>';
   if(!S.projects.length)h+='<div style="padding:2px 12px 4px;font-size:13.5px;color:var(--label3)">No projects yet</div>';
   for(const p of S.projects){
@@ -3140,6 +3142,7 @@ function doMenu(k){
     toast(`Archived ${hit.length}`,()=>{hit.forEach(t=>{t.arch=null;t.u=now();});save();render();});
   }
   if(k==='archive')setView('archive');
+  if(k==='board')location.href='board.html';
   if(k==='digest'){digestOff=!digestOff;saveView();render();toast('Last seven days '+(digestOff?'hidden':'shown'));}
   if(k==='nodigest')doMenu('digest');
   if(k==='reset'&&confirm('Delete every project and task? This cannot be undone.')){
@@ -3159,7 +3162,8 @@ $('#fileIn').addEventListener('change',async e=>{
   e.target.value='';
 });
 function setView(t,v){view={t,v};selDay=null;$('#q').value='';query='';render();$('#scroll').scrollTop=0;riseList();}
-$('#navlists').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b)setView(b.dataset.v,b.dataset.val);});
+$('#navlists').addEventListener('click',e=>{const a=e.target.closest('[data-href]');if(a)return location.href=a.dataset.href;
+  const b=e.target.closest('[data-v]');if(b)setView(b.dataset.v,b.dataset.val);});
 /* ============ drag a row onto a project ============
    The sidebar was for navigating and nothing else. Dragging is the obvious way
    to file something, and it is only offered where it means something: projects,
@@ -3457,6 +3461,7 @@ function paletteRows(q){
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
   for(const m of uniq('manufacturer'))push(m,'Maker',I.box,colorFor(m),()=>setView('mfr',m));
   for(const d of uniq('destination'))push(d,'Ship to',I.truck,colorFor(d),()=>setView('dest',d));
+  push('Everything Board','Page',I.list,'var(--yellow)',()=>location.href='board.html');
   for(const [l,k] of [['New task','new'],['New project','newproj'],['Scan a shipping label','scan'],
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['Save a backup file','export'],['Load from a backup file','import'],
@@ -3556,6 +3561,8 @@ function loadSample(){
 (async()=>{
   await loadAll();
   render();
+  // board.html sends people here to set sync up; open the sheet they came for
+  if(location.hash==='#sync'){openSync();history.replaceState(null,'',location.pathname+location.search);}
   setSync(sync.on?'idle':'off');
   if(sync.on){rtConnect();startPolling();pull(true);}
   renderVersion();

@@ -67,6 +67,18 @@ edit — which on a phone is most of the time. `pending()` answers "is there
 anything unsent" in either scheme, and `resume()` catches up both directions on
 regaining the network, the tab or the app.
 
+## The board
+
+`board.html` is the Everything Board — a capture-anything companion page (notes,
+links, images, #tags, [[wiki links]], kanban, mind map). It is deliberately its
+own file with its own look; the integration points are exactly three: it reads
+`shipshape:sync` from localStorage (never writes it), it syncs as one document in
+`shipshape_state` under `<workspace>:board` — beside, never touching, Shipshape's
+own row — and it is in the service worker shell. Its sync follows the same rules
+as the main app: 15-second poll, retried pushes, resume() both ways. Version
+lives in index.html; bump `CACHE` for board changes too, since the shell caches
+it.
+
 ## Icons
 
 App icons — `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
