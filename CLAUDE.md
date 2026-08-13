@@ -42,6 +42,19 @@ then cancelled the strip's own scrolling. A gesture beginning inside a sideways
 scroller (`inHScroller`: the day strip, the suggestion row, a `pre` block) has to
 clear a higher bar before the pull claims it.
 
+## Effects
+
+Finishing something runs `celebrate()` — sparks, confetti or fireworks, all drawn
+from divs and the Web Animations API, no library and no download. Settings live in
+the Effects sheet (⋯ → Effects…), per device with the other look-and-feel prefs:
+style, when (everything / milestones / never), how much, and sound. A milestone is
+a project finished or a shipment delivered, and those celebrate even in milestones
+mode. `prefers-reduced-motion` skips the lot regardless.
+
+Measure the row, not the tick: a burst centred on the 23px checkbox throws
+everything up over the header. Two concurrent effects are the cap — a flurry of
+completions must not pile up hundreds of animating nodes.
+
 ## Sheets
 
 The detail sheet doubles as a docked column above 1200px, so it lives inside

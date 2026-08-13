@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.23.3">
+<meta name="app-version" content="1.24.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -317,6 +317,12 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #toast button{color:#4da3ff;font-weight:700;font-size:14.5px;flex:none}
 .spark{position:fixed;width:7px;height:7px;border-radius:2px;z-index:70;pointer-events:none}
+/* Confetti is paper: a long thin rectangle. Embers are round. Both are drawn
+   with divs so an effect costs nothing to download. */
+.conf{position:fixed;width:7px;height:11px;border-radius:1.5px;z-index:70;pointer-events:none}
+.ember{position:fixed;border-radius:50%;z-index:70;pointer-events:none}
+.flash{position:fixed;width:34px;height:34px;border-radius:50%;z-index:70;pointer-events:none;
+  background:radial-gradient(circle,#fff 0%,var(--yellow) 45%,transparent 70%)}
 .sailing{position:fixed;width:18px;height:18px;z-index:70;pointer-events:none;
   filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
 /* The reading above Today's list: what is in the air right now. */
@@ -404,6 +410,10 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 #palette .r.sel{background:var(--fill)}
 #palette .none{padding:14px;color:var(--label3);font-size:14px;text-align:center}
 #palette .foot{border-top:.5px solid var(--sep);padding:7px 14px;font-size:12px;color:var(--label3);display:flex;gap:12px}
+.fxg{padding:12px 14px 0}
+.fxg .lab2{font-size:13px;color:var(--label2);margin-bottom:6px;font-weight:500}
+.fxg .seg{width:100%;margin-bottom:0}
+.fxg .seg button{flex:1;text-align:center;padding:7px 4px}
 .keys{padding:4px 14px 16px}
 .keys .kr{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:.5px solid var(--sep);font-size:14.5px}
 .keys .kr:last-child{border-bottom:0}
@@ -469,7 +479,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="sort" id="sortBtn"></button>
             <button data-m="group" id="groupBtn"></button>
             <button data-m="density" id="densityBtn"></button>
-            <button data-m="sfx" id="sfxBtn"></button>
+            <button data-m="fx">Effects…</button>
             <button data-m="digest" id="digestBtn"></button>
             <hr>
             <button data-m="undo">Undo last change</button>
@@ -542,6 +552,17 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     autocapitalize="off" autocorrect="off" spellcheck="false">
   <div class="res" id="pres"></div>
   <div class="foot"><span>↑↓ move</span><span>↵ choose</span><span>esc close</span></div>
+</div>
+
+<div class="sheet" role="dialog" aria-modal="true" id="fxsheet"><div class="grab"></div>
+  <div class="sheettitle">Effects<button class="x" id="fxclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="blurb" id="fxnote">Something to mark finishing something.</div>
+  <div class="fxg"><div class="lab2">Style</div><div class="seg" id="fx-style"></div></div>
+  <div class="fxg"><div class="lab2">When</div><div class="seg" id="fx-when"></div></div>
+  <div class="fxg"><div class="lab2">How much</div><div class="seg" id="fx-amount"></div></div>
+  <div class="fxg"><div class="lab2">Sound</div><div class="seg" id="fx-sound"></div></div>
+  <div class="blurb" id="fxwhen-note" style="padding-top:10px"></div>
+  <div style="padding:14px"><button class="btn" id="fxtry" style="width:100%;margin:0;text-align:center">Try it</button></div>
 </div>
 
 <div class="sheet" role="dialog" aria-modal="true" id="keysheet"><div class="grab"></div>
@@ -902,6 +923,8 @@ let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
 let sortBy='smart',groupBy='auto',compact=false,sfx=false,digestOff=false;
+// how finishing something is marked; per device, like every other look-and-feel pref
+let fx={style:'confetti',when:'all',amount:'medium'};
 // draft holds what has been typed into the sync sheet but not turned on yet
 let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:'',pushUrl:'',draft:null};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
@@ -942,7 +965,12 @@ async function loadAll(){
   if(vr){try{const v=JSON.parse(vr);
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
     if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;
-    compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;}catch(e){}}
+    compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;
+    if(v.fx){
+      if(FX_STYLES.some(x=>x[0]===v.fx.style))fx.style=v.fx.style;
+      if(FX_WHEN.some(x=>x[0]===v.fx.when))fx.when=v.fx.when;
+      if(FX_AMOUNT.some(x=>x[0]===v.fx.amount))fx.amount=v.fx.amount;
+    }}catch(e){}}
   $('#app').classList.toggle('compact',compact);
 }
 function migrate(){
@@ -1025,7 +1053,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();}
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact,sfx,digestOff}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact,sfx,digestOff,fx}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -1655,7 +1683,6 @@ function renderData(){
   $('#sortBtn').textContent='Sort: '+SORT_LABEL[sortBy];
   $('#groupBtn').textContent='Group: '+GROUP_LABEL[groupBy];
   $('#densityBtn').textContent='Rows: '+(compact?'compact':'comfortable');
-  $('#sfxBtn').textContent='Sound: '+(sfx?'on':'off');
   $('#sampleBtn').style.display=(S.tasks.length||S.projects.length)?'none':'';
   $('#digestBtn').textContent='Last seven days: '+(digestOff?'hidden':'shown');
   $('#hsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
@@ -2170,8 +2197,12 @@ function toggleDone(id,el){
   if(t.done&&t.rep&&t.due)spawned=repeatAfter(t);
   buzz(t.done?[6,30,10]:6);
   if(t.done)ping(880);
-  if(t.done&&el){el.closest('.row').classList.add('done');
-    const s=t.projectId?stats(t.projectId):null;if(s&&s.all&&s.open===0)burst(el);}
+  if(t.done&&el){
+    el.closest('.row').classList.add('done');
+    const s=t.projectId?stats(t.projectId):null,whole=!!(s&&s.all&&s.open===0);
+    celebrate(el,{milestone:whole});
+    if(whole)toast('Project complete 🎉');
+  }
   save();
   setTimeout(()=>{
     const w=el&&el.closest('.rowwrap');
@@ -2229,7 +2260,7 @@ function bumpStage(id){
   if(t.stage===4){t.done=true;t.completed=now();}else if(prevDone){t.done=false;t.completed=null;}
   const bar=document.querySelector(`.rowwrap[data-id="${id}"] .stagebar`);
   if(t.stage===3&&prev<3)sail(bar);                 // it has left the maker
-  if(t.stage===4&&prev!==4){ping(660);if(bar)burst(bar);}
+  if(t.stage===4&&prev!==4){ping(660);celebrate(bar,{milestone:true});}
   buzz();save();render();
   slideStage(id,prev,t.stage);
   toast(`${STAGES[prev]} → ${STAGES[t.stage]}`,()=>{t.stage=prev;t.done=prevDone;t.u=now();save();render();});
@@ -2275,19 +2306,95 @@ function delTask(id){
   S.tomb[id]=now();save();render();
   toast('Deleted',()=>{delete S.tomb[id];t.u=now();S.tasks.splice(i,0,t);save();render();});
 }
-function burst(el){
-  if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;
-  const r=el.getBoundingClientRect();
-  for(let i=0;i<16;i++){
-    const s=document.createElement('div');s.className='spark';s.style.background=PAL[i%PAL.length];
-    s.style.left=r.left+r.width/2+'px';s.style.top=r.top+r.height/2+'px';document.body.appendChild(s);
-    const a=Math.random()*Math.PI*2,d=50+Math.random()*70;
-    s.animate([{transform:'translate(0,0) scale(1)',opacity:1},
-      {transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d+30}px) rotate(${Math.random()*360}deg) scale(.4)`,opacity:0}],
-      {duration:750+Math.random()*350,easing:'cubic-bezier(.2,.6,.3,1)'}).onfinish=()=>s.remove();
-  }
-  toast('Project complete 🎉');
+/* ============ finishing something ============
+   Ticking a task off used to be silent unless it happened to finish a whole
+   project. It is the one moment in the app worth marking, so it gets an effect —
+   and because forty of them in an afternoon would be exhausting, how much and how
+   often are yours to set (⋯ → Effects…). Every style is drawn from nothing but
+   divs and the Web Animations API: no library, no images, no download.
+
+   prefers-reduced-motion wins over all of it. */
+const FX_STYLES=[['sparks','Sparks'],['confetti','Confetti'],['fireworks','Fireworks']];
+const FX_WHEN=[['all','Everything'],['milestone','Milestones'],['never','Never']];
+const FX_AMOUNT=[['light','Light'],['medium','Medium'],['full','Full']];
+const FX_N={sparks:{light:10,medium:18,full:30},confetti:{light:14,medium:26,full:44},
+  fireworks:{light:12,medium:20,full:32}};
+let fxLive=0;                         // concurrent effects, so a flurry cannot pile up
+function fxParticle(cls,x,y,bg,extra){
+  const d=document.createElement('div');
+  d.className=cls;d.style.left=x+'px';d.style.top=y+'px';
+  if(bg)d.style.background=bg;
+  if(extra)d.style.cssText+=extra;
+  document.body.appendChild(d);
+  return d;
 }
+const fxGo=(el,frames,opts)=>{el.animate(frames,opts).onfinish=()=>el.remove();};
+/* sparks — the original: a quick scatter that settles down and out */
+function fxSparks(cx,cy,n){
+  for(let i=0;i<n;i++){
+    const s=fxParticle('spark',cx,cy,PAL[i%PAL.length]);
+    const a=Math.random()*Math.PI*2,d=50+Math.random()*70;
+    fxGo(s,[{transform:'translate(0,0) scale(1)',opacity:1},
+      {transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d+30}px) rotate(${Math.random()*360}deg) scale(.4)`,opacity:0}],
+      {duration:750+Math.random()*350,easing:'cubic-bezier(.2,.6,.3,1)'});
+  }
+}
+/* confetti — paper thrown upward in a fan, fluttering as it falls back past the row */
+function fxConfetti(cx,cy,n){
+  for(let i=0;i<n;i++){
+    const c=fxParticle('conf',cx,cy,PAL[i%PAL.length]);
+    const spread=(i/n-.5)*2,up=44+Math.random()*54;
+    const dx=spread*(58+Math.random()*74),drop=150+Math.random()*150;
+    const spin=(Math.random()<.5?-1:1)*(360+Math.random()*540);
+    const flip=Math.random()<.5?'scaleX(.35)':'scaleY(.35)';
+    fxGo(c,[
+      {transform:'translate(0,0) rotate(0deg)',opacity:1,offset:0},
+      {transform:`translate(${dx*.55}px,${-up}px) rotate(${spin*.35}deg) ${flip}`,opacity:1,offset:.34},
+      {transform:`translate(${dx}px,${drop}px) rotate(${spin}deg)`,opacity:0,offset:1}],
+      {duration:1150+Math.random()*550,easing:'cubic-bezier(.25,.5,.4,1)'});
+  }
+}
+/* fireworks — a flash, a ring of trailing embers, then a smaller second pop */
+function fxFireworks(cx,cy,n){
+  const flash=fxParticle('flash',cx,cy);
+  fxGo(flash,[{transform:'translate(-50%,-50%) scale(.2)',opacity:.9},
+    {transform:'translate(-50%,-50%) scale(2.6)',opacity:0}],{duration:420,easing:'ease-out'});
+  const shell=(ox,oy,count,dist,delay,size)=>{
+    for(let i=0;i<count;i++){
+      const a=(i/count)*Math.PI*2+Math.random()*.2;
+      const d=dist*(.75+Math.random()*.45);
+      const e=fxParticle('ember',cx+ox,cy+oy,PAL[(i+Math.round(ox))%PAL.length],
+        `width:${size}px;height:${size}px`);
+      fxGo(e,[
+        {transform:'translate(-50%,-50%) scale(1)',opacity:1,offset:0},
+        {transform:`translate(calc(-50% + ${Math.cos(a)*d}px),calc(-50% + ${Math.sin(a)*d}px)) scale(.9)`,opacity:1,offset:.55},
+        {transform:`translate(calc(-50% + ${Math.cos(a)*d*1.18}px),calc(-50% + ${Math.sin(a)*d*1.18+26}px)) scale(.25)`,opacity:0,offset:1}],
+        {duration:900+Math.random()*380,delay,easing:'cubic-bezier(.1,.75,.25,1)',fill:'backwards'});
+    }
+  };
+  shell(0,0,n,78,0,7);
+  shell(26,-22,Math.max(6,Math.round(n*.55)),48,260,5);
+}
+/* The one entry point. `milestone` marks the completions that count even when
+   effects are set to milestones only: a project finished, a shipment delivered. */
+function celebrate(el,{milestone=false,force=false}={}){
+  if(!el||reduced())return;
+  // measure the row where there is one: the tick is 23px at the far left, so a
+  // burst centred on it throws everything up and off the side of the screen
+  el=el.closest?.('.row,.rowwrap')||el;
+  if(!force){
+    if(fx.when==='never')return;
+    if(fx.when==='milestone'&&!milestone)return;
+  }
+  if(fxLive>1)return;                 // two overlapping is plenty; more just costs frames
+  fxLive++;setTimeout(()=>fxLive--,900);
+  const r=el.getBoundingClientRect();
+  const cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const n=(FX_N[fx.style]||FX_N.sparks)[fx.amount]||18;
+  (fx.style==='confetti'?fxConfetti:fx.style==='fireworks'?fxFireworks:fxSparks)(cx,cy,n);
+}
+// kept for the two call sites that always mean a milestone
+const burst=el=>celebrate(el,{milestone:true});
 
 /* ============ composer ============ */
 function setType(t){
@@ -3186,6 +3293,7 @@ function doMenu(k){
     S.tasks=[];S.projects=[];S.started=false;save();render();
   }
   if(k==='keys')openKeys();
+  if(k==='fx')openFx();
 }
 $('#fileIn').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
@@ -3527,7 +3635,7 @@ function paletteRows(q){
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['Save a backup file','export'],['Load from a backup file','import'],
     ['Undo last change','undo'],['Archive completed','clearDone'],
-    ['Rows: '+(compact?'comfortable':'compact'),'density'],['Sound: '+(sfx?'off':'on'),'sfx'],['Last seven days: '+(digestOff?'show':'hide'),'digest'],
+    ['Rows: '+(compact?'comfortable':'compact'),'density'],['Effects','fx'],['Sound: '+(sfx?'off':'on'),'sfx'],['Last seven days: '+(digestOff?'show':'hide'),'digest'],
     ['Check for updates','update'],['Archived','archive'],
     ['Load a sample setup','sample']])
     push(l,'Command',I.list,'var(--gray)',()=>k==='new'?openComposer():doMenu(k));
@@ -3576,6 +3684,40 @@ $('#pres').addEventListener('click',e=>{
 });
 document.addEventListener('click',e=>{
   if($('#palette').classList.contains('on')&&!e.target.closest('#palette'))closePalette();
+});
+
+/* ============ effects sheet ============ */
+function renderFx(){
+  const seg=(id,opts,cur)=>{$('#'+id).innerHTML=opts.map(([v,l])=>
+    `<button data-fx="${id}:${v}" class="${cur===v?'on':''}">${l}</button>`).join('');};
+  seg('fx-style',FX_STYLES,fx.style);
+  seg('fx-when',FX_WHEN,fx.when);
+  seg('fx-amount',FX_AMOUNT,fx.amount);
+  seg('fx-sound',[['on','On'],['off','Off']],sfx?'on':'off');
+  $('#fxwhen-note').textContent=fx.when==='milestone'
+    ? 'Milestones are a project finished and a shipment delivered — not every task.'
+    : fx.when==='never' ? 'Ticking things off stays quiet. Sound is separate.' : '';
+  $('#fxnote').textContent=reduced()
+    ? 'This device asks for reduced motion, so effects stay off however this is set.'
+    : 'Something to mark finishing something.';
+}
+function openFx(){renderFx();rememberFocus();$('#scrim').classList.add('on');$('#fxsheet').classList.add('on');}
+$('#fxclose').addEventListener('click',closeSheets);
+$('#fxsheet').addEventListener('click',e=>{
+  const b=e.target.closest('[data-fx]');if(!b)return;
+  const [id,v]=b.dataset.fx.split(':');
+  if(id==='fx-sound'){sfx=v==='on';if(sfx)ping(880);}
+  else if(id==='fx-style'){fx.style=v;}
+  else if(id==='fx-when'){fx.when=v;}
+  else if(id==='fx-amount'){fx.amount=v;}
+  saveView();renderFx();renderData();
+  // show what was just chosen, from the button that chose it
+  if(id!=='fx-sound'&&fx.when!=='never')celebrate(b,{force:true});
+});
+$('#fxtry').addEventListener('click',()=>{
+  celebrate($('#fxtry'),{force:true});
+  if(sfx)ping(880);
+  buzz([6,30,10]);
 });
 
 /* ============ keyboard help ============
