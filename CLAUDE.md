@@ -71,13 +71,26 @@ regaining the network, the tab or the app.
 
 `board.html` is the Everything Board — a capture-anything companion page (notes,
 links, images, #tags, [[wiki links]], kanban, mind map). It is deliberately its
-own file with its own look; the integration points are exactly three: it reads
+own file with its own look; the integration points are exactly four: it reads
 `shipshape:sync` from localStorage (never writes it), it syncs as one document in
 `shipshape_state` under `<workspace>:board` — beside, never touching, Shipshape's
-own row — and it is in the service worker shell. Its sync follows the same rules
-as the main app: 15-second poll, retried pushes, resume() both ways. Version
-lives in index.html; bump `CACHE` for board changes too, since the shell caches
-it.
+own row — it is in the service worker shell, and a card's `projectId` may be
+`ss:<shipshape project id>`, a *reference* to a Shipshape job resolved from
+`shipshape:v3` at render time. Jobs are never copied into board state — one
+owner for a job's name and colour — so board-native projects and job links
+coexist. Deep links: `board.html#p=<projectId>` and `index.html#project=<id>`.
+
+Its sync follows the same rules as the main app: 15-second poll, retried pushes,
+resume() both ways — plus one of its own: the board re-renders wholesale, so a
+quiet pull defers while a pointer is down, a drag is live, the modal is open or
+the capture bar holds text (`uiBusy()`), or it steals the gesture. Both pages
+flush their debounced localStorage write on pagehide — without that, an edit
+followed within ~300ms by a hop to the other page silently lost the write.
+
+The mind map handles node taps in `pointerup`, not `click`: pointerdown captures
+the pointer to the box, and with capture held Chrome retargets the click at the
+box, so a click listener never learns which node was tapped. Version lives in
+index.html; bump `CACHE` for board changes too, since the shell caches it.
 
 ## Icons
 

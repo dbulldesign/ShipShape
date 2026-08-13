@@ -315,6 +315,18 @@ function persist() {
     schedulePush();
   }, 350);
 }
+/* The debounce above means a capture followed within 350ms by a navigation — a
+   tap on "Open in Shipshape", a tab close — would silently lose the write. The
+   page going away flushes it synchronously. */
+function persistNow() {
+  clearTimeout(saveTimer);
+  try {
+    if (memoryOnly) memoryStore = JSON.stringify(state);
+    else localStorage.setItem(KEY, JSON.stringify(state));
+  } catch (e) {}
+}
+addEventListener("pagehide", persistNow);
+document.addEventListener("visibilitychange", () => { if (document.hidden) persistNow(); });
 function setSave(s) {
   const el = document.getElementById("savestate");
   el.className = "savestate" + (s === "err" ? " err" : "");
@@ -347,7 +359,44 @@ const extractTags = (i) => [...new Set(((i.title||"")+" "+(i.content||"")).match
 const wikiRefs = (i) => ((i.content||"").match(/\[\[([^\]]+)\]\]/g) || []).map(m => m.slice(2,-2).trim().toLowerCase());
 const itemName = (i) => i.title || i.url || (i.content||"").slice(0,40) || "Untitled";
 const byId = (id) => state.items.find(i => i.id === id);
-const proj = (id) => state.projects.find(p => p.id === id);
+/* ————— Shipshape projects, linkable —————
+   A card can belong to a real job from the main app: its projectId is stored as
+   "ss:<shipshape id>", and the job itself is read from Shipshape's saved data on
+   this device — never copied into the board, so there is exactly one owner of a
+   job's name and colour. On another device the reference resolves as soon as
+   Shipshape itself has synced there. Board-native projects ("kitchen reno
+   ideas") work exactly as before, side by side. */
+const SS_COLORS = { "var(--blue)":"#0A84FF","var(--purple)":"#BF5AF2","var(--pink)":"#FF375F",
+  "var(--orange)":"#FF9F0A","var(--teal)":"#64D2FF","var(--green)":"#30D158",
+  "var(--indigo)":"#5E5CE6","var(--yellow)":"#FFD60A","var(--red)":"#FF453A","var(--gray)":"#98989D" };
+let ssProjCache = { raw: null, list: [] };
+function ssProjects() {
+  let raw = null;
+  try { raw = localStorage.getItem("shipshape:v3"); } catch (e) {}
+  if (raw === ssProjCache.raw) return ssProjCache.list;
+  let list = [];
+  try {
+    const d = JSON.parse(raw || "{}");
+    list = (Array.isArray(d.projects) ? d.projects : []).map(p => ({
+      id: "ss:" + p.id, ssId: p.id, name: p.name || "Untitled job",
+      color: SS_COLORS[p.color] || (/^#/.test(p.color || "") ? p.color : "#98989D"), ss: true }));
+  } catch (e) {}
+  ssProjCache = { raw, list };
+  return list;
+}
+const proj = (id) => (typeof id === "string" && id.startsWith("ss:"))
+  ? ssProjects().find(p => p.id === id)
+  : state.projects.find(p => p.id === id);
+/* one option list everywhere a project is picked: jobs first, then board projects */
+function projectOptionsHtml(sel) {
+  const jobs = ssProjects();
+  return `<option value=""${!sel ? " selected" : ""}>No project</option>`
+    + (jobs.length ? `<optgroup label="Jobs — from Shipshape">${jobs.map(p =>
+        `<option value="${p.id}"${sel === p.id ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</optgroup>` : "")
+    + (state.projects.length ? `<optgroup label="Board projects">${state.projects.map(p =>
+        `<option value="${p.id}"${sel === p.id ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</optgroup>` : "")
+    + `<option value="__new">＋ New board project…</option>`;
+}
 const itemImg = (i) => i.imageData || (i.type === "image" && i.url ? i.url : null);
 
 function getEdges(items) {
@@ -510,7 +559,7 @@ function homeHtml() {
   return `<div class="dash">
     <div class="dash-top">
       <h1>${greet}.</h1>
-      <p>${all.length} idea${all.length===1?"":"s"} · ${edges.length} connection${edges.length===1?"":"s"} · ${state.projects.length} project${state.projects.length===1?"":"s"}${
+      <p>${all.length} idea${all.length===1?"":"s"} · ${edges.length} connection${edges.length===1?"":"s"} · ${state.projects.length + ssProjects().filter(p => all.some(i => i.projectId === p.id)).length} project${(state.projects.length + ssProjects().filter(p => all.some(i => i.projectId === p.id)).length)===1?"":"s"}${
         orphans ? ` · <button class="link-quiet" data-act="view" data-view="map">${orphans} floating free ⟶ connect them</button>` : ""}</p>
     </div>
     <div class="tiles">${Object.entries(TYPE_META).map(([t,m]) => {
@@ -531,7 +580,8 @@ function homeHtml() {
       </section>
       <section class="panel">
         <h2 class="sec">Projects</h2>
-        ${state.projects.length ? state.projects.map(p => {
+        ${(ssProjects().filter(p => all.some(i => i.projectId === p.id)).concat(state.projects)).length
+          ? ssProjects().filter(p => all.some(i => i.projectId === p.id)).concat(state.projects).map(p => {
             const list = all.filter(i => i.projectId === p.id);
             const done = list.filter(i => i.status === "done").length;
             const pct = list.length ? Math.round(done/list.length*100) : 0;
@@ -540,7 +590,7 @@ function homeHtml() {
               <span class="track" style="display:block"><span class="fill" style="display:block;width:${pct}%;background:${p.color}"></span></span>
             </button>`;
           }).join("")
-          : `<p class="hint">No projects yet — create one from the capture bar.</p>`}
+          : `<p class="hint">No projects yet — create one from the capture bar, or pick one of your Shipshape jobs there.</p>`}
       </section>
     </div>
     <section>
@@ -604,17 +654,22 @@ function boardHtml(list) {
 }
 
 function projectsHtml(list) {
-  const groups = state.projects.map(p => ({ p, list: list.filter(i => i.projectId === p.id) }));
+  /* jobs first (only the ones that actually hold cards — the pickers list them
+     all, so an empty job earns no section), then board projects, then the rest */
+  const groups = ssProjects().map(p => ({ p, list: list.filter(i => i.projectId === p.id) }))
+    .filter(g => g.list.length);
+  groups.push(...state.projects.map(p => ({ p, list: list.filter(i => i.projectId === p.id) })));
   groups.push({ p: null, list: list.filter(i => !i.projectId || !proj(i.projectId)) });
   return `<div style="display:flex;flex-direction:column;gap:20px">
     <div id="np-slot"><button class="btn-dash" data-act="np-open">＋ New project</button></div>
     ${groups.map(({ p, list: pl }) => `
-      <section class="psec">
+      <section class="psec" id="sec-${p ? p.id : "none"}">
         <div class="phead">
           <span class="sw" style="background:${p ? p.color : "#B8C4CD"}"></span>
           <h2>${p ? esc(p.name) : "Not in a project"}</h2>
           <span class="hint">${pl.length}</span>
-          ${p ? `<button class="hint" data-act="del-proj" data-id="${p.id}" data-armed="0" style="padding:2px 6px;border-radius:6px">✕</button>` : ""}
+          ${p && p.ss ? `<a class="hint" style="color:#3D7BE8;font-weight:700;text-decoration:none" href="index.html#project=${esc(p.ssId)}">Open in Shipshape →</a>` : ""}
+          ${p && !p.ss ? `<button class="hint" data-act="del-proj" data-id="${p.id}" data-armed="0" style="padding:2px 6px;border-radius:6px">✕</button>` : ""}
         </div>
         ${pl.length ? `<div class="grid">${pl.map(i => cardHtml(i)).join("")}</div>`
           : `<p class="hint">Nothing here yet — assign items from a card, or pick this project when capturing.</p>`}
@@ -684,27 +739,34 @@ function mountMap() {
       drawEdges();
     }
   });
+  /* Taps on nodes are decided here, in pointerup, not in a click listener: the
+     pointerdown captures the pointer to the box for dragging, and with capture
+     held Chrome retargets the eventual click at the box itself — so a click
+     handler never sees which node was tapped, and "tap a node to open it" and
+     "tap the second node to thread it" silently did nothing. The ⟡ button is
+     the one exception: its pointerdown returns before capture, so its click
+     arrives normally and is handled in the click listener below. */
+  const tapNode = (id) => {
+    if (connectFrom && connectFrom !== id) { const from = connectFrom; connectFrom = null; toggleLink(from, id); return; }
+    if (connectFrom === id) { connectFrom = null; renderMapContents(); return; }
+    openModal(id);
+  };
   box.addEventListener("pointerup", () => {
     if (drag && drag.mode === "node" && drag.moved) persist();
-    if (drag && drag.mode === "pan" && !drag.moved && connectFrom) { connectFrom = null; renderMapContents(); }
+    if (drag && !drag.moved) {
+      if (drag.mode === "node") tapNode(drag.id);
+      else if (connectFrom) { connectFrom = null; renderMapContents(); }
+    }
     justDragged = !!(drag && drag.moved);
     drag = null;
   });
   box.addEventListener("click", (e) => {
     if (justDragged) { justDragged = false; return; }
     const cbtn = e.target.closest(".connect");
-    if (cbtn) {
-      const id = cbtn.closest(".node").dataset.id;
-      connectFrom = connectFrom === id ? null : id;
-      renderMapContents();
-      return;
-    }
-    const nodeEl = e.target.closest(".node");
-    if (!nodeEl) return;
-    const id = nodeEl.dataset.id;
-    if (connectFrom && connectFrom !== id) { const from = connectFrom; connectFrom = null; toggleLink(from, id); return; }
-    if (connectFrom === id) { connectFrom = null; renderMapContents(); return; }
-    openModal(id);
+    if (!cbtn) return;         // node taps were already handled in pointerup
+    const id = cbtn.closest(".node").dataset.id;
+    connectFrom = connectFrom === id ? null : id;
+    renderMapContents();
   });
 }
 function applyPan() {
@@ -779,11 +841,7 @@ function renderCaptureRow() {
      <button class="btn-add" id="cap-add">Add it</button>`;
 }
 function capProjectSelect() {
-  return `<select class="mini" id="cap-proj">
-    <option value="">No project</option>
-    ${state.projects.map(p => `<option value="${p.id}"${p.id === capProject ? " selected" : ""}>${esc(p.name)}</option>`).join("")}
-    <option value="__new">＋ New project…</option>
-  </select>`;
+  return `<select class="mini" id="cap-proj">${projectOptionsHtml(capProject)}</select>`;
 }
 function newProjectInline(onCreate, onCancel) {
   const span = document.createElement("span");
@@ -861,11 +919,7 @@ function renderModal() {
       <div class="grid2" style="margin-bottom:12px">
         <div>
           <span class="lab">PROJECT</span>
-          <span id="md-proj-slot"><select class="field" id="md-proj" style="margin:0">
-            <option value="">No project</option>
-            ${state.projects.map(p => `<option value="${p.id}"${i.projectId === p.id ? " selected" : ""}>${esc(p.name)}</option>`).join("")}
-            <option value="__new">＋ New project…</option>
-          </select></span>
+          <span id="md-proj-slot"><select class="field" id="md-proj" style="margin:0">${projectOptionsHtml(i.projectId)}</select></span>
         </div>
         <div>
           <span class="lab">STATUS</span>
@@ -982,7 +1036,10 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.matches(".card,.frow")) { openModal(e.target.dataset.id); }
-  if (e.key === "Escape" && openId) closeModal();
+  if (e.key === "Escape") {
+    if (document.querySelector("#sy-overlay")) return closeSyncPanel();
+    if (openId) closeModal();
+  }
 });
 
 /* board drag & drop */
@@ -1071,7 +1128,17 @@ document.getElementById("m-erase").addEventListener("click", (e) => {
 
 /* ————— boot ————— */
 renderCaptureRow();
-setView("home");
+/* Shipshape links straight to a project's cards with #p=<id> */
+const hp = location.hash.match(/^#p=(.+)$/);
+if (hp) {
+  const pid = decodeURIComponent(hp[1]);
+  capProject = proj(pid) ? pid : "";
+  setView("projects");
+  renderCaptureRow();
+  history.replaceState(null, "", location.pathname + location.search);
+  const sec = document.getElementById("sec-" + (proj(pid) ? pid : "none"));
+  if (sec) sec.scrollIntoView({ block: "start" });
+} else setView("home");
 
 /* ————————————————————————————————————————————
    Sync · rides the Shipshape workspace
@@ -1142,9 +1209,32 @@ function setSyncStatus(st, detail) {
   const panel = document.getElementById("sync-root");
   if (panel && panel.innerHTML) renderSyncPanel();
 }
+/* A quiet pull re-renders whatever changed, and a re-render mid-gesture is a
+   stolen gesture: the caret jumps out of the modal field, the card being dragged
+   stops existing, the map node snaps back. Same reasoning as the main app's
+   "never rebuild a container that holds a row" — but this page re-renders
+   wholesale by design, so instead the pull waits until the hands are off. */
+let pointerDownAt = 0, dragLive = false;
+addEventListener("pointerdown", () => pointerDownAt = Date.now(), true);
+addEventListener("pointerup", () => pointerDownAt = 0, true);
+addEventListener("pointercancel", () => pointerDownAt = 0, true);
+addEventListener("blur", () => pointerDownAt = 0);
+addEventListener("dragstart", () => dragLive = true, true);
+addEventListener("dragend", () => dragLive = false, true);
+addEventListener("drop", () => dragLive = false, true);
+function uiBusy() {
+  /* a mouse released outside the window never reports its pointerup, so a held
+     pointer only counts as busy for so long — a stuck flag must not starve sync */
+  if (pointerDownAt && Date.now() - pointerDownAt < 30000) return true;
+  if (dragLive) return true;
+  if (openId !== null) return true;                       // modal open: fields in use
+  const cap = document.getElementById("cap-text");
+  return document.activeElement === cap && cap.value.trim() !== "";
+}
 async function pullBoard(quiet) {
   const cfg = ssCfg();
   if (!cfg) { setSyncStatus("off"); return; }
+  if (quiet && uiBusy()) return;
   if (ss.pulling) return;
   ss.pulling = true; setSyncStatus("syncing");
   try {
