@@ -106,10 +106,14 @@ regaining the network, the tab or the app.
 
 ## Ideas vs tasks
 
-"New idea" in the + menu hands over to `board.html#new`, which lands with the
-capture bar focused — a thought in the van is not a task with a due date, and the
-board was otherwise reachable only through the ⋯ menu, which is not where anyone
-looks to add something.
+"New idea" in the + menu opens `#isheet` in place — a popup like the task
+composer, on whatever page you are on. It writes into the board's localStorage
+and, with sync on, pull-merges-pushes the workspace's board document itself
+(`mergeBoard` is a documented copy of the board's `mergeStates`), so the idea
+reaches other devices without the board page ever opening. The board listens for
+cross-tab `storage` events and merges, so two open tabs cannot clobber each
+other. `board.html#new` still exists for the richer capture (images) the sheet
+links to.
 
 ## The board
 

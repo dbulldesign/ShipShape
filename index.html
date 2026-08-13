@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.26.1">
+<meta name="app-version" content="1.27.0">
 <meta name="app-build" content="2026-08-11">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -540,6 +540,16 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     autocapitalize="off" autocorrect="off" spellcheck="false">
   <div class="res" id="pres"></div>
   <div class="foot"><span>↑↓ move</span><span>↵ choose</span><span>esc close</span></div>
+</div>
+
+<div class="sheet" role="dialog" aria-modal="true" id="isheet"><div class="grab"></div>
+  <div class="sheettitle">New idea<button class="x" id="iclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div style="padding:6px 14px 0"><textarea id="itext" style="width:100%;border:0;background:var(--fill2);border-radius:10px;padding:10px 12px;font-size:17px;line-height:1.4;min-height:96px;outline:none;resize:none;font-family:var(--sans)" placeholder="A thought, a link, a pasted email — #tags and [[idea]] connect on the board"></textarea></div>
+  <div style="padding:10px 14px 0;display:flex;gap:8px;align-items:center">
+    <select id="iproj" style="flex:1;min-width:0;background:var(--fill2);border:0;border-radius:10px;padding:9px 10px;font-size:14px;outline:none"></select>
+    <button class="addbtn" id="iadd">Add it</button>
+  </div>
+  <div style="padding:8px 14px 16px"><a class="btn ghost" href="board.html#new" style="margin:0;padding:6px 2px;font-size:14px">Images, kanban and the rest → open the board</a></div>
 </div>
 
 <div class="sheet" role="dialog" aria-modal="true" id="setsheet"><div class="grab"></div>
@@ -2988,7 +2998,7 @@ $('#addmenu').addEventListener('click',e=>{
   const k=b.dataset.add;
   closeAddMenu();
   if(k==='project')return openProject(null);
-  if(k==='idea'){location.href='board.html#new';return;}
+  if(k==='idea'){openIdea();return;}
   if(k==='scan')return openScanner('find');
   openComposer(k);
 });
@@ -3283,7 +3293,7 @@ function doMenu(k){
   if(k==='sort'){sortBy=SORTS[(SORTS.indexOf(sortBy)+1)%SORTS.length];saveView();render();toast('Sort: '+SORT_LABEL[sortBy]);}
   if(k==='group'){groupBy=GROUPS[(GROUPS.indexOf(groupBy)+1)%GROUPS.length];saveView();render();toast('Group: '+GROUP_LABEL[groupBy]);}
   if(k==='density'){compact=!compact;$('#app').classList.toggle('compact',compact);saveView();render();}
-  if(k==='idea')location.href='board.html#new';
+  if(k==='idea')openIdea();
   if(k==='sfx'){sfx=!sfx;saveView();renderData();if(sfx)ping(880);toast('Sound '+(sfx?'on':'off'));}
   if(k==='update')checkUpdate();
   if(k==='newproj')openProject(null);
@@ -3657,7 +3667,7 @@ function paletteRows(q){
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['Save a backup file','export'],['Load from a backup file','import'],
     ['Undo last change','undo'],['Archive completed','clearDone'],
-    ['Settings','settings'],['New idea on the board','idea'],
+    ['Settings','settings'],['New idea','idea'],
     ['Rows: '+(compact?'comfortable':'compact'),'density'],['Sound: '+(sfx?'off':'on'),'sfx'],
     ['Check for updates','update'],['Archived','archive'],
     ['Load a sample setup','sample']])
@@ -3707,6 +3717,93 @@ $('#pres').addEventListener('click',e=>{
 });
 document.addEventListener('click',e=>{
   if($('#palette').classList.contains('on')&&!e.target.closest('#palette'))closePalette();
+});
+
+/* ============ quick idea ============
+   "New idea" used to hand over to board.html, which is a page hop for one
+   sentence. This sheet captures from wherever you are, straight into the
+   board's own data: the item lands in its localStorage, and — when sync is on —
+   is merged into the workspace's board document the same way the board itself
+   does it, so the desktop sees the idea without the phone ever opening the
+   board page. Everything richer (images, kanban, the map) stays on the board;
+   the sheet says so and links there. */
+const BKEY='everything-board:v1';
+function boardState(){
+  try{
+    const d=JSON.parse(window.localStorage.getItem(BKEY)||'{}');
+    return {items:Array.isArray(d.items)?d.items:[],
+      projects:Array.isArray(d.projects)?d.projects:[],
+      tombstones:d.tombstones&&typeof d.tombstones==='object'?d.tombstones:{}};
+  }catch(e){return {items:[],projects:[],tombstones:{}};}
+}
+function saveBoardState(st){try{window.localStorage.setItem(BKEY,JSON.stringify(st));}catch(e){}}
+/* a copy of the board's mergeStates — newest updatedAt wins per record,
+   tombstones beat older records and age out after sixty days */
+function mergeBoard(a,b){
+  const ts=x=>x.updatedAt||x.createdAt||0;
+  const tombs={};
+  for(const k of new Set([...Object.keys(a.tombstones||{}),...Object.keys(b.tombstones||{})]))
+    tombs[k]=Math.max((a.tombstones||{})[k]||0,(b.tombstones||{})[k]||0);
+  const cut=Date.now()-60*864e5;
+  for(const k of Object.keys(tombs))if(tombs[k]<cut)delete tombs[k];
+  const pick=list=>{const m=new Map();
+    list.forEach(x=>{if(!x||!x.id)return;const p=m.get(x.id);if(!p||ts(x)>ts(p))m.set(x.id,x);});
+    return m;};
+  return {
+    items:[...pick([...(a.items||[]),...(b.items||[])]).values()]
+      .filter(i=>!(tombs[i.id]&&tombs[i.id]>=ts(i)))
+      .sort((x,y)=>(y.createdAt||0)-(x.createdAt||0)),
+    projects:[...pick([...(a.projects||[]),...(b.projects||[])]).values()]
+      .filter(p=>!(tombs['p:'+p.id]&&tombs['p:'+p.id]>=ts(p))),
+    tombstones:tombs};
+}
+async function pushBoardDoc(){
+  if(!sync.on)return;
+  const k=sync.ws+':board';
+  try{
+    const remote=await rpc('shipshape_pull',{k})||{};
+    const merged=mergeBoard(boardState(),
+      {items:remote.items||[],projects:remote.projects||[],tombstones:remote.tombstones||{}});
+    saveBoardState(merged);
+    await rpc('shipshape_push',{k,d:merged});
+  }catch(e){}                                   // the board page reconciles on its next pull
+}
+const ideaUrl=t=>/^https?:\/\/\S+$/i.test((t||'').trim());
+function openIdea(){
+  const st=boardState();
+  const sel=view.t==='project'&&P(view.v)?'ss:'+view.v:'';
+  $('#iproj').innerHTML='<option value="">No project</option>'
+    +(S.projects.length?'<optgroup label="Jobs">'+S.projects.map(p=>
+      `<option value="ss:${p.id}" ${sel==='ss:'+p.id?'selected':''}>${esc(p.name)}</option>`).join('')+'</optgroup>':'')
+    +(st.projects.length?'<optgroup label="Board projects">'+st.projects.map(p=>
+      `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')+'</optgroup>':'');
+  $('#itext').value='';
+  rememberFocus();$('#scrim').classList.add('on');$('#isheet').classList.add('on');
+  setTimeout(()=>$('#itext').focus(),260);
+}
+function addIdea(){
+  const t=$('#itext').value.trim();
+  if(!t)return;
+  const first=t.split('\n')[0].slice(0,90);
+  const type=ideaUrl(first)?(/\.(png|jpe?g|gif|webp|svg|avif)(\?.*)?$/i.test(first)?'image':'link')
+    :/^(from|to|subject|fwd|re):/i.test(t)?'email':'note';
+  const it={id:uid(),type,title:ideaUrl(first)?'':first,content:ideaUrl(t)?'':t,
+    url:ideaUrl(first)?first:'',imageData:'',projectId:$('#iproj').value||null,status:'inbox',
+    createdAt:Date.now(),updatedAt:Date.now(),pinned:false,links:[],x:null,y:null};
+  const st=boardState();st.items.unshift(it);saveBoardState(st);
+  pushBoardDoc();
+  closeSheets();buzz(6);if(sfx)ping(760);
+  toast('Idea captured',()=>{
+    const s2=boardState();
+    s2.items=s2.items.filter(x=>x.id!==it.id);s2.tombstones[it.id]=Date.now();
+    saveBoardState(s2);pushBoardDoc();
+  });
+  render();                                     // the project header's board-card count
+}
+$('#iclose').addEventListener('click',closeSheets);
+$('#iadd').addEventListener('click',addIdea);
+$('#itext').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();addIdea();}
 });
 
 /* ============ settings ============

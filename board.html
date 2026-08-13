@@ -1162,6 +1162,23 @@ document.getElementById("m-erase").addEventListener("click", (e) => {
   }
 });
 
+/* Shipshape's quick-idea sheet writes into this page's localStorage from the
+   other page. In the same window that is a navigation and loadData() sees it,
+   but on a desktop the two can be open side by side — so a write from over
+   there merges into memory here rather than being overwritten by this page's
+   next persist(). */
+addEventListener("storage", (e) => {
+  if (e.key !== KEY || !e.newValue) return;
+  try {
+    const merged = normalize(mergeStates(state, normalize(JSON.parse(e.newValue))));
+    if (JSON.stringify(merged) !== JSON.stringify(state)) {
+      state = merged;
+      renderCaptureRow(); renderMain();
+      if (openId && byId(openId)) renderModal();
+    }
+  } catch (err) {}
+});
+
 /* ————— boot ————— */
 renderCaptureRow();
 /* Shipshape links straight to a project's cards with #p=<id> */
