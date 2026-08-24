@@ -190,6 +190,35 @@ cross-tab `storage` events and merges, so two open tabs cannot clobber each
 other. `board.html#new` still exists for the richer capture (images) the sheet
 links to.
 
+## The board is a pane on a desktop, a page on a phone
+
+Above 861px the board loads into `#boardpane` — an iframe inside `#main` — so
+`view.t==='board'` is a real view and the sidebar, header and scroll position all
+survive the switch. It stays a *separate document*: its own state, its own merge
+rules, its own record in the workspace. Only the shell is shared.
+
+- `?embed=1` **and** `parent!==window` is what means embedded. The flag alone is
+  not enough, or a stray `?embed=1` in a real tab strips the chrome and leaves no
+  way out.
+- That check, and the desktop hand-over, live in a `<script>` in `<head>`. Both
+  have to run before anything else: the class because the chrome it hides would
+  otherwise paint once and be taken away, and the redirect because the board's own
+  `#p=` and `#new` handlers `replaceState` the hash away — a redirect further down
+  the file had nothing left to forward.
+- Embedded, the board's whole `.hrow` goes. Its ⋯ sat directly beneath the
+  shell's own, so the board's export and import are offered by `#moreMenu` under
+  `body[data-board]` and reach into the pane by clicking its buttons — same
+  origin, so a click, not a message.
+- **One poll.** Each page owning a 15-second timer was fine while they were
+  separate pages, since only one ever ran. In one tab that is two polls for one
+  workspace, so `__ssBoardPull` stands in for the board's interval under embed and
+  the app's existing tick calls it.
+- `body[data-board]`, not `#app[data-board]`: `#fab`, `#tabbar` and the menus live
+  outside `#app`, so a descendant selector on it silently misses them.
+- Below 861px the board is still a page. The phone's bottom bar already carries
+  Board as its sixth tab, and an iframe inside a fixed bottom bar is a scrolling
+  problem not worth taking on a phone.
+
 ## The board
 
 `board.html` is the Everything Board — a capture-anything companion page (notes,

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.34.0">
+<meta name="app-version" content="1.35.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -56,6 +56,21 @@ button{background:none;border:0;padding:0;cursor:pointer}
   border-right:.5px solid var(--sep);overflow-y:auto;padding-left:calc(10px + env(safe-area-inset-left))}
 #main{flex:1;min-width:0;display:flex;flex-direction:column}
 #scroll{flex:1;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:0 max(16px,env(safe-area-inset-left)) 170px max(16px,env(safe-area-inset-right))}
+/* The board pane fills what the list would have. It scrolls inside itself, which
+   is what makes the switch feel like a view and not a navigation: this shell
+   never moves, so the sidebar keeps its scroll position and the header stays put. */
+#boardpane{flex:1;min-height:0;display:none}
+body[data-board] #boardpane{display:block}
+body[data-board] #scroll{display:none}
+#boardframe{width:100%;height:100%;border:0;display:block;background:var(--bg)}
+/* On the board its own controls apply, not the list's — and its capture bar is
+   the + it needs. */
+/* The board's own data actions, offered by the shell's menu while the board is
+   what you are looking at — so the pane needs no menu of its own. */
+#moreMenu .boardonly{display:none}
+body[data-board] #moreMenu .boardonly{display:block}
+body[data-board] .searchbar,body[data-board] .hctl,
+body[data-board] #calBtn,body[data-board] #addTop,body[data-board] #fab{display:none}
 .wrap{max-width:780px;margin:0 auto}
 header{position:sticky;top:0;z-index:20;padding:8px max(16px,env(safe-area-inset-left)) 0;background:var(--elev);
   backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
@@ -551,6 +566,9 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="calendar">Calendar…</button>
             <button data-m="scan">Scan a shipping label</button>
             <button data-m="board">Everything Board…</button>
+            <hr class="boardonly">
+            <button class="boardonly" data-m="bexport">Save a board backup</button>
+            <button class="boardonly" data-m="bimport">Load a board backup</button>
             <hr>
             <button data-m="undo">Undo last change</button>
             <button data-m="clearDone">Archive completed</button>
@@ -565,6 +583,11 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
       </div>
     </header>
     <div id="scroll"><div class="wrap" id="list"></div></div>
+    <!-- The board, in the app rather than instead of it. Its own document, so it
+         keeps its own state and sync, but inside this shell: the sidebar stays,
+         the header stays, and switching to it is a view change rather than a page
+         load that throws the app away and builds it again. -->
+    <div id="boardpane"><iframe id="boardframe" title="Everything Board"></iframe></div>
   </div>
 <div class="sheet" role="dialog" aria-modal="true" id="detail"><div class="grab"></div>
   <div class="sheettitle"><span id="dkind">Task</span><button class="x" id="dclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
@@ -633,7 +656,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <select id="iproj" style="flex:1;min-width:0;background:var(--fill2);border:0;border-radius:10px;padding:9px 10px;font-size:14px;outline:none"></select>
     <button class="addbtn" id="iadd">Add it</button>
   </div>
-  <div style="padding:8px 14px 16px"><a class="btn ghost" href="board.html#new" style="margin:0;padding:6px 2px;font-size:14px">Images, kanban and the rest → open the board</a></div>
+  <div style="padding:8px 14px 16px"><button class="btn ghost" data-board="#new" style="margin:0;padding:6px 2px;font-size:14px">Images, kanban and the rest → open the board</button></div>
 </div>
 
 <div class="sheet" role="dialog" aria-modal="true" id="setsheet"><div class="grab"></div>
@@ -1626,7 +1649,7 @@ function mergeIn(remote){
    must never be the thing sync depends on. */
 function startPolling(){
   clearInterval(pollT);
-  if(sync.on)pollT=setInterval(()=>pull(true),15000);
+  if(sync.on)pollT=setInterval(()=>{pull(true);pokeBoard();},15000);
 }
 /* Coming back — to the network, to the tab, to the app — is exactly when a device
    is behind in both directions, so catch up both ways rather than only pulling. */
@@ -1899,7 +1922,7 @@ function renderNav(){
   h+=navItem(I.list,'var(--gray)','All open',openT().length,view.t==='all','data-v="all"');
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
   if(S.tasks.some(t=>t.arch))h+=navItem(I.box,'var(--label3)','Archived','',view.t==='archive','data-v="archive"');
-  h+=navItem(I.list,'var(--yellow)','Everything Board','',false,'data-href="board.html"');
+  h+=navItem(I.list,'var(--yellow)','Everything Board','',view.t==='board','data-v="board"');
   h+='<div class="navsec">Projects<button data-m="newproj">+ New</button></div>';
   if(!S.projects.length)h+='<div style="padding:2px 12px 4px;font-size:13.5px;color:var(--label3)">No projects yet</div>';
   for(const p of S.projects){
@@ -1918,7 +1941,7 @@ function renderNav(){
   $('#navlists').innerHTML=h;
   rollCounts();
 }
-const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',all:'All open',done:'Completed',
+const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',all:'All open',done:'Completed',
   projects:'Projects',shipments:'Shipments',archive:'Archived'};
 function renderHead(){
   const d=new Date();
@@ -1927,6 +1950,7 @@ function renderHead(){
   if(view.t==='project'){const p=P(view.v);name=p?p.name:'Project';sub='Project';}
   if(view.t==='mfr'){name=view.v;sub='Maker';}
   if(view.t==='dest'){name=view.v;sub='Shipping to';}
+  if(view.t==='board')sub='Ideas, notes and images';
   if(view.t==='week'){
     name=weekLabel(view.v);
     const n=Math.round((weekStart(view.v)-weekStart())/6048e5);
@@ -2140,7 +2164,7 @@ function projectHead(){
     <div style="flex:1;min-width:0"><h2>${esc(p.name)}</h2><div class="l">
       <span>${s.done}/${s.all} done</span>${p.client?`<span>· ${esc(p.client)}</span>`:''}
       ${p.due?`<span style="${diff(p.due)<0?'color:var(--red)':''}">· target ${fmtDue(p.due)}</span>`:''}
-      ${boardCards(p.id)?`<a href="board.html#p=ss:${p.id}" style="color:var(--blue);font-weight:600;text-decoration:none">· ✳ ${boardCards(p.id)} board card${boardCards(p.id)===1?'':'s'}</a>`:''}</div>
+      ${boardCards(p.id)?`<button data-board="#p=ss:${p.id}" style="color:var(--blue);font-weight:600">· ✳ ${boardCards(p.id)} board card${boardCards(p.id)===1?'':'s'}</button>`:''}</div>
       ${p.notes?`<div class="l" style="color:var(--label3)">${esc(p.notes)}</div>`:''}</div>
     <button class="iconbtn" data-editproj="${p.id}" aria-label="Edit project"><svg viewBox="0 0 20 20"><path d="M14.1 2.6a1.4 1.4 0 0 1 2 0l1.3 1.3a1.4 1.4 0 0 1 0 2l-1 1-3.3-3.3 1-1ZM12 4.7 3.4 13.3 2.5 17l3.7-.9 8.6-8.6L12 4.7Z"/></svg></button>
     <button class="iconbtn" data-a="new" aria-label="Add to this project" style="background:var(--blue)"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
@@ -2335,6 +2359,9 @@ function groupNode(x){
   return g;
 }
 function renderList(){
+  syncBoard();
+  // the board draws itself; nothing of the list applies while it is showing
+  if(view.t==='board')return;
   const el=$('#list'),out=[];
   rowCtx=view.t+'|'+iso(midnight())+'|'+S.projects.map(p=>p.id+p.u).join(',');
   const chunk=(name,h)=>{if(h)out.push(...slot(name,h));};
@@ -2947,6 +2974,42 @@ const wide=()=>matchMedia('(min-width:1200px)').matches;
 const docked=()=>$('#detail').classList.contains('dock');
 /* The window can be resized across the split-view threshold with a task open, so
    the pane has to be able to become the modal it would have been, and back. */
+/* ============ the board, embedded ============
+   Above 861px the board is a view in this shell rather than a page of its own.
+   It stays a separate document — its state, its merge rules and its own record in
+   the workspace are all untouched — but it loads into a pane here, so switching
+   costs a view change instead of a page load that discards the app and rebuilds
+   it from localStorage.
+   Below 861px it is still a page: the phone's bottom bar carries Board as its
+   sixth tab and that already reads as one app, and an iframe inside a fixed
+   bottom bar is a scrolling problem not worth taking on a phone. */
+const boardWide=()=>matchMedia('(min-width:861px)').matches;
+let boardHash='';
+function openBoard(hash){
+  if(!boardWide()){location.href='board.html'+(hash||'');return;}
+  boardHash=hash||'';
+  setView('board');
+}
+function syncBoard(){
+  const on=view.t==='board';
+  document.body.toggleAttribute('data-board',on);
+  if(!on)return;
+  const f=$('#boardframe');
+  // ?embed=1 is what tells the board to drop its own chrome. A deep link
+  // reloads the pane on purpose: the board reads #p= and #new once, at load.
+  const want='board.html?embed=1'+(boardHash||'');
+  if(boardHash||!f.getAttribute('src')){f.setAttribute('src',want);boardHash='';}
+}
+/* One timer, not two. Each page used to own its poll, which was fine while they
+   were separate pages — only one ran at a time. Embedded, both would run in the
+   same tab, so the board's own interval stands down under ?embed=1 and this
+   nudges it from the app's existing fifteen-second tick instead. */
+function pokeBoard(){
+  const f=$('#boardframe');
+  if(view.t!=='board'||!f.getAttribute('src'))return;
+  try{f.contentWindow&&f.contentWindow.__ssBoardPull&&f.contentWindow.__ssBoardPull();}catch(e){}
+}
+addEventListener('resize',()=>{if(view.t==='board')syncBoard();});
 function syncDock(){
   const d=$('#detail');
   if(!d.classList.contains('on'))return;
@@ -3805,7 +3868,17 @@ function doMenu(k){
     toast(`Archived ${hit.length}`,()=>{hit.forEach(t=>{t.arch=null;t.u=now();});save();render();});
   }
   if(k==='archive')setView('archive');
-  if(k==='board')location.href='board.html';
+  if(k==='board')openBoard();
+  /* Reaching into the pane rather than reimplementing: the board owns its own
+     export and its own file input, and both read board state this document does
+     not hold. Same origin, so this is a click, not a message. */
+  if(k==='bexport'||k==='bimport'){
+    try{
+      const d=$('#boardframe').contentDocument;
+      const btn=d&&d.getElementById(k==='bexport'?'m-export':'m-import');
+      if(btn)btn.click();else toast('Open the board first.');
+    }catch(e){toast('Open the board first.');}
+  }
   if(k==='digest'){digestOff=!digestOff;saveView();render();toast('Last seven days '+(digestOff?'hidden':'shown'));}
   if(k==='nodigest')doMenu('digest');
   if(k==='reset'&&confirm('Delete every project and task? This cannot be undone.')){
@@ -3837,9 +3910,14 @@ $('#fileIn').addEventListener('change',async e=>{
   }catch(err){toast('That file is not a Shipshape backup.');}
   e.target.value='';
 });
-function setView(t,v){view={t,v};selDay=null;$('#q').value='';query='';render();$('#scroll').scrollTop=0;riseList();}
+function setView(t,v){
+  // a docked detail column beside the board leaves neither enough room
+  if(t==='board'&&$('#detail').classList.contains('on'))closeSheets();
+  view={t,v};selDay=null;$('#q').value='';query='';render();$('#scroll').scrollTop=0;
+  if(t!=='board')riseList();
+}
 $('#navlists').addEventListener('click',e=>{const a=e.target.closest('[data-href]');if(a)return location.href=a.dataset.href;
-  const b=e.target.closest('[data-v]');if(b)setView(b.dataset.v,b.dataset.val);});
+  const b=e.target.closest('[data-v]');if(b)b.dataset.v==='board'?openBoard():setView(b.dataset.v,b.dataset.val);});
 /* ============ drag a row onto a project ============
    The sidebar was for navigating and nothing else. Dragging is the obvious way
    to file something, and it is only offered where it means something: projects,
@@ -3902,6 +3980,13 @@ $('#hgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();ren
 $('#tabbar').addEventListener('click',e=>{
   const a=e.target.closest('[data-href]');if(a)return location.href=a.dataset.href;
   const b=e.target.closest('[data-v]');if(b){setView(b.dataset.v);buzz(4);}});
+/* Anything that says "go to the board" goes through openBoard, so it lands in
+   the pane on a desktop and on the page on a phone without each caller deciding. */
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-board]');
+  if(!b)return;
+  e.preventDefault();closeSheets();openBoard(b.dataset.board);
+});
 $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-m]'))return;
   if(e.target.closest('[data-noopen]'))return;   // tracking link: follow it, don't open the row
@@ -4185,7 +4270,7 @@ function paletteRows(q){
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
   for(const m of uniq('manufacturer'))push(m,'Maker',I.box,colorFor(m),()=>setView('mfr',m));
   for(const d of uniq('destination'))push(d,'Ship to',I.truck,colorFor(d),()=>setView('dest',d));
-  push('Everything Board','Page',I.list,'var(--yellow)',()=>location.href='board.html');
+  push('Everything Board','View',I.list,'var(--yellow)',()=>openBoard());
   for(const [l,k] of [['New task','new'],['New project','newproj'],['Scan a shipping label','scan'],
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['Save a backup file','export'],['Load from a backup file','import'],
@@ -4438,7 +4523,12 @@ function loadSample(){
   if(location.hash==='#sync'){openSync();history.replaceState(null,'',location.pathname+location.search);}
   const hv=location.hash.match(/^#view=(\w+)$/);
   if(hv){history.replaceState(null,'',location.pathname+location.search);
-    if(TITLES[hv[1]])setView(hv[1]);}
+    if(hv[1]==='board')openBoard();
+    else if(TITLES[hv[1]])setView(hv[1]);}
+  // board.html hands a desktop-width visitor over here, keeping its deep link
+  const hb=location.hash.match(/^#board=(.*)$/);
+  if(hb){history.replaceState(null,'',location.pathname+location.search);
+    openBoard(decodeURIComponent(hb[1]||''));}
   const hp=location.hash.match(/^#project=(.+)$/);
   if(hp){const id=decodeURIComponent(hp[1]);history.replaceState(null,'',location.pathname+location.search);
     if(P(id))setView('project',id);}

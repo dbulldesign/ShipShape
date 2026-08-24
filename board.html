@@ -7,6 +7,25 @@
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Everything Board</title>
+<script>
+/* Embedded in Shipshape's shell? Decided here rather than in the main script at
+   the end of the body, because the chrome this hides would otherwise paint once
+   before being taken away. Checks the parent too, so a stray ?embed=1 in a real
+   tab cannot strip the chrome and leave no way out. */
+try{
+  var emb=new URLSearchParams(location.search).has('embed')&&parent!==window;
+  if(emb)document.documentElement.classList.add('embed');
+  /* Opened as a page on a desktop — a bookmark, an old link, a window that grew
+     — this is the separate view the integration exists to avoid, so hand over to
+     the shell. It has to happen here, before anything else runs: the board's own
+     #p= and #new handlers replace the hash away, so a redirect further down the
+     file would have nothing left to forward. */
+  else if(matchMedia('(min-width:861px)').matches)
+    location.replace(location.hash
+      ? 'index.html#board='+encodeURIComponent(location.hash)
+      : 'index.html#view=board');
+}catch(e){}
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317242F'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%23E4F222' font-family='sans-serif' font-weight='bold'%3E%E2%88%97%3C/text%3E%3C/svg%3E">
 <style>
 /* ————— Shipshape's design system, applied to the board —————
@@ -215,6 +234,19 @@ textarea.field{resize:vertical;min-height:100px}
 .openlink{background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue);font-weight:700;border-radius:10px;padding:9px 12px;font-size:13.5px;text-decoration:none;white-space:nowrap;margin-bottom:12px}
 .banner{font-size:13px;background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red);padding:8px 12px;border-radius:10px;margin-bottom:12px}
 main{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
+/* Embedded in Shipshape's shell. The chrome that shell already provides comes
+   off — the identity, the way back, the sync state — and what is left is only
+   what belongs to the board itself: what is saved, its own data menu, its search
+   and its five views. The bottom tab bar goes because the shell has one. */
+.embed #tabbar{display:none}
+.embed main{padding-bottom:40px}
+/* The whole top row goes. Everything on it — who this is, the way back, the sync
+   state, the data menu — the shell either already shows or now offers in its own
+   ⋯, so leaving the row in place put a second ⋯ directly beneath the first and a
+   band of empty space where the title used to be. What is left is the board's
+   own: its search and its five views. */
+.embed .hrow{display:none}
+.embed header{border-radius:0;padding-top:12px}
 
 /* ————— the shared bottom tab bar, same as the main app ————— */
 #tabbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--elev);
@@ -1323,6 +1355,10 @@ function mergeStates(a, b) {
     .filter(p => !(tombs["p:" + p.id] && tombs["p:" + p.id] >= ts(p)));
   return { items, projects, tombstones: tombs };
 }
+/* Embedded means: inside Shipshape's own shell, as a pane rather than a page.
+   Checked against the parent as well as the flag, so a stray ?embed=1 in a real
+   tab cannot strip the chrome and leave no way out. */
+const EMBED = document.documentElement.classList.contains("embed");
 const SS_KEY = "shipshape:sync";
 const ss = { status:"off", lastPushed:"", pushT:null, retryT:null, fails:0, pulling:false };
 function ssCfg() {
@@ -1434,7 +1470,11 @@ window.addEventListener("online", ssResume);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) ssResume(); });
 /* fifteen seconds, same as the main app — see its working notes for why this
    never slows down on any "live" signal */
-setInterval(() => { if (ssCfg() && !document.hidden) pullBoard(true); }, 15000);
+/* The shell drives this when embedded. Two documents each running their own
+   fifteen-second timer was harmless while they were separate pages — only one
+   ever ran — but in one tab it is two polls for one workspace. */
+window.__ssBoardPull = () => { if (ssCfg() && !document.hidden) pullBoard(true); };
+if (!EMBED) setInterval(() => { if (ssCfg() && !document.hidden) pullBoard(true); }, 15000);
 
 /* ————— sync panel ————— */
 function openSyncPanel() { renderSyncPanel(); }
