@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.28.0">
+<meta name="app-version" content="1.29.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -106,6 +106,35 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .day .pips{height:6px;display:flex;gap:2.5px;justify-content:center;margin-top:2px}
 .day .pips i{width:4px;height:4px;border-radius:50%;display:block}
 .day.weekend{background:var(--fill2);box-shadow:none}
+/* The week. Seven cells across, always seven, so the grid never reflows and an
+   empty day is as legible as a full one. A grid rather than the strip's flex
+   scroller: a week is a fixed thing and should not be swipeable past its ends. */
+.weekwrap{padding:2px 0 12px}
+.weekbar{display:flex;align-items:center;gap:6px;padding:0 2px 9px}
+.wlab{flex:1;min-width:0;text-align:center;line-height:1.15}
+.wlab b{display:block;font-family:var(--round);font-size:16px;font-weight:700;letter-spacing:-.2px}
+.wlab span{font-size:11.5px;color:var(--label3);font-weight:600}
+.wnav{width:32px;height:32px;flex:none;border-radius:9px;background:var(--fill2);color:var(--label2);
+  font-size:19px;font-weight:700;line-height:1;display:grid;place-items:center;transition:transform .18s var(--ease)}
+.wnav:active{transform:scale(.9)}
+.wnav.now{width:auto;padding:0 11px;font-size:12.5px;font-weight:700;color:var(--blue)}
+.weekgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.wcell{border-radius:12px;background:var(--card);padding:7px 0 5px;text-align:center;min-width:0;
+  box-shadow:var(--shadow);transition:transform .2s var(--ease);border:1.5px solid transparent}
+.wcell:active{transform:scale(.94)}.wcell.sel{border-color:var(--blue)}
+.wcell.weekend{background:var(--fill2);box-shadow:none}
+.wcell .w{font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--label3);text-transform:uppercase}
+.wcell .n{font-family:var(--round);font-size:17px;font-weight:700;line-height:1.3;font-variant-numeric:tabular-nums}
+.wcell.today .n{color:#fff;background:var(--red);border-radius:50%;width:24px;height:24px;margin:0 auto;display:grid;place-items:center}
+.wcell .pips{height:6px;display:flex;gap:2px;justify-content:center;margin-top:1px}
+.wcell .pips i{width:4px;height:4px;border-radius:50%;display:block}
+.wcell .ct{height:13px;font-size:11px;font-weight:700;color:var(--label3);font-variant-numeric:tabular-nums}
+.wcell .ct.late{color:var(--red)}
+.weeklate{display:block;width:100%;margin-top:9px;padding:8px 11px;border-radius:11px;background:var(--fill2);
+  font-size:13px;font-weight:600;color:var(--red);text-align:left;transition:transform .18s var(--ease)}
+.weeklate:active{transform:scale(.985)}
+/* The seg is a sheet component; in the list it needs the list's own gutter. */
+.listseg{margin:2px 0 12px}
 /* Group headings hold their place at the top of the scroll area, so a long list
    never leaves you wondering which bucket the rows on screen belong to. They
    need an opaque background for the rows to pass behind, and to sit above the
@@ -1532,6 +1561,17 @@ const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${Str
 const fromISO=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c);};
 const diff=s=>Math.round((fromISO(s)-midnight())/864e5);
 const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+/* Sunday, to match the month calendar's own grid rather than introduce a second
+   idea of where a week starts. */
+const weekStart=k=>{const d=k?fromISO(k):midnight();return addDays(d,-d.getDay());};
+const weekDays=k=>{const s=weekStart(k);return Array.from({length:7},(_,i)=>addDays(s,i));};
+function weekLabel(k){
+  const d=weekDays(k),a=d[0],b=d[6];
+  return a.getMonth()===b.getMonth()
+    ? `${MO[a.getMonth()]} ${a.getDate()} – ${b.getDate()}`
+    : `${MO[a.getMonth()]} ${a.getDate()} – ${MO[b.getMonth()]} ${b.getDate()}`;
+}
 function fmtDue(s){
   const n=diff(s),d=fromISO(s);
   if(n<-1)return `${-n} days late`; if(n===-1)return 'Yesterday';
@@ -1667,7 +1707,12 @@ function filtered(){
   if(query)return a.sort(bySort);
   // A day picked on the strip wins over the view's own date rule, otherwise
   // picking a future day under Today could never match anything.
-  if(selDay&&(v.t==='today'||v.t==='scheduled'))a=a.filter(t=>!t.done&&t.due===selDay);
+  if(selDay&&(v.t==='today'||v.t==='scheduled'||v.t==='week'))a=a.filter(t=>!t.done&&t.due===selDay);
+  else if(v.t==='week'){
+    // ISO dates compare correctly as strings, so the week is a plain range test
+    const d=weekDays(v.v),lo=iso(d[0]),hi=iso(d[6]);
+    a=a.filter(t=>!t.done&&t.due&&t.due>=lo&&t.due<=hi);
+  }
   else if(v.t==='today')a=a.filter(t=>!t.done&&t.due&&diff(t.due)<=0);
   else if(v.t==='scheduled')a=a.filter(t=>!t.done&&t.due);
   else if(v.t==='flagged')a=a.filter(t=>!t.done&&t.flagged);
@@ -1703,6 +1748,14 @@ function groupOf(t){
   if(groupBy==='stage'){
     if(t.type!=='shipment')return {k:'s9',l:'Tasks',o:9};
     return {k:'s'+t.stage,l:STAGES[t.stage],o:t.stage};}
+  /* Inside a week, "This week" as a heading says nothing — every row is in it.
+     One heading per day is the whole point of the view. Ordered by the date read
+     as a number, which sorts correctly because the format is fixed-width. */
+  // Not while searching: a search is global, so it can return completed and
+  // undated work that a day heading would quietly mislabel.
+  if(view.t==='week'&&!query&&t.due){const d=fromISO(t.due);
+    return {k:'wd'+t.due,l:`${WD[d.getDay()]} · ${MO[d.getMonth()]} ${d.getDate()}`,
+      o:+t.due.replace(/-/g,'')};}
   return bucket(t);
 }
 function bucket(t){
@@ -1721,7 +1774,7 @@ function bucket(t){
 /* ============ render ============ */
 function render(){renderNav();renderHead();renderList();renderData();
   // the calendar only means anything where the list is organised by date
-  $('#calBtn').style.display=(view.t==='today'||view.t==='scheduled')?'':'none';}
+  $('#calBtn').style.display=(view.t==='today'||view.t==='scheduled'||view.t==='week')?'':'none';}
 function renderData(){
   $('#l-mfr').innerHTML=uniq('manufacturer').map(v=>`<option value="${esc(v)}">`).join('');
   $('#l-dest').innerHTML=uniq('destination').map(v=>`<option value="${esc(v)}">`).join('');
@@ -1745,6 +1798,8 @@ function renderNav(){
     <span class="dot" style="background:var(--red)">${I.flag}</span><span class="nm" style="color:var(--red);font-weight:600">${late} past due</span></button>`;
   h+=navItem(I.today,'var(--blue)','Today',openT().filter(t=>t.due&&diff(t.due)<=0).length,view.t==='today','data-v="today"');
   h+=navItem(I.clock,'var(--red)','Scheduled',openT().filter(t=>t.due).length,view.t==='scheduled','data-v="scheduled"');
+  h+=navItem(I.today,'var(--teal)','Week',openT().filter(t=>{
+    if(!t.due)return false;const d=weekDays();return t.due>=iso(d[0])&&t.due<=iso(d[6]);}).length,view.t==='week','data-v="week"');
   h+=navItem(I.flag,'var(--orange)','Flagged',openT().filter(t=>t.flagged).length,view.t==='flagged','data-v="flagged"');
   h+=navItem(I.truck,'var(--purple)','Shipments',openT().filter(t=>t.type==='shipment').length,view.t==='shipments','data-v="shipments"');
   h+=navItem(I.list,'var(--gray)','All open',openT().length,view.t==='all','data-v="all"');
@@ -1769,7 +1824,7 @@ function renderNav(){
   $('#navlists').innerHTML=h;
   rollCounts();
 }
-const TITLES={today:'Today',scheduled:'Scheduled',flagged:'Flagged',all:'All open',done:'Completed',
+const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',all:'All open',done:'Completed',
   projects:'Projects',shipments:'Shipments',archive:'Archived'};
 function renderHead(){
   const d=new Date();
@@ -1778,6 +1833,11 @@ function renderHead(){
   if(view.t==='project'){const p=P(view.v);name=p?p.name:'Project';sub='Project';}
   if(view.t==='mfr'){name=view.v;sub='Maker';}
   if(view.t==='dest'){name=view.v;sub='Shipping to';}
+  if(view.t==='week'){
+    name=weekLabel(view.v);
+    const n=Math.round((weekStart(view.v)-weekStart())/6048e5);
+    sub=n===0?'This week':n===1?'Next week':n===-1?'Last week':n>0?`In ${n} weeks`:`${-n} weeks ago`;
+  }
   $('#title').textContent=name;$('#eyebrow').innerHTML=sub;
   $$('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===view.t));
 }
@@ -1793,6 +1853,43 @@ function stripHTML(){
     return `<button class="day ${diff(k)===0?'today':''} ${[0,6].includes(d.getDay())?'weekend':''} ${selDay===k?'sel':''}" data-day="${k}">
       <div class="w">${WD[d.getDay()].slice(0,2)}</div><div class="n">${d.getDate()}</div><div class="pips">${pips}</div></button>`;
   }).join('')+'</div>';
+}
+/* ============ the week ============
+   The strip answers "what is on this day" fifteen days at a time; the calendar
+   answers "where is the 14th". Neither answers "what does next week look like",
+   which is the horizon this work actually lives on — a maker quotes three weeks,
+   a site wants a fortnight's notice.
+   Seven cells, always all seven, because an empty Thursday is information: it is
+   where the next thing can go. The strip cannot show that — it only draws days
+   it has, and a day with nothing on it looks the same as the gap between weeks. */
+function weekGridHTML(){
+  const days=weekDays(view.v),open=openT();
+  const cells=days.map(d=>{
+    const k=iso(d),on=open.filter(x=>x.due===k);
+    const pips=on.slice(0,4).map(x=>{const p=projectOf(x);
+      return `<i style="background:${p?p.color:'var(--gray)'}"></i>`;}).join('');
+    const late=on.some(x=>diff(x.due)<0);
+    return `<button class="wcell ${diff(k)===0?'today':''} ${[0,6].includes(d.getDay())?'weekend':''} ${selDay===k?'sel':''}"
+      data-day="${k}" aria-label="${WD[d.getDay()]} ${MO[d.getMonth()]} ${d.getDate()}, ${on.length} item${on.length===1?'':'s'}">
+      <div class="w">${WD[d.getDay()].slice(0,2)}</div><div class="n">${d.getDate()}</div>
+      <div class="pips">${pips}</div>
+      <div class="ct ${late?'late':''}">${on.length||''}</div></button>`;
+  }).join('');
+  const here=iso(weekStart(view.v))===iso(weekStart());
+  // A week bounded at both ends can hide something overdue from before it, and a
+  // view that quietly drops late work is worse than no view. Say so, and lead there.
+  const before=iso(weekDays(view.v)[0]);
+  const stale=openT().filter(t=>t.due&&t.due<before&&diff(t.due)<0).length;
+  return `<div class="weekwrap">
+    <div class="weekbar">
+      <button class="wnav" data-wk="prev" aria-label="Previous week">‹</button>
+      <div class="wlab"><b>${weekLabel(view.v)}</b><span>${days.reduce((n,d)=>n+open.filter(x=>x.due===iso(d)).length,0)} in this week</span></div>
+      <button class="wnav" data-wk="next" aria-label="Next week">›</button>
+      ${here?'':'<button class="wnav now" data-wk="now">This week</button>'}
+    </div>
+    <div class="weekgrid">${cells}</div>
+    ${stale?`<button class="weeklate" data-v="today">${stale} overdue from before this week ›</button>`:''}
+  </div>`;
 }
 /* One line above Today: what is actually in the air. Each part is a filter you
    can click, because "2 late" always leads to "which two". */
@@ -1989,7 +2086,7 @@ function emptyHTML(){
     [`<button class="btn" data-a="newq">Add “${esc(q.slice(0,40))}” as a ${ship?'shipment':'task'}</button>`,
      `<button class="btn ghost" data-a="clearq">Clear the search</button>`]);
   // A day picked on the strip is a different question from "nothing due today".
-  if(selDay&&(view.t==='today'||view.t==='scheduled')){
+  if(selDay&&(view.t==='today'||view.t==='scheduled'||view.t==='week')){
     // fmtDue alone would give "Nothing due Tomorrow", so the preposition is
     // chosen with the phrase rather than baked into the formatter
     const n=diff(selDay),when=n===0?'today':n===1?'tomorrow':`on ${fmtDue(selDay)}`;
@@ -2000,6 +2097,9 @@ function emptyHTML(){
       [A(),G('scheduled','See what is coming')]],
     scheduled:['🗓','No dates set','Add a due date to anything and it lands here.',
       [A(),G('all','Show everything open')]],
+    // The grid is still above this, so it does not need to describe the week
+    week:['🗓',`Nothing due ${weekLabel(view.v)}`,'Seven clear days. Page to another week, or put something in one.',
+      [A(),G('scheduled','See the whole list')]],
     flagged:['🚩','Nothing flagged','Flag anything you want to keep close.',
       [G('all','Show everything open')]],
     done:['✨','Nothing completed yet','Finished work collects here.',
@@ -2116,6 +2216,14 @@ function renderList(){
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
   if(view.t==='project')chunk('phead',projectHead());
   if(view.t==='mfr')chunk('mhead',makerHead());
+  /* The two ways of looking at dated work, side by side, because a week view
+     nobody can find is not a week view. One tap from the phone, where the
+     sidebar and the palette are both out of reach. */
+  if((view.t==='scheduled'||view.t==='week')&&!query)
+    chunk('mode',`<div class="seg listseg" role="tablist">
+      <button data-v="scheduled" ${view.t==='scheduled'?'class="on" aria-selected="true"':''} role="tab">List</button>
+      <button data-v="week" ${view.t==='week'?'class="on" aria-selected="true"':''} role="tab">Week</button></div>`);
+  if(view.t==='week'&&!query)chunk('week',weekGridHTML());
   if((view.t==='today'||view.t==='scheduled')&&!query)chunk('strip',stripHTML());
   if(view.t==='today'&&!query&&!selDay){chunk('sea',seaStateHTML());chunk('digest',digestHTML());}
   if(query)chunk('sprojects',searchProjectsHTML());   // projects are searchable too, not just tasks
@@ -3487,6 +3595,14 @@ $('#list').addEventListener('click',e=>{
   const ep=e.target.closest('[data-editproj]');if(ep)return openProject(ep.dataset.editproj);
   if(e.target.closest('[data-editmaker]'))return openMaker(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
+  const wk=e.target.closest('[data-wk]');
+  if(wk){
+    const k=wk.dataset.wk;
+    // Paging keeps the week in view.v rather than a separate offset, so a deep
+    // link and a re-render both land on the week you were actually looking at.
+    view.v=k==='now'?undefined:iso(addDays(weekStart(view.v),k==='prev'?-7:7));
+    selDay=null;buzz(4);render();$('#scroll').scrollTop=0;return;
+  }
   const d=e.target.closest('[data-day]');if(d){selDay=selDay===d.dataset.day?null:d.dataset.day;buzz(4);renderList();return;}
   // a reading in the sea-state line is a question: clicking it runs the search
   const sq=e.target.closest('[data-q]');
@@ -3734,7 +3850,7 @@ let pitems=[],psel=0;
 function paletteRows(q){
   const out=[],hit=s=>!q||(s||'').toLowerCase().includes(q);
   const push=(t,h,ico,col,run)=>{if(hit(t))out.push({t,h,ico,col,run});};
-  for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],
+  for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],['week','Week',I.today,'var(--teal)'],
     ['flagged','Flagged',I.flag,'var(--orange)'],['shipments','Shipments',I.truck,'var(--purple)'],
     ['all','All open',I.list,'var(--gray)'],['done','Completed',I.check,'var(--green)'],
     ['projects','Projects',I.box,'var(--indigo)'],['archive','Archived',I.box,'var(--label3)']])
