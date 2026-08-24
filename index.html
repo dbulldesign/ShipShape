@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.27.1">
-<meta name="app-build" content="2026-08-11">
+<meta name="app-version" content="1.28.0">
+<meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -137,6 +137,15 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip i{width:6px;height:6px;border-radius:2px;flex:none}
 .chip.stage{transition:transform .18s var(--ease)}.chip.stage:active{transform:scale(.92)}
 .chip.track{color:var(--blue);text-decoration:none}
+/* A navigating chip has to look pressable without shouting: the meta line already
+   carries five or six of them and colouring them all blue would make the row a
+   ransom note. Depth on press is enough.
+   Named `go`, not `nav`: `.nav` is the sidebar item, and it carries width:100%,
+   which stretched every chip to the full 200px it was allowed and stacked them
+   one per line. */
+.chip.go{transition:transform .18s var(--ease),background .18s}
+.chip.go:active{transform:scale(.93);background:var(--fill)}
+@media(hover:hover){.chip.go:hover{background:var(--fill)}}
 .stagebar{display:inline-flex;align-items:center;gap:3px;padding:2px 6px 2px 3px;border-radius:6px;background:var(--fill2);
   transition:transform .18s var(--ease)}
 .stagebar:active{transform:scale(.94)}
@@ -438,6 +447,15 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   #fab svg{width:25px;height:25px}
   #toast{bottom:calc(142px + env(safe-area-inset-bottom))}
   .field label{width:84px;font-size:14.5px}
+  /* The stage bar is the control most used away from a desk, one-handed, and its
+     segments were 4px tall — a decoration you had to aim at. Grown here only:
+     a mouse can hit 4px, a thumb lands within a few millimetres. Advancing the
+     wrong shipment costs a tap to undo, so the target is worth the 8px of row. */
+  .stagebar{padding:5px 10px 5px 7px;gap:4px}
+  .stagebar i{width:13px;height:6px;border-radius:3px}
+  .stagebar span{font-size:13px}
+  /* Same reasoning for a navigating chip: it is a target now, not a label. */
+  .chip.go{padding:4px 9px}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
@@ -1814,9 +1832,16 @@ function digestHTML(){
 
 function rowHTML(t){
   const p=projectOf(t),chips=[];
-  if(p&&view.t!=='project')chips.push(`<span class="chip"><i style="background:${p.color}"></i>${esc(p.name)}</span>`);
-  if(t.manufacturer)chips.push(`<span class="chip">${esc(t.manufacturer)}</span>`);
-  if(t.destination)chips.push(`<span class="chip">→ ${esc(t.destination)}</span>`);
+  /* A chip that names something the app can show is a door to it, and the phone
+     needs those doors more than anywhere else: the sidebar is display:none below
+     861px and the palette wants ⌘K, so a maker's own view — "everything I have
+     coming from Lumascape" — had no way in from a phone at all. */
+  if(p&&view.t!=='project')chips.push(`<button class="chip go" data-v="project" data-val="${p.id}"
+    aria-label="Show ${esc(p.name)}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`);
+  if(t.manufacturer)chips.push(`<button class="chip go" data-v="mfr" data-val="${esc(t.manufacturer)}"
+    aria-label="Show everything from ${esc(t.manufacturer)}">${esc(t.manufacturer)}</button>`);
+  if(t.destination)chips.push(`<button class="chip go" data-v="dest" data-val="${esc(t.destination)}"
+    aria-label="Show everything going to ${esc(t.destination)}">→ ${esc(t.destination)}</button>`);
   if(t.qty)chips.push(`<span class="chip">×${t.qty}</span>`);
   if(t.po)chips.push(`<span class="chip">${/^p\.?o\b/i.test(t.po.trim())?'':'PO '}${esc(t.po)}</span>`);
   if(t.rep)chips.push(`<span class="chip">↻ ${REP_SHORT[t.rep]}</span>`);
@@ -1945,17 +1970,55 @@ function emptyHTML(){
       <p>Make a project for each job, then track what needs doing and what is being made and shipped.</p>
       <div><button class="btn" data-m="newproj">New project</button></div>
       <div><button class="btn ghost" data-m="sample">Load a sample setup</button></div></div>`;
-  const m={today:['☕️','Nothing due today','Anything without a date sits in All. Scheduled shows what is coming.'],
-    scheduled:['🗓','No dates set','Add a due date and it lands here.'],
-    flagged:['🚩','Nothing flagged','Flag anything you want to keep close.'],
-    done:['✨','Nothing completed yet','Finished work collects here.'],
-    shipments:['📦','No shipments open','Add one with a maker and a destination.'],
-    project:['🌱','This project is empty','Add the first task to get it moving.'],
-    all:['📋','All clear','Add a task to get going.'],
-    archive:['🗄','Nothing archived','Archive completed work to clear the list and keep its history.']}[view.t]
-    ||['🔍','No matches','Try a different search.'];
-  return `<div class="empty"><div class="g">${m[0]}</div><h3>${m[1]}</h3><p>${m[2]}</p>
-    <div><button class="btn" data-a="new">${composerCtx().type==='shipment'?'Add shipment':'New task'}</button></div></div>`;
+  /* An empty state is a fork in the road, not a sign saying the road ended. Each
+     one now offers what you most likely came to do — which is not always "add
+     something": an empty archive offering to make a task was a non-sequitur, and
+     nothing due today almost always means "so what is coming?" */
+  const ship=composerCtx().type==='shipment';
+  const A=lbl=>`<button class="btn" data-a="new">${lbl||(ship?'Add shipment':'New task')}</button>`;
+  const G=(v,lbl)=>`<button class="btn ghost" data-v="${v}">${lbl}</button>`;
+  const wrap=(g,h,p,btns)=>`<div class="empty"><div class="g">${g}</div><h3>${h}</h3><p>${p}</p>
+    ${btns.map(b=>`<div>${b}</div>`).join('')}</div>`;
+  /* The query is asked about first, and deliberately: a fruitless search while
+     the All tab happened to be showing said "All clear · Add a task to get
+     going", which answers a question nobody asked and hides the two things you
+     actually want — make the thing you were looking for, or stop looking. */
+  const q=query.trim();
+  if(q)return wrap('🔍','No matches',
+    `Nothing matches “${esc(q)}”. Search looks through completed and archived work too.`,
+    [`<button class="btn" data-a="newq">Add “${esc(q.slice(0,40))}” as a ${ship?'shipment':'task'}</button>`,
+     `<button class="btn ghost" data-a="clearq">Clear the search</button>`]);
+  // A day picked on the strip is a different question from "nothing due today".
+  if(selDay&&(view.t==='today'||view.t==='scheduled')){
+    // fmtDue alone would give "Nothing due Tomorrow", so the preposition is
+    // chosen with the phrase rather than baked into the formatter
+    const n=diff(selDay),when=n===0?'today':n===1?'tomorrow':`on ${fmtDue(selDay)}`;
+    return wrap('🗓',`Nothing due ${when}`,'Pick another day on the strip, or tap that one again to see the whole view.',
+      [A(),G(view.t,'Clear the day')]);
+  }
+  const m={today:['☕️','Nothing due today','Anything without a date sits in All. Scheduled shows what is coming.',
+      [A(),G('scheduled','See what is coming')]],
+    scheduled:['🗓','No dates set','Add a due date to anything and it lands here.',
+      [A(),G('all','Show everything open')]],
+    flagged:['🚩','Nothing flagged','Flag anything you want to keep close.',
+      [G('all','Show everything open')]],
+    done:['✨','Nothing completed yet','Finished work collects here.',
+      [G('all','Show everything open')]],
+    shipments:['📦','No shipments open','Add one with a maker and a destination.',
+      [A('Add shipment')]],
+    project:['🌱','This project is empty','Add the first task to get it moving.',
+      [A()]],
+    all:['📋','All clear','Nothing open. Anything you finish collects under Done.',[A(),G('done','Show completed work')]],
+    archive:['🗄','Nothing archived','Archive completed work to clear the list and keep its history.',
+      [G('done','Show completed work')]],
+    // These two are reachable from a chip now, so they need their own answer
+    // rather than falling through to a search state with nothing searched.
+    mfr:['📦','Nothing open from this maker','Everything from them has arrived, or nothing is on order yet.',
+      [A('Add shipment'),G('shipments','All shipments')]],
+    dest:['🚚','Nothing going here','No open shipment has this destination.',
+      [A('Add shipment'),G('shipments','All shipments')]]}[view.t]
+    ||['📋','Nothing here','Nothing to show in this view.',[A()]];
+  return wrap(m[0],m[1],m[2],m[3]);
 }
 function searchProjectsHTML(){
   const q=query.toLowerCase();
@@ -2709,6 +2772,13 @@ function onScan(raw){
   const c=detectCarrier(n);
   toast(c?`New shipment · ${c.name}`:'New shipment · carrier not recognised');
 }
+/* A search that found nothing, turned into the thing you were looking for. The
+   text goes in the box rather than into ctx so the composer's own parsing of
+   `#Project` and the rest still applies to it. */
+function openComposerWith(text){
+  openComposer();
+  if(text){$('#ci').value=text;updatePreview();}
+}
 function openComposerFor(tracking){
   openComposer();
   ctx.type='shipment';ctx.tracking=tracking;
@@ -3404,7 +3474,16 @@ $('#tabbar').addEventListener('click',e=>{
 $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-m]'))return;
   if(e.target.closest('[data-noopen]'))return;   // tracking link: follow it, don't open the row
-  if(e.target.closest('[data-a="new"]'))return openComposer();
+  const ac=e.target.closest('[data-a]');
+  if(ac){
+    if(ac.dataset.a==='new')return openComposer();
+    if(ac.dataset.a==='newq')return openComposerWith(query.trim());
+    if(ac.dataset.a==='clearq'){$('#q').value='';query='';renderList();return;}
+  }
+  /* A chip or an empty state naming a view is a door to it. Not while selecting,
+     though: there a tap anywhere in the row means "pick this one". */
+  const nv=e.target.closest('[data-v]');
+  if(nv&&!selMode){buzz(4);return setView(nv.dataset.v,nv.dataset.val||undefined);}
   const ep=e.target.closest('[data-editproj]');if(ep)return openProject(ep.dataset.editproj);
   if(e.target.closest('[data-editmaker]'))return openMaker(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
