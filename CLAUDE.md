@@ -74,22 +74,31 @@ means "pick this one".
 
 ## Storage is the constraint
 
-localStorage gives a page about 5MB — measured at 5056KB, not assumed. Everything
-about images follows from that:
+localStorage gives a page about 5MB — measured at 5056KB, not assumed. Most of
+the app is text and nowhere near it; images are the whole problem.
 
-- Task photos are their own record kind (`pic`), never a field on the task.
-  In items mode a row crosses the wire only when it changes; inside the task,
-  every photo would be re-sent whenever anything about that task was edited. The
-  `kind` column is free-form text and the SQL never enumerates kinds, so a new
-  kind needs no schema change.
-- Nothing is stored as handed over. 1000px longest edge, JPEG 0.6 — about 70KB
-  for a real photo, 138KB for a noisy worst case. The board did store raw files
-  behind a 2MB check, and two photos made a **4.5MB** document that was re-pulled
-  every fifteen seconds; `shrinkStoredImages()` squeezes those on load, once,
-  only downwards, because it runs on every load.
+**Tasks have no photos, and that was a decision, not an omission.** They were
+built (own record kind `pic`, compressed, budgeted) and taken out again: four
+photos on one item spent a tenth of the entire store on a single row, which is
+the wrong trade for this app. Don't rebuild it without a store that isn't
+localStorage.
+
+- Only the board takes images. Nothing is stored as handed over: 1000px longest
+  edge, JPEG 0.6 — about 70KB for a real photo, 180KB for a noisy one. The board
+  did keep raw files behind a 2MB check, and two of them made a **4.5MB**
+  document that was re-pulled every fifteen seconds. `shrinkStoredImages()`
+  squeezes what is already stored, once, only downwards, because it runs on
+  every load.
 - `createImageBitmap` takes a Blob and honours EXIF orientation; it **rejects a
   string**. Already-stored data URLs need an `<img>`, which needs no orientation
   handling because a canvas-produced URL has no EXIF left.
+- Removing a feature has to give the space back. `migrate()` drops any stored
+  `pics` and tombstones them, and `loadAll()` writes that through immediately —
+  nothing saves during boot, so otherwise the old copy sits there until the next
+  edit, which on a full store is the edit that cannot succeed.
+- `KINDS` is a whitelist, not a lookup with a fallback. It used to default to
+  `tasks` for an unknown kind, which would have poured leftover `pic` rows into
+  the task list. A *missing* kind still means task — the earliest rows had none.
 - A deleted record is swept from **every** list, not the one its kind names: a
   tombstone carries no kind, so it goes out labelled `task`. Before this, a maker
   deleted on one device survived on all the others.

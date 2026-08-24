@@ -294,28 +294,6 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trk .gotbtn.on{color:var(--green);font-weight:600}
 .trk .del{margin-left:auto;color:var(--red);font-size:13px}
 .trackadd{display:flex;gap:8px;padding:10px 14px 12px;background:var(--card2)}
-/* Photos. A row of squares that scrolls sideways, so four of them never push the
-   notes field off the sheet. Square thumbnails of a portrait photo, cropped by
-   object-fit rather than letterboxed — a strip of different shapes reads as a
-   mess, and the full picture is one tap away. */
-.pics{display:flex;gap:8px;overflow-x:auto;padding:9px 14px 2px;background:var(--card2);scrollbar-width:none}
-.pics::-webkit-scrollbar{display:none}
-.pic{flex:none;width:74px;height:74px;border-radius:11px;overflow:hidden;background:var(--fill2);
-  transition:transform .18s var(--ease)}
-.pic:active{transform:scale(.94)}
-.pic img{width:100%;height:100%;object-fit:cover;display:block}
-#dpicadd:disabled{opacity:.4;pointer-events:none}
-/* The viewer is deliberately not a sheet: a photo wants the whole screen, and
-   the detail sheet it was opened from is still behind it. */
-#picview{position:fixed;inset:0;z-index:130;background:#000;display:none;
-  flex-direction:column;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 0 0}
-#picview.on{display:flex}
-#picimg{max-width:100%;max-height:calc(100% - 64px);object-fit:contain}
-#picview .picbar{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:14px;
-  padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(0,0,0,.5)}
-#picview .picbar span{flex:1;min-width:0;font-size:12.5px;color:#ffffff99;font-variant-numeric:tabular-nums}
-#picview .picbar button{font-size:15px;font-weight:600;color:#fff}
-#picview #picdel{color:#ff6961}
 /* The checklist. A step is a line, not a card: eight of them under one task have
    to stay scannable, and the tick is the only thing worth any weight. */
 .stepadd{display:flex;gap:8px;padding:9px 14px 12px;background:var(--card2)}
@@ -617,14 +595,6 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div id="dstamps" class="stamps"></div>
   </div>
   <div class="fgroup">
-    <div class="trackhead"><span>Photos</span><span id="dpicct" class="got"></span></div>
-    <div id="dpics" class="pics"></div>
-    <div class="stepadd">
-      <button class="btn sec" id="dpicadd" style="margin:0;font-size:14px;padding:8px 14px">Add a photo</button>
-      <input id="dpicfile" type="file" accept="image/*" multiple hidden>
-    </div>
-  </div>
-  <div class="fgroup">
     <div class="trackhead"><span>Checklist</span><span id="dstepct" class="got"></span></div>
     <div id="dsteps"></div>
     <div class="stepadd">
@@ -692,7 +662,6 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div style="padding:10px 14px 0"><button class="btn sec" id="setsync" style="width:100%;margin:0;text-align:center">Sync setup…</button></div>
 
   <div class="sethead">Your data</div>
-  <div class="blurb" id="setpicnote" style="padding-bottom:0"></div>
   <div style="padding:10px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn sec" data-m="export" style="margin:0;font-size:14px;padding:9px 14px">Save a backup file</button>
     <button class="btn sec" data-m="import" style="margin:0;font-size:14px;padding:9px 14px">Load from a backup file</button>
@@ -945,14 +914,6 @@ grant execute on function shipshape_push_unsub(text, text) to anon;</pre>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
 <div id="toast" role="status" aria-live="polite"><span id="tmsg"></span><button id="tundo" hidden>Undo</button></div>
 
-<div id="picview" role="dialog" aria-modal="true" aria-label="Photo">
-  <img id="picimg" alt="">
-  <div class="picbar">
-    <span id="picmeta"></span>
-    <button id="picdel">Remove</button>
-    <button id="picclose" aria-label="Close">Done</button>
-  </div>
-</div>
 
 <div id="bulkbar">
   <span class="n" id="bulkn">0 selected</span>
@@ -1090,6 +1051,8 @@ let fx={style:'confetti',when:'all',amount:'medium'};
 let sync={url:'',key:'',ws:'',on:false,last:0,mode:null,pushed:0,pulled:0,push:false,pushKey:'',pushUrl:'',draft:null};
 /* "just now" was hard-coded, so the sheet claimed a fresh sync however long ago
    the last one really was. */
+// Sizes, for the one place that talks about them: what clearing out would free.
+const fmtKB=n=>n>=1048576?`${(n/1048576).toFixed(1)} MB`:`${Math.round(n/1024)} KB`;
 function fmtAgo(ts){
   if(!ts)return 'never';
   const s=Math.max(0,Math.round((Date.now()-ts)/1000));
@@ -1110,17 +1073,20 @@ const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"
 /* A docked detail pane can sit open for an hour, so unlike a modal sheet it must
    not hold off background pulls — nothing re-renders the open sheet under you,
    and whatever is in its fields is written back when it closes. */
-/* Whether something is open that a background render would interrupt. The photo
-   viewer counts: it is not a .sheet, but it is the whole screen and someone is
-   looking at it. */
-const sheetOpen=()=>$$('.sheet.on').some(s=>!s.classList.contains('dock'))
-  ||$('#picview').classList.contains('on');
+const sheetOpen=()=>$$('.sheet.on').some(s=>!s.classList.contains('dock'));
 
 async function loadAll(){
   let raw=await local.get(KEY);
   if(!raw){for(const k of ['shipshape:v2','shipshape:v1']){const o=await local.get(k);if(o){raw=o;break;}}}
   if(raw){try{S=Object.assign(S,JSON.parse(raw));}catch(e){}}
   migrate();
+  /* Dropping the photos out of S is not enough on its own: nothing saves during
+     boot, so the old copy — megabytes of it — would sit in localStorage until the
+     next edit happened to write over it. On a store that is already full that
+     edit cannot succeed, so the space has to be given back before anything else
+     is attempted. Written straight through rather than debounced, and the
+     tombstones go out so the other devices drop them too. */
+  if(migrate.freed){saveNow();schedulePush();migrate.freed=false;}
   const sr=await local.get(SKEY);
   if(sr){try{sync=Object.assign(sync,JSON.parse(sr));}catch(e){}}
   // "doc" only means the optional functions were missing last time. They can be
@@ -1139,7 +1105,7 @@ async function loadAll(){
   $('#app').classList.toggle('compact',compact);
 }
 function migrate(){
-  S.projects=S.projects||[];S.tasks=S.tasks||[];S.tomb=S.tomb||{};S.pics=S.pics||[];
+  S.projects=S.projects||[];S.tasks=S.tasks||[];S.tomb=S.tomb||{};
   if(!S.v||S.v<2){
     for(const n of [...new Set(S.tasks.map(t=>t.project).filter(Boolean))])
       if(!S.projects.find(p=>p.name===n))S.projects.push({id:uid(),name:n,color:colorFor(n),client:'',due:null,notes:'',u:now()});
@@ -1166,11 +1132,17 @@ function migrate(){
   }
   for(const p of S.projects){p.u=p.u||now();delete p.lead;}
   S.makers=Array.isArray(S.makers)?S.makers:[];
-  // Photos, and never a photo whose task has gone — those would be invisible
-  // weight in a store with about 5MB to give.
-  S.pics=Array.isArray(S.pics)?S.pics.filter(x=>x&&x.id&&x.d&&x.taskId):[];
-  {const live=new Set(S.tasks.map(t=>t.id));
-   S.pics=S.pics.filter(x=>live.has(x.taskId));}
+  /* Task photos were tried and taken out again: a browser gives a page about
+     5MB, and four on one item spent a tenth of that on a single row. Removing
+     the feature is not enough by itself — a photo nothing can reach any more is
+     the worst kind of weight, invisible and permanent. So anything already
+     stored is dropped here and tombstoned, which frees the space and takes them
+     off the other devices too. Runs once; after it there is nothing to find. */
+  if(Array.isArray(S.pics)&&S.pics.length){
+    for(const x of S.pics)if(x&&x.id)S.tomb[x.id]=now();
+    migrate.freed=true;             // loadAll writes it back; see there for why
+  }
+  delete S.pics;
   sanitizeColors();
 }
 /* A maker's quoted lead time was recorded and then only ever displayed. Given a
@@ -1253,7 +1225,7 @@ async function rpc(fn,body){
   const txt=await r.text();
   return txt?JSON.parse(txt):null;
 }
-const payload=()=>({v:3,projects:S.projects,tasks:S.tasks,makers:S.makers,pics:S.pics,tomb:S.tomb});
+const payload=()=>({v:3,projects:S.projects,tasks:S.tasks,makers:S.makers,tomb:S.tomb});
 function schedulePush(){
   if(!sync.on)return;
   clearTimeout(pushT);
@@ -1426,12 +1398,13 @@ $('#pushoff').addEventListener('click',disablePush);
    Clocks on two devices are never exactly equal, so the pull cursor is rewound
    by a grace window rather than trusting it to the millisecond. */
 const ITEM_GRACE=5*60*1000;
-/* Photos are their own kind, not a field on the task, and the reason is the
-   fifteen-second poll. In items mode a row moves only when it changes, so a
-   photo crosses the wire once; inside the task it would be re-sent every time
-   anything about that task was edited. The `kind` column is free-form text and
-   the SQL functions never enumerate kinds, so this needed no schema change. */
-const KINDS={task:'tasks',project:'projects',maker:'makers',pic:'pics'};
+/* A record kind the app no longer knows about must be ignored, not guessed at.
+   The lookup used to fall back to 'tasks' for anything unrecognised, which was
+   fine while every kind was known — but a workspace that still holds `pic` rows
+   from when task photos existed would have poured them into the task list. A
+   missing kind still means task, because the very first rows were written
+   without one. */
+const KINDS={task:'tasks',project:'projects',maker:'makers'};
 function itemsSince(ts){
   const out=[];
   for(const [kind,key] of Object.entries(KINDS))
@@ -1594,7 +1567,9 @@ async function pull(quiet){
 function mergeItems(rows){
   let changed=false;
   for(const r of rows){
-    const key=KINDS[r.kind]||'tasks',list=S[key]=S[key]||[];
+    const key=r.kind?KINDS[r.kind]:'tasks';
+    if(!key)continue;                             // a kind this version does not keep
+    const list=S[key]=S[key]||[];
     const u=+r.u||0;
     if(!r.data){                                  // deleted elsewhere
       if(!S.tomb[r.id]||S.tomb[r.id]<u){S.tomb[r.id]=u;changed=true;}
@@ -1634,12 +1609,10 @@ function mergeIn(remote){
   changed=mergeList(S.tasks,remote.tasks)||changed;
   changed=mergeList(S.projects,remote.projects)||changed;
   changed=mergeList(S.makers,remote.makers)||changed;
-  changed=mergeList(S.pics,remote.pics)||changed;
-  const n0=S.tasks.length+S.projects.length+S.pics.length;
+  const n0=S.tasks.length+S.projects.length;
   S.tasks=S.tasks.filter(t=>!(S.tomb[t.id]&&S.tomb[t.id]>=(t.u||0)));
   S.projects=S.projects.filter(p=>!(S.tomb[p.id]&&S.tomb[p.id]>=(p.u||0)));
-  S.pics=S.pics.filter(x=>!(S.tomb[x.id]&&S.tomb[x.id]>=(x.u||0)));
-  if(n0!==S.tasks.length+S.projects.length+S.pics.length)changed=true;
+  if(n0!==S.tasks.length+S.projects.length)changed=true;
   const cut=now()-60*864e5;
   for(const id in S.tomb)if(S.tomb[id]<cut)delete S.tomb[id];
   if(changed){S.started=true;sanitizeColors();}   // remote projects are untrusted input
@@ -2090,8 +2063,6 @@ function rowHTML(t){
      that gets a colour. */
   if(t.wait&&!t.done)chips.push(`<button class="chip go" data-v="waiting"
     ${t.wait==='them'?'style="color:var(--orange)"':''}>${WAIT_LABEL[t.wait]}</button>`);
-  {const np=picsOf(t.id).length;
-   if(np)chips.push(`<span class="chip">▣ ${np}</span>`);}
   const st_=stepsOf(t);
   if(st_.length)chips.push(`<span class="chip"${st_.every(s=>s.d)?' style="color:var(--green)"':''}>✓ ${st_.filter(s=>s.d).length}/${st_.length}</span>`);
   // an expected arrival later than the promised date is the thing worth seeing
@@ -2659,15 +2630,8 @@ function ping(hz){
 function delTask(id){
   const i=S.tasks.findIndex(x=>x.id===id);if(i<0)return;
   const [t]=S.tasks.splice(i,1);
-  // its photos go with it, or they are weight nothing can reach
-  const pics=S.pics.filter(x=>x.taskId===id);
-  S.pics=S.pics.filter(x=>x.taskId!==id);
-  S.tomb[id]=now();for(const x of pics)S.tomb[x.id]=now();
-  save();render();
-  toast('Deleted',()=>{
-    delete S.tomb[id];t.u=now();S.tasks.splice(i,0,t);
-    for(const x of pics){delete S.tomb[x.id];x.u=now();S.pics.push(x);}
-    save();render();});
+  S.tomb[id]=now();save();render();
+  toast('Deleted',()=>{delete S.tomb[id];t.u=now();S.tasks.splice(i,0,t);save();render();});
 }
 /* ============ clearing out ============
    Archiving takes something off the list; it never took it out of the file. A
@@ -2683,21 +2647,19 @@ function prunable(days=PRUNE_DAYS){
   const cut=now()-days*864e5;
   const tasks=S.tasks.filter(t=>t.arch&&t.arch<cut);
   const going=new Set(tasks.map(t=>t.id));
-  const pics=S.pics.filter(x=>going.has(x.taskId));
   /* A project goes only when nothing of it is left standing. One whose every
      task is on this list is a finished job; one with no tasks at all is left
      alone, because that is what a project looks like the moment it is created. */
   const staying=new Set(S.tasks.filter(t=>!going.has(t.id)).map(t=>t.projectId).filter(Boolean));
   const projects=S.projects.filter(p=>!staying.has(p.id)&&S.tasks.some(t=>t.projectId===p.id));
-  return {tasks,pics,projects,bytes:JSON.stringify({tasks,pics,projects}).length};
+  return {tasks,projects,bytes:JSON.stringify({tasks,projects}).length};
 }
 function prune(pr){
   pr=pr||prunable();
-  const going=new Set([...pr.tasks,...pr.pics,...pr.projects].map(x=>x.id));
+  const going=new Set([...pr.tasks,...pr.projects].map(x=>x.id));
   if(!going.size)return;
   for(const id of going)S.tomb[id]=now();
   S.tasks=S.tasks.filter(t=>!going.has(t.id));
-  S.pics=S.pics.filter(x=>!going.has(x.id));
   S.projects=S.projects.filter(p=>!going.has(p.id));
   // whatever view was showing one of these has nothing to show now
   if((view.t==='project'&&going.has(view.v)))view={t:'today'};
@@ -2961,7 +2923,7 @@ function openDetail(id){
   $('#dpo').value=t.po||'';$('#dqty').value=t.qty||'';$('#deta').value=t.eta||'';
   $('#dstamps').innerHTML=stampsHTML(t);
   $('#dwait').innerHTML=WAITS.map(([v,l])=>`<option value="${v}" ${(t.wait||'')===v?'selected':''}>${l}</option>`).join('');
-  $('#dstepnew').value='';renderSteps(t);renderPics(t);
+  $('#dstepnew').value='';renderSteps(t);
   renderTracks(t);
   $('#dproj').innerHTML='<option value="">No project</option>'
     +S.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
@@ -3153,102 +3115,6 @@ function addTrack(t,n='',carrier=''){
   mirrorTracking(t);
   return t.tracks[t.tracks.length-1];
 }
-/* ============ photos ============
-   A photo of a damaged fixture, or of a packing slip, attached to the shipment it
-   belongs to rather than lost in a camera roll.
-
-   Everything here is downstream of one measured fact: this app keeps its whole
-   state in localStorage, and localStorage stops at about 5MB (measured: 5056KB in
-   Chrome). A phone photo is 3–4MB on its own, so it is re-encoded before it is
-   ever stored — 1000px on the longest edge at JPEG 0.6, which measured 138KB for
-   a deliberately noisy test image and lands nearer 70KB for real ones.
-
-   The budget below is the honest limit rather than a guess, and going over it is
-   refused with a number, not a silent failure — a quota error mid-write would
-   lose the whole document, not just the photo. */
-const PIC_MAX=1000,PIC_Q=.6,PIC_PER_TASK=4,PIC_BUDGET=1.5*1024*1024;
-const picsOf=id=>S.pics.filter(x=>x.taskId===id);
-const picBytes=()=>S.pics.reduce((n,x)=>n+(x.d?x.d.length:0),0);
-const fmtKB=n=>n>=1048576?`${(n/1048576).toFixed(1)} MB`:`${Math.round(n/1024)} KB`;
-/* Drawn through a canvas, which also strips the EXIF orientation flag — so the
-   bitmap has to be rotated to match what the camera intended, or every photo
-   taken in portrait on a phone arrives on its side. createImageBitmap does that
-   for us where it exists. */
-async function shrinkImage(file){
-  const bmp=await (window.createImageBitmap
-    ? createImageBitmap(file,{imageOrientation:'from-image'}).catch(()=>createImageBitmap(file))
-    : new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;
-        i.src=URL.createObjectURL(file);}));
-  const w0=bmp.width||bmp.naturalWidth,h0=bmp.height||bmp.naturalHeight;
-  if(!w0||!h0)throw new Error('not an image');
-  const s=Math.min(1,PIC_MAX/Math.max(w0,h0));
-  const c=document.createElement('canvas');
-  c.width=Math.max(1,Math.round(w0*s));c.height=Math.max(1,Math.round(h0*s));
-  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
-  bmp.close&&bmp.close();
-  return {d:c.toDataURL('image/jpeg',PIC_Q),w:c.width,h:c.height};
-}
-async function addPics(files){
-  const t=S.tasks.find(x=>x.id===editing);if(!t||!files||!files.length)return;
-  const room=PIC_PER_TASK-picsOf(t.id).length;
-  if(room<=0)return toast(`${PIC_PER_TASK} photos is the limit on one item.`);
-  let added=0,full=false;
-  for(const f of [...files].slice(0,room)){
-    if(!/^image\//.test(f.type||''))continue;
-    let img;
-    try{img=await shrinkImage(f);}catch(e){toast('That file could not be read as an image.');continue;}
-    if(picBytes()+img.d.length>PIC_BUDGET){full=true;break;}
-    S.pics.push({id:uid(),taskId:t.id,d:img.d,w:img.w,h:img.h,at:now(),u:now()});
-    added++;
-  }
-  if(added){t.u=now();save();renderPics(t);render();buzz(8);}
-  if(full)toast(`No room for that one. Photos are using ${fmtKB(picBytes())} of ${fmtKB(PIC_BUDGET)} — remove one first.`);
-  else if(added)toast(added===1?'Photo added':`${added} photos added`);
-}
-function renderPics(t){
-  const list=picsOf(t.id);
-  $('#dpicct').textContent=list.length?`${list.length} of ${PIC_PER_TASK}`:'';
-  $('#dpics').innerHTML=list.map(x=>`<button class="pic" data-pic="${x.id}" aria-label="Open photo">
-    <img src="${x.d}" alt="" width="${x.w}" height="${x.h}" loading="lazy"></button>`).join('');
-  $('#dpics').style.display=list.length?'':'none';
-  $('#dpicadd').disabled=list.length>=PIC_PER_TASK;
-}
-$('#dpicadd').addEventListener('click',()=>$('#dpicfile').click());
-$('#dpicfile').addEventListener('change',async e=>{
-  /* Copied out before the input is reset, not after: e.target.files is a live
-     FileList, and clearing value empties the very list being held. Resetting is
-     still needed, or picking the same file twice fires no change event. */
-  const f=[...e.target.files];
-  e.target.value='';
-  await addPics(f);
-});
-/* Full screen, because the point of the photo is the detail in it. */
-let picOpen=null;
-function openPic(id){
-  const x=S.pics.find(p=>p.id===id);if(!x)return;
-  picOpen=id;
-  $('#picimg').src=x.d;
-  $('#picmeta').textContent=`${x.w}×${x.h} · ${fmtKB(x.d.length)} · ${fmtAgo(x.at)}`;
-  $('#picview').classList.add('on');
-}
-function closePic(){picOpen=null;$('#picview').classList.remove('on');$('#picimg').src='';}
-$('#dpics').addEventListener('click',e=>{
-  const b=e.target.closest('[data-pic]');if(b)openPic(b.dataset.pic);
-});
-$('#picclose').addEventListener('click',closePic);
-$('#picview').addEventListener('click',e=>{if(e.target===$('#picview'))closePic();});
-$('#picdel').addEventListener('click',()=>{
-  const id=picOpen;if(!id)return;
-  const i=S.pics.findIndex(x=>x.id===id);if(i<0)return closePic();
-  const [x]=S.pics.splice(i,1);
-  S.tomb[x.id]=now();
-  const t=S.tasks.find(y=>y.id===x.taskId);if(t)t.u=now();
-  closePic();save();render();
-  if(t&&editing===t.id)renderPics(t);
-  toast('Photo removed',()=>{delete S.tomb[x.id];x.u=now();S.pics.splice(i,0,x);
-    if(t)t.u=now();save();render();
-    if(t&&editing===t.id)renderPics(t);});
-});
 /* ============ checklist ============
    A punch list is eight rooms under one task, not eight tasks. Kept on the task
    so it moves, syncs and archives with it, and deliberately not wired to the
@@ -3952,7 +3818,6 @@ function doMenu(k){
       return toast(`Nothing archived longer than a year yet. Archive finished work first.`);
     const bits=[`${pr.tasks.length} archived item${pr.tasks.length===1?'':'s'}`];
     if(pr.projects.length)bits.push(`${pr.projects.length} finished project${pr.projects.length===1?'':'s'}`);
-    if(pr.pics.length)bits.push(`${pr.pics.length} photo${pr.pics.length===1?'':'s'}`);
     if(!confirm(`Permanently remove ${bits.join(', ')}, freeing ${fmtKB(pr.bytes)}?\n\n`
       +`Everything here was archived over a year ago. This cannot be undone, and it removes them from your other devices too. `
       +`Save a backup file first if you want to keep the history.`))return;
@@ -4284,7 +4149,6 @@ document.addEventListener('keydown',e=>{
     return $('#palette').classList.contains('on')?closePalette():openPalette();
   }
   if(e.key==='Escape'){
-    if($('#picview').classList.contains('on'))return closePic();
     if($('#palette').classList.contains('on'))return closePalette();
     if($('#addmenu').classList.contains('on'))return closeAddMenu();
     if($('#rowmenu').classList.contains('on'))return closeRowMenu();
@@ -4497,8 +4361,6 @@ function renderSettings(){
     ? (rtJoined?'On, and live — changes arrive as they happen.':'On, checking every 15 seconds.')
     : 'Off — everything stays on this device. Turn it on to share with your other devices.';
   $('#keysBtn').style.display=matchMedia('(min-width:861px)').matches?'':'none';
-  /* Photos are the one thing here that can run out, so the number is shown
-     rather than left to be discovered when a photo is refused. */
   {const pr=prunable(),all=JSON.stringify(S).length;
    $('#setprunenote').textContent=pr.tasks.length||pr.projects.length
      ? `Everything you have takes ${fmtKB(all)}. ${pr.tasks.length} item${pr.tasks.length===1?'':'s'}`
@@ -4506,12 +4368,6 @@ function renderSettings(){
        +` have been archived over a year — clearing them out frees ${fmtKB(pr.bytes)}.`
      : `Everything you have takes ${fmtKB(all)}. Archived work is cleared out only once it is over a year old, and only when you ask.`;
    $('#pruneBtn').style.display=(pr.tasks.length||pr.projects.length)?'':'none';}
-  const pb=picBytes(),np=S.pics.length;
-  $('#setpicnote').textContent=np
-    ? `${np} photo${np===1?'':'s'} using ${fmtKB(pb)} of the ${fmtKB(PIC_BUDGET)} photos are allowed. `
-      +`Everything else here is text and takes almost nothing.`
-    : 'Everything is kept on this device, and photos are the only part with a limit — '
-      +`${fmtKB(PIC_BUDGET)}, about twenty of them, because a browser gives a page around 5MB in total.`;
 }
 function openSettings(){renderSettings();rememberFocus();$('#scrim').classList.add('on');$('#setsheet').classList.add('on');}
 $('#setclose').addEventListener('click',closeSheets);
