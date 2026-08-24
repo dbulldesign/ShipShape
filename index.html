@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.35.0">
+<meta name="app-version" content="1.36.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -59,7 +59,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
 /* The board pane fills what the list would have. It scrolls inside itself, which
    is what makes the switch feel like a view and not a navigation: this shell
    never moves, so the sidebar keeps its scroll position and the header stays put. */
-#boardpane{flex:1;min-height:0;display:none}
+/* overflow:hidden and a full-height frame, so the board scrolls inside its own
+   document rather than growing the pane. iOS has historically laid an iframe out
+   at its content height instead of scrolling it; a fixed-height pane that clips
+   is the shape that behaves there. */
+#boardpane{flex:1;min-height:0;display:none;overflow:hidden}
 body[data-board] #boardpane{display:block}
 body[data-board] #scroll{display:none}
 #boardframe{width:100%;height:100%;border:0;display:block;background:var(--bg)}
@@ -69,6 +73,9 @@ body[data-board] #scroll{display:none}
    what you are looking at — so the pane needs no menu of its own. */
 #moreMenu .boardonly{display:none}
 body[data-board] #moreMenu .boardonly{display:block}
+/* The pane says when it has an overlay up: its own is fixed inside the iframe
+   and cannot cover this bar, so this bar gets out of the way instead. */
+body[data-boardmodal] #tabbar{display:none}
 body[data-board] .searchbar,body[data-board] .hctl,
 body[data-board] #calBtn,body[data-board] #addTop,body[data-board] #fab{display:none}
 .wrap{max-width:780px;margin:0 auto}
@@ -636,7 +643,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <button class="tab" data-v="projects"><svg viewBox="0 0 24 24"><path d="M4 4h6l1.6 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg><span>Projects</span></button>
   <button class="tab" data-v="shipments"><svg viewBox="0 0 24 24"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h7A2.5 2.5 0 0 1 14 6.5V8h3l4 4.5V17h-2.1a2.9 2.9 0 0 1-5.8 0H9.9a2.9 2.9 0 0 1-5.8 0H2V6.5Z"/></svg><span>Shipments</span></button>
   <button class="tab" data-v="all"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Z"/></svg><span>All</span></button>
-  <button class="tab" data-href="board.html"><svg viewBox="0 0 24 24"><path d="M5 4h5.5v7H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8.5 0H19a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1h-5.5V4ZM5 13.5h5.5V20H5a1 1 0 0 1-1-1v-4.5a1 1 0 0 1 1-1Zm8.5-1H19a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-5.5v-7.5Z"/></svg><span>Board</span></button>
+  <button class="tab" data-v="board"><svg viewBox="0 0 24 24"><path d="M5 4h5.5v7H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8.5 0H19a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1h-5.5V4ZM5 13.5h5.5V20H5a1 1 0 0 1-1-1v-4.5a1 1 0 0 1 1-1Zm8.5-1H19a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-5.5v-7.5Z"/></svg><span>Board</span></button>
 </div></nav>
 
 <div id="ptr" aria-hidden="true"><img src="favicon.svg" alt=""></div>
@@ -2975,25 +2982,23 @@ const docked=()=>$('#detail').classList.contains('dock');
 /* The window can be resized across the split-view threshold with a task open, so
    the pane has to be able to become the modal it would have been, and back. */
 /* ============ the board, embedded ============
-   Above 861px the board is a view in this shell rather than a page of its own.
-   It stays a separate document — its state, its merge rules and its own record in
-   the workspace are all untouched — but it loads into a pane here, so switching
-   costs a view change instead of a page load that discards the app and rebuilds
-   it from localStorage.
-   Below 861px it is still a page: the phone's bottom bar carries Board as its
-   sixth tab and that already reads as one app, and an iframe inside a fixed
-   bottom bar is a scrolling problem not worth taking on a phone. */
-const boardWide=()=>matchMedia('(min-width:861px)').matches;
+   The board is a view in this shell rather than a page of its own, at every
+   width. It stays a separate document — its state, its merge rules and its own
+   record in the workspace are all untouched — but it loads into a pane here, so
+   switching costs a view change instead of a page load that discards the app and
+   builds it again out of localStorage.
+   On a phone that matters more, not less: a page load there is a white flash and
+   a scroll position lost, and the bottom bar it shares with the app was the only
+   thing making two pages look like one. */
 let boardHash='';
 function openBoard(hash){
-  if(!boardWide()){location.href='board.html'+(hash||'');return;}
   boardHash=hash||'';
   setView('board');
 }
 function syncBoard(){
   const on=view.t==='board';
   document.body.toggleAttribute('data-board',on);
-  if(!on)return;
+  if(!on){document.body.removeAttribute('data-boardmodal');return;}
   const f=$('#boardframe');
   // ?embed=1 is what tells the board to drop its own chrome. A deep link
   // reloads the pane on purpose: the board reads #p= and #new once, at load.
@@ -3004,6 +3009,7 @@ function syncBoard(){
    were separate pages — only one ran at a time. Embedded, both would run in the
    same tab, so the board's own interval stands down under ?embed=1 and this
    nudges it from the app's existing fifteen-second tick instead. */
+window.__ssBoardModal=on=>document.body.toggleAttribute('data-boardmodal',!!on);
 function pokeBoard(){
   const f=$('#boardframe');
   if(view.t!=='board'||!f.getAttribute('src'))return;
@@ -3979,7 +3985,8 @@ $('#hsort').addEventListener('change',e=>{sortBy=e.target.value;saveView();rende
 $('#hgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();render();});
 $('#tabbar').addEventListener('click',e=>{
   const a=e.target.closest('[data-href]');if(a)return location.href=a.dataset.href;
-  const b=e.target.closest('[data-v]');if(b){setView(b.dataset.v);buzz(4);}});
+  const b=e.target.closest('[data-v]');
+  if(b){b.dataset.v==='board'?openBoard():setView(b.dataset.v);buzz(4);}});
 /* Anything that says "go to the board" goes through openBoard, so it lands in
    the pane on a desktop and on the page on a phone without each caller deciding. */
 document.addEventListener('click',e=>{
@@ -4146,7 +4153,8 @@ function ptrSet(dy,busy){
   el.classList.toggle('spin',!!busy);
 }
 $('#scroll').addEventListener('touchstart',e=>{
-  if(ptrBusy||e.touches.length!==1||$('#scroll').scrollTop>0||sheetOpen()){ptrY=null;return;}
+  // the board is its own document in a pane; the app's list is not even on screen
+  if(ptrBusy||view.t==='board'||e.touches.length!==1||$('#scroll').scrollTop>0||sheetOpen()){ptrY=null;return;}
   ptrY=e.touches[0].clientY;ptrX=e.touches[0].clientX;ptrDy=0;ptrLock=null;
   ptrInH=inHScroller(e.target);
   // sit at the top of the list, not the top of the window: above that is the

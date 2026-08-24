@@ -190,12 +190,14 @@ cross-tab `storage` events and merges, so two open tabs cannot clobber each
 other. `board.html#new` still exists for the richer capture (images) the sheet
 links to.
 
-## The board is a pane on a desktop, a page on a phone
+## The board is a pane, not a page
 
-Above 861px the board loads into `#boardpane` — an iframe inside `#main` — so
-`view.t==='board'` is a real view and the sidebar, header and scroll position all
+The board loads into `#boardpane` — an iframe inside `#main` — at every width, so
+`view.t==='board'` is a real view and the chrome, sidebar and scroll position all
 survive the switch. It stays a *separate document*: its own state, its own merge
-rules, its own record in the workspace. Only the shell is shared.
+rules, its own record in the workspace. Only the shell is shared. `board.html`
+opened directly hands over to `index.html#view=board`, keeping any deep link, so
+there is one way in and no way to end up on a bare page.
 
 - `?embed=1` **and** `parent!==window` is what means embedded. The flag alone is
   not enough, or a stray `?embed=1` in a real tab strips the chrome and leaves no
@@ -215,9 +217,18 @@ rules, its own record in the workspace. Only the shell is shared.
   the app's existing tick calls it.
 - `body[data-board]`, not `#app[data-board]`: `#fab`, `#tabbar` and the menus live
   outside `#app`, so a descendant selector on it silently misses them.
-- Below 861px the board is still a page. The phone's bottom bar already carries
-  Board as its sixth tab, and an iframe inside a fixed bottom bar is a scrolling
-  problem not worth taking on a phone.
+- An overlay inside the pane is fixed to *that* document, so it stops at the
+  pane's edge and the shell's bottom tab bar paints straight over it. Standalone
+  this never came up — `.overlay` is z-index 60 and the board's own bar is 40 — so
+  the board calls `parent.__ssBoardModal` and the shell hides `#tabbar` while a
+  board modal or its sync panel is up. `syncBoard()` clears the flag on the way
+  out, or leaving mid-modal would strand the bar hidden.
+- The phone keeps the board's original `padding-bottom` on `main`; only a desktop,
+  which has no bottom bar, gets that space back. The pane deliberately extends
+  under the tab bar, so the padding is what clears it.
+- `#boardpane` is `overflow:hidden` with a full-height frame. iOS has historically
+  laid an iframe out at its content height rather than scrolling it, and a
+  fixed-height pane that clips is the shape that behaves there.
 
 ## The board
 

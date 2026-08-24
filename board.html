@@ -15,15 +15,14 @@
 try{
   var emb=new URLSearchParams(location.search).has('embed')&&parent!==window;
   if(emb)document.documentElement.classList.add('embed');
-  /* Opened as a page on a desktop — a bookmark, an old link, a window that grew
-     — this is the separate view the integration exists to avoid, so hand over to
-     the shell. It has to happen here, before anything else runs: the board's own
-     #p= and #new handlers replace the hash away, so a redirect further down the
-     file would have nothing left to forward. */
-  else if(matchMedia('(min-width:861px)').matches)
-    location.replace(location.hash
-      ? 'index.html#board='+encodeURIComponent(location.hash)
-      : 'index.html#view=board');
+  /* Opened as a page — a bookmark, an old link, a Home Screen shortcut — this is
+     the separate view the integration exists to avoid, so hand over to the shell
+     at any width. It has to happen here, before anything else runs: the board's
+     own #p= and #new handlers replace the hash away, so a redirect further down
+     the file would have nothing left to forward. */
+  else location.replace(location.hash
+    ? 'index.html#board='+encodeURIComponent(location.hash)
+    : 'index.html#view=board');
 }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317242F'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%23E4F222' font-family='sans-serif' font-weight='bold'%3E%E2%88%97%3C/text%3E%3C/svg%3E">
@@ -239,7 +238,10 @@ main{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
    what belongs to the board itself: what is saved, its own data menu, its search
    and its five views. The bottom tab bar goes because the shell has one. */
 .embed #tabbar{display:none}
-.embed main{padding-bottom:40px}
+/* Embedded, the space at the bottom is for the shell's tab bar rather than this
+   page's own — which is the same amount, so the phone keeps the original figure
+   and only a desktop, where there is no bottom bar at all, gets it back. */
+@media (min-width:861px){.embed main{padding-bottom:40px}}
 /* The whole top row goes. Everything on it — who this is, the way back, the sync
    state, the data menu — the shell either already shows or now offers in its own
    ⋯, so leaving the row in place put a second ⋯ directly beneath the first and a
@@ -996,8 +998,17 @@ function capMsg(m) {
 }
 
 /* ————— modal ————— */
-function openModal(id) { openId = id; renderModal(); }
-function closeModal() { openId = null; document.getElementById("modal-root").innerHTML = ""; renderMain(); }
+/* An overlay in here is fixed to *this* document, so it stops at the pane's edge
+   — and the shell's bottom tab bar, being another document, paints straight over
+   it. Standalone that never came up: .overlay is z-index 60 and the board's own
+   tab bar is 40, so the modal covered it. Embedded, the only way to get the same
+   result is to ask the shell to stand its bar down, or an idea being edited on a
+   phone sits under five tappable tabs. */
+function shellOverlay(on) {
+  try { if (EMBED && parent.__ssBoardModal) parent.__ssBoardModal(on); } catch (e) {}
+}
+function openModal(id) { openId = id; renderModal(); shellOverlay(true); }
+function closeModal() { openId = null; document.getElementById("modal-root").innerHTML = ""; shellOverlay(false); renderMain(); }
 function renderModal() {
   const i = byId(openId);
   const root = document.getElementById("modal-root");
@@ -1477,8 +1488,8 @@ window.__ssBoardPull = () => { if (ssCfg() && !document.hidden) pullBoard(true);
 if (!EMBED) setInterval(() => { if (ssCfg() && !document.hidden) pullBoard(true); }, 15000);
 
 /* ————— sync panel ————— */
-function openSyncPanel() { renderSyncPanel(); }
-function closeSyncPanel() { document.getElementById("sync-root").innerHTML = ""; }
+function openSyncPanel() { renderSyncPanel(); shellOverlay(true); }
+function closeSyncPanel() { document.getElementById("sync-root").innerHTML = ""; shellOverlay(false); }
 function renderSyncPanel() {
   const root = document.getElementById("sync-root");
   const cfg = ssCfg();
