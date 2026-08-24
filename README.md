@@ -27,6 +27,38 @@ The check runs at startup and whenever the app returns to the foreground
 (throttled to once a minute), so an installed Home Screen app notices a deploy
 without being asked.
 
+## Emails on a task
+
+The question is usually "which email was this about", and the answer is a link
+that reopens the actual message.
+
+**From the new Outlook, use Copy link to message.** Open the message, ⋯ → *Copy
+link to message*, then paste it into a task's **Links** field, or drop it straight
+onto the row. The chip on the row opens the message again. This is the route that
+works, and it works from the new Outlook, Outlook on the web, and Outlook mobile.
+
+**Dragging a message out of the new Outlook does not work, and cannot be made
+to.** It is a limitation of Outlook itself, not of this app: the new Outlook is a
+web app in a WebView and does not offer a dragged message to anything outside
+itself. Microsoft's own guidance is to save the message to a folder first.
+
+What each route gives you:
+
+| From | What to do | What you get |
+| --- | --- | --- |
+| New Outlook / web | ⋯ → Copy link to message, then paste or drop | a link that reopens the message |
+| Classic Outlook | drag the message onto the app | subject as the title (Chrome and Edge only — Firefox drops nothing) |
+| Either | drag the message to a folder, then drop the `.msg` | subject as the title |
+| Either | save as `.eml`, then drop it | subject, sender and date |
+| Either | copy the message, paste into the composer | first line as the title |
+
+Dropped **onto a row** it attaches to that task. Dropped **anywhere else** it
+makes a new task — in the current project, if you are looking at one.
+
+A `.msg` is an OLE container and this app will not parse one in the page, so what
+it reads is the filename — which is the subject, because that is what Outlook
+names the file. A `.eml` is plain RFC 822 text, so the headers are read properly.
+
 ## Keeping Supabase awake
 
 A free Supabase project pauses after about seven days without database activity,

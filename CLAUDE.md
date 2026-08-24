@@ -81,6 +81,26 @@ business's own rather than general: **a PO is always five digits after `PO`**.
   without one, and the number arriving before anyone has named the line is a real
   way to work.
 
+## Emails, and what a drop can carry
+
+`t.links` holds URLs on the task — a hundred bytes each and meaningless away from
+the task they explain, so not their own record kind. **http(s) only**: a dropped
+`javascript:` or `data:` URL turned into a clickable chip would be a hole.
+
+The new Outlook cannot drag a message into a browser at all — it is a web app in a
+WebView and offers nothing outward. Classic Outlook does, as a `.msg` File, in
+Chromium only. So the route that actually works is Outlook's own *Copy link to
+message*, and everything else is a fallback:
+
+- `text/uri-list` and `text/plain` are both read, not the first that answers: a
+  mail client puts the bare URL in one and the subject in the other, so taking
+  only one loses either the link or its name.
+- `.eml` is RFC 822 text — headers unfolded, then Subject/From/Date.
+- `.msg` is an OLE container, so the filename is all there is. That is fine:
+  Outlook names the file after the subject.
+- `outsideDrag()` gates all of it on `dragId` being null. An internal row drag
+  means "file this under that project" and must not be read as an inbound drop.
+
 ## Chips are doors
 
 A row chip that names something the app can show navigates to it: project, maker,

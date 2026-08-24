@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.37.1">
+<meta name="app-version" content="1.38.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -364,6 +364,25 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tmbar{width:52px;height:6px;border-radius:3px;background:var(--fill2);overflow:hidden;flex:none}
 .tmbar i{display:block;height:100%;border-radius:3px}
 .tmempty{padding:14px;font-size:14px;color:var(--label3)}
+/* A link is a line with somewhere to go: what it is on top, where it points
+   underneath, small, because the URL is for confirming rather than reading. */
+.lrow{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--card2);border-top:.5px solid var(--sep)}
+.lrow .lk{flex:none;font-size:15px;width:18px;text-align:center}
+.lrow .lt{flex:1;min-width:0;text-decoration:none;display:block}
+.lrow .lt b{display:block;font-size:15px;font-weight:600;color:var(--blue);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .lt span{display:block;font-size:11.5px;color:var(--label3);font-family:var(--mono);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .del{flex:none;color:var(--label3);font-size:19px;line-height:1;padding:0 2px}
+@media(hover:hover){.lrow .del{opacity:0;transition:opacity .15s}.lrow:hover .del{opacity:1}}
+/* Dropping something in from outside. The whole window is the target, because
+   aiming at a small one with a file already in hand is a nuisance — and a row
+   under the pointer lights up, because that means "attach to this" instead. */
+body[data-dropping] #app::after{content:'';position:fixed;inset:0;z-index:55;pointer-events:none;
+  border:2.5px dashed var(--blue);border-radius:14px;background:color-mix(in srgb,var(--blue) 7%,transparent)}
+body[data-dropping] .rowwrap{transition:transform .14s var(--ease)}
+.rowwrap.dropon .row{background:color-mix(in srgb,var(--blue) 16%,var(--card));
+  outline:2px solid var(--blue);outline-offset:-2px}
 /* The checklist. A step is a line, not a card: eight of them under one task have
    to stay scannable, and the tick is the only thing worth any weight. */
 .stepadd{display:flex;gap:8px;padding:9px 14px 12px;background:var(--card2)}
@@ -675,6 +694,15 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
       <button class="btn sec" id="dcheck" style="margin:0;font-size:14px;padding:8px 14px;display:none">Check status</button>
     </div>
     <div id="dstamps" class="stamps"></div>
+  </div>
+  <div class="fgroup">
+    <div class="trackhead"><span>Links</span><span id="dlinkct" class="got"></span></div>
+    <div id="dlinks"></div>
+    <div class="stepadd">
+      <input id="dlinknew" placeholder="Paste a link — an Outlook email, a quote page" autocomplete="off"
+        autocapitalize="off" spellcheck="false" enterkeyhint="done">
+      <button class="btn sec" id="dlinkadd" style="margin:0;font-size:14px;padding:8px 14px">Add</button>
+    </div>
   </div>
   <div class="fgroup">
     <div class="trackhead"><span>Checklist</span><span id="dstepct" class="got"></span></div>
@@ -1205,6 +1233,16 @@ function migrate(){
     t.rep=REPS.some(r=>r[0]===t.rep)?t.rep:null;t.arch=t.arch||null;
     t.remind=Number.isFinite(t.remind)&&t.remind>0?t.remind:null;
     t.wait=['me','them'].includes(t.wait)?t.wait:null;
+    /* Links to the thing the task is actually about — nearly always an email.
+       Held on the task rather than as their own kind: a URL is a hundred bytes
+       and it is meaningless away from the task it explains. Shaped rather than
+       trusted, and http(s) only, because a dropped javascript: or data: URL
+       turned into a clickable chip would be a hole. */
+    t.links=Array.isArray(t.links)
+      ? t.links.filter(l=>l&&typeof l.url==='string'&&/^https?:\/\//i.test(l.url))
+          .map(l=>({id:l.id||uid(),url:l.url,title:String(l.title||''),at:l.at||now()}))
+          .slice(0,12)
+      : [];
     // steps come from anywhere a synced document can, so shape them rather than trust them
     t.steps=Array.isArray(t.steps)
       ? t.steps.filter(s=>s&&typeof s.t==='string').map(s=>({id:s.id||uid(),t:s.t,d:!!s.d}))
@@ -1804,6 +1842,11 @@ function parseInput(raw){
   let text=' '+raw.trim()+' ',due=null,flagged=false,po='';
   const pm=text.match(PO_RE);
   if(pm){po=pm[1];text=text.slice(0,pm.index)+' '+text.slice(pm.index+pm[0].length);}
+  /* A pasted URL is a link, not part of the title. Out before the date is looked
+     for, so nothing in a query string can be mistaken for one. */
+  let link='';
+  const lm=text.match(URL_RE);
+  if(lm){link=lm[0];text=text.slice(0,lm.index)+' '+text.slice(lm.index+lm[0].length);}
   const d=extractDate(text);
   if(d){due=iso(d.date);text=text.slice(0,d.index)+' '+text.slice(d.index+d.text.length);}
   if(/\s!\s/.test(text)){flagged=true;text=text.replace(/\s!\s/g,' ');}
@@ -1817,7 +1860,7 @@ function parseInput(raw){
   /* Typing nothing but the number is a real way to work — the PO arrives before
      anyone has decided what to call the line — and the composer will not submit
      without a title, so the number becomes one. */
-  return {title:title||(po?'PO '+po:''),due,flagged,po,...out};
+  return {title:title||(po?'PO '+po:'')||(link?linkKind(link).label:''),due,flagged,po,link,...out};
 }
 
 /* ============ helpers ============ */
@@ -2192,6 +2235,12 @@ function rowHTML(t){
    if(r&&r.taskId===t.id)chips.push('<span class="chip" style="color:var(--green)"><span class="pulse"></span>Running</span>');
    else{const ms=timeOn(t.id);
      if(ms>30000)chips.push(`<span class="chip">⏱ ${clockHM(ms)}</span>`);}}
+  {const ls=linksOf(t);
+   // the email is the one worth a chip when there are several: it is the thing
+   // that says why this task exists
+   if(ls.length){const pick=ls.find(l=>linkKind(l.url).mail)||ls[0],k=linkKind(pick.url);
+     chips.push(`<a class="chip track" href="${esc(pick.url)}" target="_blank" rel="noopener noreferrer"
+       data-noopen="1" title="${esc(pick.title||pick.url)}">${k.mail?'✉':'🔗'} ${esc(k.label)}${ls.length>1?` +${ls.length-1}`:''} ↗</a>`);}}
   const st_=stepsOf(t);
   if(st_.length)chips.push(`<span class="chip"${st_.every(s=>s.d)?' style="color:var(--green)"':''}>✓ ${st_.filter(s=>s.d).length}/${st_.length}</span>`);
   // an expected arrival later than the promised date is the thing worth seeing
@@ -2690,6 +2739,7 @@ function addTask(d){
     tracking:d.tracking||'',carrier:d.carrier||'',po:d.po||'',
     tracks:d.tracking?[{id:uid(),n:d.tracking,carrier:d.carrier||'',got:null}]:[],
     due:d.due||null,stage:0,flagged:!!d.flagged,notes:'',done:false,rep:null,arch:null,
+    links:d.link?[{id:uid(),url:d.link,title:'',at:now()}]:[],
     created:now(),u:now()};
   // a maker with a quoted lead time answers "when is this expected" by itself,
   // counted from today, which is when the order is going in
@@ -2843,6 +2893,164 @@ function delTask(id){
   S.tomb[id]=now();save();render();
   toast('Deleted',()=>{delete S.tomb[id];t.u=now();S.tasks.splice(i,0,t);save();render();});
 }
+/* ============ links ============
+   The question this answers is "which email was this about". Outlook's own
+   "Copy link to message" gives a URL that reopens the exact message, and that is
+   the route that works from the new Outlook — dragging a message straight into a
+   browser is something the new Outlook does not do at all.
+   Anything else with a URL lands here too: a supplier's quote page, a spec sheet,
+   a Teams thread. */
+const linksOf=t=>Array.isArray(t.links)?t.links:[];
+const URL_RE=/https?:\/\/[^\s<>"')\]]+/i;
+/* A task pointing at an email should say "Email", not "outlook.office.com". */
+const MAIL_HOSTS=/(^|\.)(outlook\.(office|office365|live)\.com|outlook\.com|mail\.google\.com)$/i;
+function linkKind(url){
+  let h='';
+  try{h=new URL(url).hostname;}catch(e){h='';}
+  if(!h)return {label:'Link',mail:false};
+  if(/(^|\.)teams\.microsoft\.com$/i.test(h))return {label:'Teams',mail:false};
+  if(MAIL_HOSTS.test(h))return {label:'Email',mail:true};
+  return {label:h.replace(/^www\./,''),mail:false};
+}
+function addLink(t,url,title){
+  if(!t||!/^https?:\/\//i.test(url||''))return false;
+  t.links=linksOf(t);
+  if(t.links.some(l=>l.url===url))return false;          // dropping twice is not two links
+  if(t.links.length>=12)return false;
+  t.links.push({id:uid(),url,title:(title||'').slice(0,160),at:now()});
+  t.u=now();
+  return true;
+}
+
+/* ============ dropping things in ============
+   What actually arrives depends entirely on where it came from, and the honest
+   summary is that the new Outlook cannot drag a message into a browser at all —
+   Microsoft's own guidance is to save it to a folder first. So this takes
+   whatever a drop can carry and makes the best of each:
+
+   - a .eml file — real RFC 822 text, so the subject, sender and date are read
+     out of the headers properly
+   - a .msg file — an OLE container this is not going to parse in a page, but
+     Outlook names the file after the subject, which is the part that matters
+   - a URL — "Copy link to message" in Outlook, which is the one route that works
+     from the new Outlook, and the only one that reopens the actual email
+   - plain text — a pasted email, first line as the title
+
+   Dropped on a row it attaches to that task; dropped anywhere else it makes one. */
+/* Both flavours, not the first one that answers. A drag out of a mail client
+   typically puts the bare URL in text/uri-list and the subject in text/plain, so
+   taking only one of them loses either the link or the name for it. */
+function dropParts(dt){
+  const uri=(dt.getData('text/uri-list')||'').split(/\r?\n/)
+    .map(l=>l.trim()).find(l=>l&&!l.startsWith('#'))||'';   // # lines are comments
+  const plain=(dt.getData('text/plain')||'').trim();
+  return {uri,plain};
+}
+function emlFields(text){
+  // headers end at the first blank line; unfold continuations before matching
+  const head=text.split(/\r?\n\r?\n/)[0].replace(/\r?\n[ \t]+/g,' ');
+  const get=n=>{const m=head.match(new RegExp('^'+n+':\\s*(.+)$','im'));return m?m[1].trim():'';};
+  // =?utf-8?...?= encoded words are common; show something rather than the raw form
+  const clean=v=>v.replace(/=\?[^?]+\?[bBqQ]\?[^?]*\?=/g,'…').trim();
+  return {subject:clean(get('Subject')),from:clean(get('From')),date:get('Date')};
+}
+const readText=f=>new Promise(res=>{const r=new FileReader();
+  r.onload=()=>res(String(r.result||''));r.onerror=()=>res('');r.readAsText(f);});
+/* One description of whatever was dropped: a title, and notes worth keeping. */
+async function describeDrop(dt){
+  const files=[...(dt.files||[])];
+  const f=files[0];
+  if(f){
+    const name=f.name.replace(/\.(eml|msg)$/i,'');
+    if(/\.eml$/i.test(f.name)){
+      const e=emlFields(await readText(f));
+      return {title:e.subject||name,
+        notes:[e.from&&'From: '+e.from,e.date&&'Sent: '+e.date].filter(Boolean).join('\n'),
+        what:'email'};
+    }
+    // .msg: the filename is the subject, which is the whole of what we can read
+    if(/\.msg$/i.test(f.name))return {title:name,notes:'',what:'email'};
+    return {title:name,notes:'',what:'file'};
+  }
+  const {uri,plain}=dropParts(dt);
+  const url=/^https?:\/\//i.test(uri)?uri:(plain.match(URL_RE)||[''])[0];
+  if(url){
+    // whatever was dragged alongside the link is its name; the bare URL is not
+    const rest=plain.replace(url,'').split(/\r?\n/).map(x=>x.trim())
+      .filter(x=>x&&!URL_RE.test(x))[0]||'';
+    return {title:rest.slice(0,160)||linkKind(url).label,
+      url,notes:'',what:linkKind(url).mail?'email':'link'};
+  }
+  const text=plain||uri;
+  if(!text)return null;
+  const lines=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(!lines.length)return null;
+  return {title:lines[0].slice(0,160),notes:lines.slice(1,6).join('\n'),what:'text'};
+}
+async function handleDrop(dt,onto){
+  const d=await describeDrop(dt);
+  if(!d)return toast('Nothing in that I could use.');
+  if(onto){
+    const t=S.tasks.find(x=>x.id===onto);if(!t)return;
+    if(d.url){
+      if(!addLink(t,d.url,d.title))return toast('That link is already on this one.');
+      save();render();
+      if(editing===t.id)openDetail(t.id);
+      return toast(`${linkKind(d.url).mail?'Email':'Link'} attached to ${t.title}`);
+    }
+    // no URL to attach, so the useful thing is to record what it said
+    const add=[d.title,d.notes].filter(Boolean).join('\n');
+    const before=t.notes||'';
+    t.notes=(before?before+'\n\n':'')+add;t.u=now();save();render();
+    if(editing===t.id)openDetail(t.id);
+    return toast('Added to the notes',()=>{t.notes=before;t.u=now();save();render();});
+  }
+  const ctxp=view.t==='project'?view.v:null;
+  const t=addTask({title:d.title,type:'task',projectId:ctxp});
+  if(!t)return;
+  if(d.url)addLink(t,d.url,'');
+  if(d.notes)t.notes=d.notes;
+  if(ctxp)t.projectId=ctxp;
+  t.u=now();save();render();
+  toast(d.what==='email'?'Task made from that email':'Task made',()=>{
+    S.tasks=S.tasks.filter(x=>x.id!==t.id);S.tomb[t.id]=now();save();render();});
+}
+/* A drop target the size of the window, because aiming at a small one with a
+   file already in hand is a nuisance. Only for drags from outside: an internal
+   row drag sets dragId, and those mean "file this under that project". */
+let dropDepth=0;
+const outsideDrag=e=>!dragId&&[...(e.dataTransfer?e.dataTransfer.types:[])]
+  .some(t=>['Files','text/uri-list','text/plain','text/html'].includes(t));
+addEventListener('dragenter',e=>{
+  if(!outsideDrag(e))return;
+  e.preventDefault();dropDepth++;
+  document.body.setAttribute('data-dropping','');
+});
+addEventListener('dragover',e=>{
+  if(!outsideDrag(e))return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect='copy';
+  const w=e.target.closest&&e.target.closest('.rowwrap[data-id]');
+  $$('.rowwrap.dropon').forEach(x=>{if(x!==w)x.classList.remove('dropon')});
+  if(w)w.classList.add('dropon');
+});
+addEventListener('dragleave',e=>{
+  if(!outsideDrag(e))return;
+  if(--dropDepth<=0){dropDepth=0;clearDropUI();}
+});
+function clearDropUI(){
+  dropDepth=0;document.body.removeAttribute('data-dropping');
+  $$('.rowwrap.dropon').forEach(x=>x.classList.remove('dropon'));
+}
+addEventListener('drop',e=>{
+  if(!outsideDrag(e))return;
+  e.preventDefault();
+  const w=e.target.closest&&e.target.closest('.rowwrap[data-id]');
+  const onto=w?w.dataset.id:null;
+  clearDropUI();
+  handleDrop(e.dataTransfer,onto);
+});
+
 /* ============ the clock ============
    A timer is one record with a start and an end. Running means `end` is null, so
    elapsed is always computed and never stored — which is the whole reason a timer
@@ -3136,6 +3344,7 @@ function composed(){
     destination:p.destination||c.destination,
     tracking:$('#ctrack').value.trim()||c.tracking||'',
     po:$('#cpo').value.trim()||p.po||'',
+    link:p.link||'',
     carrier:$('#ccarrier').value,
     due:p.due||c.due};
 }
@@ -3182,6 +3391,8 @@ function updatePreview(){
   if(p.project){const known=S.projects.find(x=>x.name.toLowerCase()===p.project.toLowerCase());
     c.push(`<span class="pchip"><i style="width:7px;height:7px;border-radius:2px;background:${known?known.color:colorFor(p.project)}"></i><b>${esc(p.project)}</b>${known?'':' · new'}</span>`);}
   if(p.po)c.push(`<span class="pchip">🧾 <b>${esc(p.po)}</b></span>`);
+  if(p.link){const k=linkKind(p.link);
+    c.push(`<span class="pchip">${k.mail?'✉️':'🔗'} <b>${esc(k.label)}</b></span>`);}
   if(p.tracking){const i=trackInfo({tracking:p.tracking,carrier:p.carrier});
     const who=i.unknown?'carrier not recognised'
       :esc(i.carrier.name)+(i.guess?' (a guess)':i.auto?'':' (you chose)');
@@ -3231,6 +3442,7 @@ function openDetail(id){
    $('#dtime').textContent=live?'Running now':ms>0?clockHM(ms)+' logged':'Nothing logged yet';
    $('#dtime').style.color=live?'var(--green)':'var(--label2)';
    $('#dtimebtn').textContent=live?'Stop':'Start';}
+  $('#dlinknew').value='';renderLinks(t);
   $('#dstepnew').value='';renderSteps(t);
   renderTracks(t);
   $('#dproj').innerHTML='<option value="">No project</option>'
@@ -3465,6 +3677,37 @@ function addTrack(t,n='',carrier=''){
    task's own tick: finishing every step is a fact about the steps, and deciding
    the task is done stays a decision. */
 const stepsOf=t=>Array.isArray(t.steps)?t.steps:[];
+function renderLinks(t){
+  const ls=linksOf(t);
+  $('#dlinkct').textContent=ls.length?`${ls.length}`:'';
+  $('#dlinks').innerHTML=ls.map(l=>{const k=linkKind(l.url);
+    return `<div class="lrow">
+      <span class="lk">${k.mail?'✉':'🔗'}</span>
+      <a class="lt" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
+        <b>${esc(l.title||k.label)}</b><span>${esc(l.url.slice(0,72))}${l.url.length>72?'…':''}</span></a>
+      <button class="del" data-linkdel="${l.id}" aria-label="Remove this link">×</button></div>`;}).join('');
+  $('#dlinks').style.display=ls.length?'':'none';
+}
+function addLinkFromField(){
+  const t=S.tasks.find(x=>x.id===editing);if(!t)return;
+  const v=$('#dlinknew').value.trim();
+  if(!v)return;
+  const m=v.match(URL_RE);
+  if(!m)return toast('That needs to be a web link, starting http.');
+  if(!addLink(t,m[0],''))return toast('That link is already on this one.');
+  $('#dlinknew').value='';save();renderLinks(t);render();
+}
+$('#dlinkadd').addEventListener('click',addLinkFromField);
+$('#dlinknew').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addLinkFromField();}});
+$('#dlinks').addEventListener('click',e=>{
+  const d=e.target.closest('[data-linkdel]');if(!d)return;
+  const t=S.tasks.find(x=>x.id===editing);if(!t)return;
+  const i=linksOf(t).findIndex(l=>l.id===d.dataset.linkdel);if(i<0)return;
+  const [l]=t.links.splice(i,1);t.u=now();save();renderLinks(t);render();
+  toast('Link removed',()=>{const x=S.tasks.find(y=>y.id===t.id);if(!x)return;
+    x.links=linksOf(x);x.links.splice(i,0,l);x.u=now();save();render();
+    if(editing===x.id)renderLinks(x);});
+});
 function renderSteps(t){
   const list=stepsOf(t),done=list.filter(s=>s.d).length;
   $('#dstepct').textContent=list.length?`${done} of ${list.length} done`:'';
