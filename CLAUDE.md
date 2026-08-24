@@ -42,6 +42,60 @@ then cancelled the strip's own scrolling. A gesture beginning inside a sideways
 scroller (`inHScroller`: the day strip, the suggestion row, a `pre` block) has to
 clear a higher bar before the pull claims it.
 
+## Views
+
+`week` is a real view, not a mode: `view.v` holds the ISO date of the week's
+Sunday, so paging and a re-render agree on which week you were looking at. Week
+starts Sunday to match the month calendar's grid — don't introduce a second idea
+of where a week begins. It is reachable from a List/Week control at the top of
+Scheduled, because on a phone the sidebar is `display:none` and the palette wants
+a keyboard.
+
+Anything bounded at both ends can hide late work. The week grid says how much is
+overdue from before it and leads there; a view that quietly drops late work is
+worse than no view.
+
+Search is global, so a query can return completed and undated work. Per-day
+grouping, the week grid and the mode control all stand down while a query is
+running — a day heading over a completed task is a lie.
+
+`emptyHTML()` asks about the query **before** the view. A fruitless search from
+the All tab used to answer "All clear · Add a task to get going", which replies to
+a question nobody asked.
+
+## Chips are doors
+
+A row chip that names something the app can show navigates to it: project, maker,
+destination, whose-move. This is the only way to reach the maker and destination
+views from a phone. The class is `go`, not `nav` — `.nav` is the sidebar item and
+carries `width:100%`, which stretches a chip to its full 200px allowance and
+stacks them one per line. Not while `selMode`: there a tap anywhere in the row
+means "pick this one".
+
+## Storage is the constraint
+
+localStorage gives a page about 5MB — measured at 5056KB, not assumed. Everything
+about images follows from that:
+
+- Task photos are their own record kind (`pic`), never a field on the task.
+  In items mode a row crosses the wire only when it changes; inside the task,
+  every photo would be re-sent whenever anything about that task was edited. The
+  `kind` column is free-form text and the SQL never enumerates kinds, so a new
+  kind needs no schema change.
+- Nothing is stored as handed over. 1000px longest edge, JPEG 0.6 — about 70KB
+  for a real photo, 138KB for a noisy worst case. The board did store raw files
+  behind a 2MB check, and two photos made a **4.5MB** document that was re-pulled
+  every fifteen seconds; `shrinkStoredImages()` squeezes those on load, once,
+  only downwards, because it runs on every load.
+- `createImageBitmap` takes a Blob and honours EXIF orientation; it **rejects a
+  string**. Already-stored data URLs need an `<img>`, which needs no orientation
+  handling because a canvas-produced URL has no EXIF left.
+- A deleted record is swept from **every** list, not the one its kind names: a
+  tombstone carries no kind, so it goes out labelled `task`. Before this, a maker
+  deleted on one device survived on all the others.
+- Archiving never removed anything. `prune()` does, over a year old, only when
+  asked, and it says what it frees first.
+
 ## Settings
 
 One sheet, `#setsheet`, holds every preference: list sort/group/row height, the
@@ -53,6 +107,18 @@ here, not there. `renderSettings()` is re-run by `renderData()` while the sheet 
 open, so it never shows stale state.
 
 ## Effects
+
+Delivery is the exception to the shape: everything else throws outward from the
+row, which is "well done", and a parcel arriving is not that feeling. `fxDeliver`
+falls in from above and ripples on landing, ignores the chosen style (a shipment
+arriving is the same event whichever style you picked) and still obeys amount,
+reduced motion and the concurrency cap. The ripple is a circle for a reason — it
+started as a rounded rectangle the width of the row and looked right for exactly
+one frame, because completing something re-sorts the list and left the box framing
+whichever unrelated row slid into that space. Every effect is fixed-position at
+the row's old coordinates; keep them shapes that belong to the effect, not to
+whatever ends up underneath.
+
 
 Finishing something runs `celebrate()` — sparks, confetti or fireworks, all drawn
 from divs and the Web Animations API, no library and no download. Settings live in

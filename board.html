@@ -317,6 +317,64 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 
 /* ————— storage (localStorage with in-memory fallback) ————— */
 let memoryOnly = false, memoryStore = null;
+/* ============ images ============
+   The board takes photos, and it used to keep them exactly as handed over: a
+   FileReader data URL behind a 2MB size check. Measured, two 1.7MB photos made a
+   4.5MB document — against a localStorage that holds about 5MB, and with all of
+   it re-pulled on every fifteen-second poll. So images are re-encoded on the way
+   in, to the same shape a photo on a task gets in the main app: 1000px on the
+   longest edge, JPEG 0.6, which turns 1.7MB into about 70KB. */
+const IMG_MAX = 1000, IMG_Q = 0.6, IMG_BUDGET = 1.5 * 1024 * 1024, IMG_BIG = 250 * 1024;
+const imageBytes = () => (state.items || []).reduce((n, i) => n + ((i.imageData || "").length), 0);
+const fmtBytes = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.round(n / 1024) + " KB";
+/* Drawn through a canvas, which drops the EXIF orientation flag with it — so the
+   decode is asked to apply it, or every photo taken in portrait arrives sideways. */
+async function shrinkToJpeg(src) {
+  /* Two sources, two decoders, and they are not interchangeable:
+     createImageBitmap takes a Blob and honours the EXIF orientation, which is
+     what a file off a phone needs — but it rejects a string outright, so the
+     already-stored data URLs went down that path and threw. An <img> takes the
+     data URL, and needs no orientation handling because a URL we produced from a
+     canvas has no EXIF left to honour. */
+  const isStr = typeof src === "string";
+  const bmp = await (!isStr && window.createImageBitmap
+    ? createImageBitmap(src, { imageOrientation: "from-image" }).catch(() => createImageBitmap(src))
+    : new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej;
+        i.src = isStr ? src : URL.createObjectURL(src); }));
+  const w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
+  if (!w0 || !h0) throw new Error("not an image");
+  const k = Math.min(1, IMG_MAX / Math.max(w0, h0));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w0 * k));
+  c.height = Math.max(1, Math.round(h0 * k));
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close && bmp.close();
+  return c.toDataURL("image/jpeg", IMG_Q);
+}
+const shrinkBoardImage = (file) => shrinkToJpeg(file);
+/* A board saved before this existed is already sitting on megabytes, and it
+   cannot fix itself: it is over the store's limit, so nothing new saves. Squeeze
+   what is already there, once, on the way in. Only images actually big enough to
+   be worth re-encoding, and only ever downwards — running twice must be a no-op,
+   because it runs on every load. */
+async function shrinkStoredImages() {
+  const big = (state.items || []).filter(i => (i.imageData || "").length > IMG_BIG);
+  if (!big.length) return;
+  let saved = 0;
+  for (const i of big) {
+    try {
+      const out = await shrinkToJpeg(i.imageData);
+      if (out.length >= i.imageData.length) continue;   // already smaller than we can do
+      saved += i.imageData.length - out.length;
+      i.imageData = out;
+      i.updatedAt = Date.now();                        // so the smaller one wins the merge
+    } catch (e) {}
+  }
+  if (!saved) return;
+  persistNow(); renderMain();
+  capMsg(`Squeezed ${big.length} image${big.length === 1 ? "" : "s"} down by ${fmtBytes(saved)}.`);
+  schedulePush();
+}
 function normalize(d) {
   d.items = Array.isArray(d.items) ? d.items : [];
   d.projects = Array.isArray(d.projects) ? d.projects : [];
@@ -1102,7 +1160,7 @@ document.getElementById("cap-types").addEventListener("click", (e) => {
   if (e.target.closest("#cap-img-btn")) { document.getElementById("cap-file").click(); return; }
   if (e.target.closest("#cap-add")) { capSubmit(); return; }
 });
-document.getElementById("cap-types").addEventListener("change", (e) => {
+document.getElementById("cap-types").addEventListener("change", async (e) => {
   if (e.target.id === "cap-proj") {
     if (e.target.value === "__new") {
       const slot = document.getElementById("cap-proj-slot");
@@ -1115,13 +1173,25 @@ document.getElementById("cap-types").addEventListener("change", (e) => {
   }
   if (e.target.id === "cap-file") {
     const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    if (f.size > 2 * 1024 * 1024) { capMsg("That image is over 2 MB — resize it or paste an image URL instead."); e.target.value = ""; return; }
-    capMsg("");
-    const r = new FileReader();
-    r.onload = () => capSubmit({ imageData: r.result, title: document.getElementById("cap-text").value.trim().split("\n")[0] || f.name });
-    r.readAsDataURL(f);
     e.target.value = "";
+    if (!f) return;
+    if (!/^image\//.test(f.type || "")) { capMsg("That does not look like an image."); return; }
+    capMsg("Adding…");
+    /* Re-encoded rather than stored as handed over. It used to take the file
+       whole, through FileReader, with nothing but a 2MB size check — and 2MB of
+       JPEG is about 2.7MB once base64'd, so two photos made a 4.5MB document
+       (measured) against a store that holds about 5MB, and every byte of it was
+       pulled again on every fifteen-second poll. Same treatment as a photo on a
+       task in the main app: 1000px on the longest edge at JPEG 0.6. */
+    let img;
+    try { img = await shrinkBoardImage(f); }
+    catch (err) { capMsg("That image could not be read."); return; }
+    if (imageBytes() + img.length > IMG_BUDGET) {
+      capMsg(`No room — images are using ${fmtBytes(imageBytes())} of ${fmtBytes(IMG_BUDGET)}. Remove one first.`);
+      return;
+    }
+    capMsg("");
+    capSubmit({ imageData: img, title: document.getElementById("cap-text").value.trim().split("\n")[0] || f.name });
   }
 });
 
@@ -1398,6 +1468,9 @@ function renderSyncPanel() {
 }
 document.getElementById("sync-btn").addEventListener("click", openSyncPanel);
 pullBoard(true);
+// after the first paint, never before it: decoding several photos is not
+// something to make the board wait on
+setTimeout(shrinkStoredImages, 800);
 
 /* Offline support comes from the same service worker as the rest of Shipshape;
    registered here too so landing on the board first still installs it. */

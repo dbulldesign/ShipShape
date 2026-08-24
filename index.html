@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.32.0">
+<meta name="app-version" content="1.33.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -697,7 +697,9 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <button class="btn sec" data-m="export" style="margin:0;font-size:14px;padding:9px 14px">Save a backup file</button>
     <button class="btn sec" data-m="import" style="margin:0;font-size:14px;padding:9px 14px">Load from a backup file</button>
     <button class="btn sec" data-m="sample" id="sampleBtn" style="margin:0;font-size:14px;padding:9px 14px">Load a sample setup</button>
+    <button class="btn sec" data-m="prune" id="pruneBtn" style="margin:0;font-size:14px;padding:9px 14px">Clear out old archived work</button>
   </div>
+  <div class="blurb" id="setprunenote" style="padding-top:8px"></div>
   <button class="danger" data-m="reset">Delete everything</button>
 
   <div class="sethead">About</div>
@@ -2667,6 +2669,41 @@ function delTask(id){
     for(const x of pics){delete S.tomb[x.id];x.u=now();S.pics.push(x);}
     save();render();});
 }
+/* ============ clearing out ============
+   Archiving takes something off the list; it never took it out of the file. A
+   job finished two years ago was still parsed on every load, held in memory on
+   every device, and merged on every sync, for ever — and with photos attached it
+   is not a rounding error any more.
+   A year is the threshold because this is a business record: an invoice query or
+   a warranty claim arrives months later, not years. Explicit rather than
+   automatic, and it says what it will remove and what that frees before it does
+   anything, because permanent means permanent. */
+const PRUNE_DAYS=365;
+function prunable(days=PRUNE_DAYS){
+  const cut=now()-days*864e5;
+  const tasks=S.tasks.filter(t=>t.arch&&t.arch<cut);
+  const going=new Set(tasks.map(t=>t.id));
+  const pics=S.pics.filter(x=>going.has(x.taskId));
+  /* A project goes only when nothing of it is left standing. One whose every
+     task is on this list is a finished job; one with no tasks at all is left
+     alone, because that is what a project looks like the moment it is created. */
+  const staying=new Set(S.tasks.filter(t=>!going.has(t.id)).map(t=>t.projectId).filter(Boolean));
+  const projects=S.projects.filter(p=>!staying.has(p.id)&&S.tasks.some(t=>t.projectId===p.id));
+  return {tasks,pics,projects,bytes:JSON.stringify({tasks,pics,projects}).length};
+}
+function prune(pr){
+  pr=pr||prunable();
+  const going=new Set([...pr.tasks,...pr.pics,...pr.projects].map(x=>x.id));
+  if(!going.size)return;
+  for(const id of going)S.tomb[id]=now();
+  S.tasks=S.tasks.filter(t=>!going.has(t.id));
+  S.pics=S.pics.filter(x=>!going.has(x.id));
+  S.projects=S.projects.filter(p=>!going.has(p.id));
+  // whatever view was showing one of these has nothing to show now
+  if((view.t==='project'&&going.has(view.v)))view={t:'today'};
+  save();render();
+  toast(`Cleared out ${pr.tasks.length+pr.projects.length} — ${fmtKB(pr.bytes)} freed`);
+}
 /* ============ finishing something ============
    Ticking a task off used to be silent unless it happened to finish a whole
    project. It is the one moment in the app worth marking, so it gets an effect —
@@ -3909,6 +3946,18 @@ function doMenu(k){
     [...S.tasks,...S.projects].forEach(x=>S.tomb[x.id]=now());
     S.tasks=[];S.projects=[];S.started=false;save();render();
   }
+  if(k==='prune'){
+    const pr=prunable();
+    if(!pr.tasks.length&&!pr.projects.length)
+      return toast(`Nothing archived longer than a year yet. Archive finished work first.`);
+    const bits=[`${pr.tasks.length} archived item${pr.tasks.length===1?'':'s'}`];
+    if(pr.projects.length)bits.push(`${pr.projects.length} finished project${pr.projects.length===1?'':'s'}`);
+    if(pr.pics.length)bits.push(`${pr.pics.length} photo${pr.pics.length===1?'':'s'}`);
+    if(!confirm(`Permanently remove ${bits.join(', ')}, freeing ${fmtKB(pr.bytes)}?\n\n`
+      +`Everything here was archived over a year ago. This cannot be undone, and it removes them from your other devices too. `
+      +`Save a backup file first if you want to keep the history.`))return;
+    prune(pr);
+  }
   if(k==='keys')openKeys();
   if(k==='settings')openSettings();
   if(k==='fx')openSettings();
@@ -4450,6 +4499,13 @@ function renderSettings(){
   $('#keysBtn').style.display=matchMedia('(min-width:861px)').matches?'':'none';
   /* Photos are the one thing here that can run out, so the number is shown
      rather than left to be discovered when a photo is refused. */
+  {const pr=prunable(),all=JSON.stringify(S).length;
+   $('#setprunenote').textContent=pr.tasks.length||pr.projects.length
+     ? `Everything you have takes ${fmtKB(all)}. ${pr.tasks.length} item${pr.tasks.length===1?'':'s'}`
+       +`${pr.projects.length?` and ${pr.projects.length} finished project${pr.projects.length===1?'':'s'}`:''}`
+       +` have been archived over a year — clearing them out frees ${fmtKB(pr.bytes)}.`
+     : `Everything you have takes ${fmtKB(all)}. Archived work is cleared out only once it is over a year old, and only when you ask.`;
+   $('#pruneBtn').style.display=(pr.tasks.length||pr.projects.length)?'':'none';}
   const pb=picBytes(),np=S.pics.length;
   $('#setpicnote').textContent=np
     ? `${np} photo${np===1?'':'s'} using ${fmtKB(pb)} of the ${fmtKB(PIC_BUDGET)} photos are allowed. `
