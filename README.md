@@ -35,16 +35,23 @@ its own copy, the cloud icon turns red, and nothing syncs until the project is
 restored by hand in the dashboard.
 
 `.github/workflows/keepalive.yml` runs one query a day so that never happens. It
-needs two repository secrets — **Settings → Secrets and variables → Actions**:
+needs two values — **Settings → Secrets and variables → Actions**, on either tab:
+Secrets to keep them hidden, Variables to be able to read them back later.
 
-| Secret | Value |
+| Name | Value |
 | --- | --- |
 | `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
 | `SUPABASE_ANON_KEY` | the anon public key, the same one in the app's sync sheet |
 
-The workspace key is deliberately not among them. The workflow calls
+Neither is much of a secret: the project URL is in every request the app makes,
+and the key is the publishable one. The workspace key — the value that actually
+guards your data — is deliberately not among them. The workflow calls
 `shipshape_pull` with a key belonging to nobody, which still runs a real `SELECT`
 — the thing that counts as activity — while reading none of your data.
+
+Until both are set the workflow does nothing and says so. That is the reason to
+leave it in place if you would rather not switch it on: it costs nothing and is
+one setting away later.
 
 Use **Actions → Keep Supabase awake → Run workflow** to try it immediately. A red
 run is the useful signal: the messages distinguish a rejected key, missing SQL,

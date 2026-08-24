@@ -6,10 +6,14 @@
 # is restored by hand in the dashboard. One harmless query a day means that
 # never happens.
 #
-# Two repository secrets, under Settings → Secrets and variables → Actions:
+# Two values, under Settings → Secrets and variables → Actions. Either tab works
+# — Secrets to keep them hidden, Variables to be able to read them back later:
 #
 #   SUPABASE_URL        https://<project-ref>.supabase.co
 #   SUPABASE_ANON_KEY   the anon public key — the same one in the app's sync sheet
+#
+# Until both are set this does nothing and says so, rather than failing; an
+# unconfigured workflow should not email a red run every morning.
 #
 # The workspace key is deliberately NOT needed here. This calls shipshape_pull
 # with a key that belongs to nobody, which still runs a real SELECT — the thing
@@ -44,14 +48,21 @@ jobs:
     steps:
       - name: Run one query against the database
         env:
-          URL: ${{ secrets.SUPABASE_URL }}
-          KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # Either kind works: Secrets if you want them hidden, Variables if you
+          # would rather read them back later. Neither value is a real secret —
+          # the project URL is in every request the app makes, and the key is the
+          # publishable one. The workspace key, which is the actual secret, is
+          # not used here at all.
+          URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
         run: |
           set -euo pipefail
 
+          # Not configured is not a failure — it is just off. Failing here would
+          # email a red run every single day for something nobody asked for.
           if [ -z "${URL:-}" ] || [ -z "${KEY:-}" ]; then
-            echo "::error::Set SUPABASE_URL and SUPABASE_ANON_KEY under Settings → Secrets and variables → Actions."
-            exit 1
+            echo "::notice::Not configured, so nothing to do. Add SUPABASE_URL and SUPABASE_ANON_KEY under Settings → Secrets and variables → Actions to switch this on."
+            exit 0
           fi
 
           # `|| code=000` matters: curl exits non-zero when it cannot connect at
