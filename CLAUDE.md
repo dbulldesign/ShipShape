@@ -105,6 +105,36 @@ localStorage.
 - Archiving never removed anything. `prune()` does, over a year old, only when
   asked, and it says what it frees first.
 
+## The clock
+
+A timer is one record with a `start` and an `end`. Running means `end` is null, so
+elapsed is **always computed and never stored** — which is the whole reason a
+timer started on the phone reads correctly on the laptop without the two clocks
+agreeing on anything past the epoch, and why a reload a week later still knows
+what it was doing.
+
+One timer at a time is the decision the rest rests on: nothing to pick between
+when stopping, no arithmetic to explain, and "is something running" has one
+answer.
+
+- Two devices apart can each start one and the merge keeps both. `oneRunner()`
+  closes the older at the moment the newer began — the same answer on every
+  device from the same records, so they converge with no round trip. It runs after
+  a pull, not only at load, and because it writes, the result has to be pushed.
+- `running()` takes the latest `start` in a single pass rather than the first
+  match, so even the transient two-live state reads the same everywhere.
+- The ticking digits are written straight into their two nodes by `tickClock()`.
+  Never through `render()`: the list is patched by signature, and repainting it
+  every second would fight every gesture on the page. The interval only exists
+  while something runs.
+- The row shows a dot, not a clock, for the same reason — and the running task's
+  id is in `rowCtx`, or the dot never appears or never leaves.
+- `timeByTask` is tallied once per render. `timeOn()` used to filter the whole log
+  per row, which is quadratic and only shows up on a long list.
+- An entry's `label` is a snapshot taken at start. Time logged is a record, not a
+  pointer: renaming or deleting the task must not make the hours unreadable, which
+  is also why `prune()` leaves time entries alone.
+
 ## Settings
 
 One sheet, `#setsheet`, holds every preference: list sort/group/row height, the

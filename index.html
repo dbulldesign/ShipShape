@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.36.0">
+<meta name="app-version" content="1.37.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -76,6 +76,7 @@ body[data-board] #moreMenu .boardonly{display:block}
 /* The pane says when it has an overlay up: its own is fixed inside the iframe
    and cannot cover this bar, so this bar gets out of the way instead. */
 body[data-boardmodal] #tabbar{display:none}
+body[data-time] .hctl{display:none}
 body[data-board] .searchbar,body[data-board] .hctl,
 body[data-board] #calBtn,body[data-board] #addTop,body[data-board] #fab{display:none}
 .wrap{max-width:780px;margin:0 auto}
@@ -238,7 +239,7 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
   border-top:.5px solid var(--sep);padding-bottom:env(safe-area-inset-bottom)}
 #tabbar .tabs{display:flex}
-.tab{flex:1;padding:7px 0 5px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--label3)}
+.tab{flex:1;min-width:0;padding:7px 0 5px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--label3)}
 .tab svg{width:24px;height:24px;fill:currentColor}
 .tab span{font-size:9.5px;font-weight:600}
 .tab.on{color:var(--blue)}
@@ -316,6 +317,53 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trk .gotbtn.on{color:var(--green);font-weight:600}
 .trk .del{margin-left:auto;color:var(--red);font-size:13px}
 .trackadd{display:flex;gap:8px;padding:10px 14px 12px;background:var(--card2)}
+/* ============ the clock ============
+   A running timer has to be visible from wherever you are, or you forget it is on
+   and the number it produces is worthless. The chip lives in the header, so it is
+   on every view, and it says what as well as how long — "3:07:44" alone tells you
+   nothing about which job it is billing. */
+#runchip{display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;
+  background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green);
+  font-size:13px;font-weight:700;max-width:230px;min-width:0;
+  transition:transform .18s var(--ease)}
+#runchip:active{transform:scale(.95)}
+#runchiplabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--label2)}
+#runchiptime{font-variant-numeric:tabular-nums;flex:none}
+@media (max-width:520px){#runchiplabel{display:none}}
+/* One dot, animated, meaning "now". Reused on the row and in the card. */
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none;display:block;
+  animation:beat 1.6s ease-in-out infinite}
+@keyframes beat{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.72)}}
+.runcard{background:var(--card);border-radius:16px;padding:16px;box-shadow:var(--shadow);margin:2px 0 4px}
+.runcard .rl{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:var(--label2)}
+.runcard .rt{font-family:var(--round);font-size:44px;font-weight:700;letter-spacing:-1.5px;
+  font-variant-numeric:tabular-nums;line-height:1.1;margin:4px 0 2px}
+.runcard .rm{font-size:13px;color:var(--label3);display:flex;align-items:center;gap:5px}
+.runcard .rm i{width:7px;height:7px;border-radius:2px;display:block}
+.runcard .ra{display:flex;gap:8px;margin-top:13px}
+.runcard .ra .btn{margin:0}
+.stopbtn{background:var(--red)!important}
+.startcard{background:var(--card);border-radius:16px;padding:14px;box-shadow:var(--shadow);margin:2px 0 4px}
+.startcard input{width:100%;background:var(--fill2);border:0;outline:none;font-size:16px;
+  padding:11px 13px;border-radius:11px}
+.startcard .sr{display:flex;gap:8px;margin-top:9px;align-items:center}
+.startcard select{flex:1;min-width:0;background:var(--fill2);border:0;outline:none;
+  font-size:14.5px;padding:10px 11px;border-radius:11px;color:var(--label)}
+.startcard .sh{font-size:12.5px;color:var(--label3);margin-top:9px}
+.tmrow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:.5px solid var(--sep)}
+.tmrow:first-child{border-top:0}
+.tmmain{flex:1;min-width:0}
+.tmmain .tt{font-size:15.5px;display:flex;align-items:center;gap:6px}
+.tmmain .dot{width:8px;height:8px;border-radius:2px;flex:none;display:block}
+.tmr{display:flex;align-items:center;gap:8px;flex:none}
+.tmdur{font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--label2)}
+.tmagain,.tmdel{color:var(--label3);font-size:16px;line-height:1;padding:2px 3px}
+.tmdel{font-size:19px}
+@media(hover:hover){.tmagain,.tmdel{opacity:0;transition:opacity .15s}
+  .tmrow:hover .tmagain,.tmrow:hover .tmdel{opacity:1}}
+.tmbar{width:52px;height:6px;border-radius:3px;background:var(--fill2);overflow:hidden;flex:none}
+.tmbar i{display:block;height:100%;border-radius:3px}
+.tmempty{padding:14px;font-size:14px;color:var(--label3)}
 /* The checklist. A step is a line, not a card: eight of them under one task have
    to stay scannable, and the tick is the only thing worth any weight. */
 .stepadd{display:flex;gap:8px;padding:9px 14px 12px;background:var(--card2)}
@@ -561,6 +609,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
       <div class="hrow">
         <h1><span class="sub" id="eyebrow">Today</span><span class="nm" id="title">Today</span></h1>
         <div class="hctl"><select id="hsort" aria-label="Sort by"></select><select id="hgroup" aria-label="Group by"></select></div>
+        <button id="runchip" data-v="time" hidden aria-label="A timer is running — open Time">
+          <span class="pulse"></span><span id="runchiplabel"></span><span id="runchiptime"></span></button>
         <button class="iconbtn" id="calBtn" aria-label="Open the calendar"><svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.5A2.5 2.5 0 0 1 21 6.5v12A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4H6V3a1 1 0 0 1 1-1ZM5 9v9.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V9H5Zm2.5 2h3v3h-3v-3Z"/></svg></button>
         <button class="iconbtn" id="syncBtn" aria-label="Sync"><svg viewBox="0 0 24 24"><path d="M6.5 19A5.5 5.5 0 0 1 5.7 8.06a6.5 6.5 0 0 1 12.34 1.6A4.5 4.5 0 0 1 17.5 19h-11Z"/></svg></button>
         <div style="position:relative">
@@ -608,6 +658,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="drep">Repeats</label><select id="drep"></select></div>
     <div class="field"><label for="dflag">Flagged</label><input id="dflag" type="checkbox" style="flex:none;width:auto;transform:scale(1.2);accent-color:var(--orange)"></div>
     <div class="field"><label for="dwait">Waiting on</label><select id="dwait"></select></div>
+    <div class="field" id="dtimerow"><label>Time</label><span id="dtime" style="flex:1"></span>
+      <button class="btn sec" id="dtimebtn" style="margin:0;font-size:13.5px;padding:6px 12px">Start</button></div>
   </div>
   <div class="fgroup" id="shipfields">
     <div class="field"><label for="dmfr">Maker</label><input id="dmfr" list="l-mfr" placeholder="None"></div>
@@ -643,6 +695,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <button class="tab" data-v="projects"><svg viewBox="0 0 24 24"><path d="M4 4h6l1.6 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg><span>Projects</span></button>
   <button class="tab" data-v="shipments"><svg viewBox="0 0 24 24"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h7A2.5 2.5 0 0 1 14 6.5V8h3l4 4.5V17h-2.1a2.9 2.9 0 0 1-5.8 0H9.9a2.9 2.9 0 0 1-5.8 0H2V6.5Z"/></svg><span>Shipments</span></button>
   <button class="tab" data-v="all"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Z"/></svg><span>All</span></button>
+  <button class="tab" data-v="time"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm1 3a1 1 0 1 0-2 0v5.4l3.4 2a1 1 0 1 0 1-1.7L13 11.4V7Z"/></svg><span>Time</span></button>
   <button class="tab" data-v="board"><svg viewBox="0 0 24 24"><path d="M5 4h5.5v7H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8.5 0H19a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1h-5.5V4ZM5 13.5h5.5V20H5a1 1 0 0 1-1-1v-4.5a1 1 0 0 1 1-1Zm8.5-1H19a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-5.5v-7.5Z"/></svg><span>Board</span></button>
 </div></nav>
 
@@ -1135,7 +1188,7 @@ async function loadAll(){
   $('#app').classList.toggle('compact',compact);
 }
 function migrate(){
-  S.projects=S.projects||[];S.tasks=S.tasks||[];S.tomb=S.tomb||{};
+  S.projects=S.projects||[];S.tasks=S.tasks||[];S.tomb=S.tomb||{};S.times=S.times||[];
   if(!S.v||S.v<2){
     for(const n of [...new Set(S.tasks.map(t=>t.project).filter(Boolean))])
       if(!S.projects.find(p=>p.name===n))S.projects.push({id:uid(),name:n,color:colorFor(n),client:'',due:null,notes:'',u:now()});
@@ -1162,6 +1215,14 @@ function migrate(){
   }
   for(const p of S.projects){p.u=p.u||now();delete p.lead;}
   S.makers=Array.isArray(S.makers)?S.makers:[];
+  /* Time entries come off the wire like everything else, so they are shaped
+     rather than trusted. `end:null` is what running means — elapsed is computed
+     from `start`, never stored, so a timer started on one device reads correctly
+     on another without the two clocks having to agree on anything but the epoch. */
+  S.times=Array.isArray(S.times)?S.times.filter(x=>x&&x.id&&Number.isFinite(x.start)).map(x=>({
+    id:x.id,taskId:x.taskId||null,projectId:x.projectId||null,label:String(x.label||''),
+    start:x.start,end:Number.isFinite(x.end)?x.end:null,u:x.u||x.start})):[];
+  oneRunner();
   /* Task photos were tried and taken out again: a browser gives a page about
      5MB, and four on one item spent a tenth of that on a single row. Removing
      the feature is not enough by itself — a photo nothing can reach any more is
@@ -1255,7 +1316,7 @@ async function rpc(fn,body){
   const txt=await r.text();
   return txt?JSON.parse(txt):null;
 }
-const payload=()=>({v:3,projects:S.projects,tasks:S.tasks,makers:S.makers,tomb:S.tomb});
+const payload=()=>({v:3,projects:S.projects,tasks:S.tasks,makers:S.makers,times:S.times,tomb:S.tomb});
 function schedulePush(){
   if(!sync.on)return;
   clearTimeout(pushT);
@@ -1434,7 +1495,7 @@ const ITEM_GRACE=5*60*1000;
    from when task photos existed would have poured them into the task list. A
    missing kind still means task, because the very first rows were written
    without one. */
-const KINDS={task:'tasks',project:'projects',maker:'makers'};
+const KINDS={task:'tasks',project:'projects',maker:'makers',time:'times'};
 function itemsSince(ts){
   const out=[];
   for(const [kind,key] of Object.entries(KINDS))
@@ -1583,7 +1644,15 @@ async function pull(quiet){
       const remote=await rpc('shipshape_pull',{k:sync.ws});
       changed=!!(remote&&mergeIn(remote));
     }
-    if(changed){saveLocal();render();}
+    /* Two devices apart can each have started one, and the merge keeps both.
+       oneRunner closes the older at the moment the newer began — the same answer
+       on every device from the same records, so they converge without asking each
+       other. It writes, so the result has to go back out rather than only be
+       saved here. */
+    if(changed){
+      if(oneRunner())save();else saveLocal();
+      render();
+    }
     setSync('idle');
   }catch(e){
     setSync(navigator.onLine?'error':'offline');
@@ -1639,10 +1708,12 @@ function mergeIn(remote){
   changed=mergeList(S.tasks,remote.tasks)||changed;
   changed=mergeList(S.projects,remote.projects)||changed;
   changed=mergeList(S.makers,remote.makers)||changed;
-  const n0=S.tasks.length+S.projects.length;
+  changed=mergeList(S.times,remote.times)||changed;
+  const n0=S.tasks.length+S.projects.length+S.times.length;
   S.tasks=S.tasks.filter(t=>!(S.tomb[t.id]&&S.tomb[t.id]>=(t.u||0)));
   S.projects=S.projects.filter(p=>!(S.tomb[p.id]&&S.tomb[p.id]>=(p.u||0)));
-  if(n0!==S.tasks.length+S.projects.length)changed=true;
+  S.times=S.times.filter(x=>!(S.tomb[x.id]&&S.tomb[x.id]>=(x.u||0)));
+  if(n0!==S.tasks.length+S.projects.length+S.times.length)changed=true;
   const cut=now()-60*864e5;
   for(const id in S.tomb)if(S.tomb[id]<cut)delete S.tomb[id];
   if(changed){S.started=true;sanitizeColors();}   // remote projects are untrusted input
@@ -1894,7 +1965,7 @@ function bucket(t){
 }
 
 /* ============ render ============ */
-function render(){renderNav();renderHead();renderList();renderData();
+function render(){renderNav();renderHead();renderList();renderData();syncTick();
   // the calendar only means anything where the list is organised by date
   $('#calBtn').style.display=(view.t==='today'||view.t==='scheduled'||view.t==='week')?'':'none';}
 function renderData(){
@@ -1927,6 +1998,8 @@ function renderNav(){
    if(w||view.t==='waiting')h+=navItem(I.clock,'var(--pink)','Whose move',w,view.t==='waiting','data-v="waiting"');}
   h+=navItem(I.truck,'var(--purple)','Shipments',openT().filter(t=>t.type==='shipment').length,view.t==='shipments','data-v="shipments"');
   h+=navItem(I.list,'var(--gray)','All open',openT().length,view.t==='all','data-v="all"');
+  {const e=running();
+   h+=navItem(I.clock,e?'var(--green)':'var(--label3)','Time',e?'●':'',view.t==='time','data-v="time"');}
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
   if(S.tasks.some(t=>t.arch))h+=navItem(I.box,'var(--label3)','Archived','',view.t==='archive','data-v="archive"');
   h+=navItem(I.list,'var(--yellow)','Everything Board','',view.t==='board','data-v="board"');
@@ -1948,7 +2021,7 @@ function renderNav(){
   $('#navlists').innerHTML=h;
   rollCounts();
 }
-const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',all:'All open',done:'Completed',
+const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',all:'All open',done:'Completed',
   projects:'Projects',shipments:'Shipments',archive:'Archived'};
 function renderHead(){
   const d=new Date();
@@ -1958,6 +2031,8 @@ function renderHead(){
   if(view.t==='mfr'){name=view.v;sub='Maker';}
   if(view.t==='dest'){name=view.v;sub='Shipping to';}
   if(view.t==='board')sub='Ideas, notes and images';
+  if(view.t==='time'){const e=running();
+    sub=e?'Running now':'Hours on the job';}
   if(view.t==='week'){
     name=weekLabel(view.v);
     const n=Math.round((weekStart(view.v)-weekStart())/6048e5);
@@ -2094,6 +2169,12 @@ function rowHTML(t){
      that gets a colour. */
   if(t.wait&&!t.done)chips.push(`<button class="chip go" data-v="waiting"
     ${t.wait==='them'?'style="color:var(--orange)"':''}>${WAIT_LABEL[t.wait]}</button>`);
+  /* A dot, not a clock. The row is patched by signature, so a ticking number here
+     would rewrite the row every second and fight anything the finger is doing. */
+  {const r=running();
+   if(r&&r.taskId===t.id)chips.push('<span class="chip" style="color:var(--green)"><span class="pulse"></span>Running</span>');
+   else{const ms=timeOn(t.id);
+     if(ms>30000)chips.push(`<span class="chip">⏱ ${clockHM(ms)}</span>`);}}
   const st_=stepsOf(t);
   if(st_.length)chips.push(`<span class="chip"${st_.every(s=>s.d)?' style="color:var(--green)"':''}>✓ ${st_.filter(s=>s.d).length}/${st_.length}</span>`);
   // an expected arrival later than the promised date is the thing worth seeing
@@ -2124,6 +2205,77 @@ function rowHTML(t){
       <div class="rowmain"><div class="tt">${esc(t.title)}</div>${chips.length?`<div class="meta">${chips.join('')}</div>`:''}</div>
       <div class="rright">${t.flagged?'<svg class="flag" viewBox="0 0 20 20"><use href="#i-flag"/></svg>':''}
       ${t.due?`<span class="due ${cls}">${fmtDue(t.due)}</span>`:''}</div></div></div>`;
+}
+/* The Time view. Three things and no more: what is running, what you did today,
+   and where the week went. Anything else belongs in a timesheet, not here. */
+function timeHTML(){
+  const e=running();let h='';
+  const projOpts=sel=>'<option value="">No project</option>'
+    +S.projects.map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  if(e){
+    const p=e.projectId?P(e.projectId):null;
+    h+=`<div class="runcard">
+      <div class="rl"><span class="pulse"></span>${esc(e.label)}</div>
+      <div class="rt" id="runbig">${clockHMS(elapsed(e))}</div>
+      <div class="rm">Since ${hhmm(e.start)}${p?` · <i style="background:${p.color}"></i>${esc(p.name)}`:''}</div>
+      <div class="ra">
+        <button class="btn stopbtn" data-tm="stop">Stop</button>
+        ${e.taskId&&S.tasks.find(x=>x.id===e.taskId)?`<button class="btn ghost" data-tm="open:${e.taskId}" style="margin:0">Open the task</button>`:''}
+      </div></div>`;
+  }else{
+    h+=`<div class="startcard">
+      <input id="tmwhat" placeholder="What are you working on?" autocomplete="off" enterkeyhint="go">
+      <div class="sr">
+        <select id="tmproj" aria-label="Project">${projOpts(view.t==='time'?null:null)}</select>
+        <button class="btn" data-tm="start" style="margin:0">Start</button>
+      </div>
+      <div class="sh">Or start one from any task — hold it, or right-click, and pick Start timer.</div>
+    </div>`;
+  }
+  // today
+  const t0=midnight().getTime(),t1=t0+864e5;
+  const today=S.times.filter(x=>x.start<t1&&(x.end===null||x.end>t0)).sort((a,b)=>b.start-a.start);
+  const dayTotal=today.reduce((n,x)=>n+elapsed(x),0);
+  h+=`<div class="grp">Today<span class="c">${clockTotal(dayTotal)}</span></div>`;
+  if(!today.length)h+=`<div class="card"><div class="tmempty">Nothing timed yet today.</div></div>`;
+  else{
+    h+='<div class="card">';
+    for(const x of today){
+      const p=x.projectId?P(x.projectId):null;
+      h+=`<div class="tmrow" data-tmid="${x.id}">
+        <div class="tmmain"><div class="tt">${esc(x.label)}</div>
+          <div class="meta">
+            <span class="chip">${hhmm(x.start)}–${x.end===null?'now':hhmm(x.end)}</span>
+            ${p?`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`:''}
+          </div></div>
+        <div class="tmr"><span class="tmdur">${x.end===null?'running':clockHM(elapsed(x))}</span>
+          <button class="tmagain" data-tm="again:${x.id}" aria-label="Start this again">↻</button>
+          <button class="tmdel" data-tm="del:${x.id}" aria-label="Remove this entry">×</button></div></div>`;
+    }
+    h+='</div>';
+  }
+  // the week, by project — the number you actually invoice from
+  const wk=weekDays(),lo=fromISO(iso(wk[0])).getTime(),hi=fromISO(iso(wk[6])).getTime()+864e5;
+  const inWeek=S.times.filter(x=>x.start<hi&&(x.end===null||x.end>lo));
+  if(inWeek.length){
+    const by=new Map();
+    for(const x of inWeek){
+      const k=x.projectId||'';
+      by.set(k,(by.get(k)||0)+elapsed(x));
+    }
+    const rows=[...by.entries()].sort((a,b)=>b[1]-a[1]);
+    const total=rows.reduce((n,r)=>n+r[1],0);
+    h+=`<div class="grp">This week<span class="c">${clockTotal(total)}</span></div><div class="card">`;
+    for(const [pid,ms] of rows){
+      const p=pid?P(pid):null;
+      h+=`<div class="tmrow"><div class="tmmain"><div class="tt">
+        ${p?`<i class="dot" style="background:${p.color}"></i>${esc(p.name)}`:'<span style="color:var(--label3)">No project</span>'}</div></div>
+        <div class="tmr"><span class="tmdur">${clockHM(ms)}</span>
+        <span class="tmbar"><i style="width:${Math.round(ms/total*100)}%;background:${p?p.color:'var(--gray)'}"></i></span></div></div>`;
+    }
+    h+='</div>';
+  }
+  return h;
 }
 function projectsHTML(){
   if(!S.projects.length)return `<div class="empty"><div class="g">🗂</div><h3>No projects yet</h3>
@@ -2370,8 +2522,15 @@ function renderList(){
   // the board draws itself; nothing of the list applies while it is showing
   if(view.t==='board')return;
   const el=$('#list'),out=[];
-  rowCtx=view.t+'|'+iso(midnight())+'|'+S.projects.map(p=>p.id+p.u).join(',');
+  /* Anything rowHTML reads from outside the task belongs here, or the row keeps a
+     stale signature and is never repainted: which view, today's date, the
+     projects' names and colours, and which task the clock is on. */
+  tallyTime();
+  const r_=running();
+  rowCtx=view.t+'|'+iso(midnight())+'|'+S.projects.map(p=>p.id+p.u).join(',')
+    +'|'+(r_?r_.taskId:'')+'|'+S.times.length;
   const chunk=(name,h)=>{if(h)out.push(...slot(name,h));};
+  if(view.t==='time'&&!query){chunk('time',timeHTML());patch(el,out);syncTick();return;}
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
   if(view.t==='project')chunk('phead',projectHead());
   if(view.t==='mfr')chunk('mhead',makerHead());
@@ -2667,6 +2826,97 @@ function delTask(id){
   S.tomb[id]=now();save();render();
   toast('Deleted',()=>{delete S.tomb[id];t.u=now();S.tasks.splice(i,0,t);save();render();});
 }
+/* ============ the clock ============
+   A timer is one record with a start and an end. Running means `end` is null, so
+   elapsed is always computed and never stored — which is the whole reason a timer
+   started on the phone reads correctly on the laptop without the two clocks
+   agreeing on anything beyond the epoch, and why a reload, a week later, still
+   knows what it was doing.
+
+   One timer at a time. That is the simplifying decision this whole feature rests
+   on: no picking which of several to stop, no arithmetic to explain, and the
+   question "is something running" has one answer. */
+const running=()=>{
+  let b=null;
+  for(const x of S.times)if(x.end===null&&(!b||x.start>b.start))b=x;
+  return b;
+};
+const elapsed=x=>Math.max(0,(x.end===null?now():x.end)-x.start);
+let timeByTask=new Map();
+function tallyTime(){
+  timeByTask=new Map();
+  for(const x of S.times){
+    if(!x.taskId)continue;
+    timeByTask.set(x.taskId,(timeByTask.get(x.taskId)||0)+elapsed(x));
+  }
+}
+const timeOn=id=>timeByTask.get(id)||0;
+/* Two devices can each start one while apart, and the merge keeps both. Rather
+   than ask, close the older at the moment the newer began: every device computes
+   the same answer from the same records, so they converge without a round trip. */
+function oneRunner(){
+  const live=S.times.filter(x=>x.end===null).sort((a,b)=>b.start-a.start);
+  if(live.length<2)return false;
+  for(const x of live.slice(1)){x.end=Math.max(x.start,live[0].start);x.u=now();}
+  return true;
+}
+// hh:mm:ss while it runs — seconds matter when you are watching them
+const clockHMS=ms=>{const s=Math.floor(ms/1000);
+  return `${Math.floor(s/3600)}:${String(Math.floor(s/60)%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;};
+// and 2h 14m for anything totalled, where seconds are noise
+function clockHM(ms){
+  const m=Math.round(ms/60000);
+  if(m<1)return 'under a minute';
+  return m<60?`${m}m`:`${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}m`;
+}
+// A heading counts a day that may hold nothing, where "under a minute" is a lie.
+const clockTotal=ms=>ms<1000?'0m':clockHM(ms);
+const hhmm=ts=>{const d=new Date(ts);
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;};
+function startTimer({taskId=null,projectId=null,label=''}={}){
+  const t=taskId?S.tasks.find(x=>x.id===taskId):null;
+  // the label is a snapshot, so an entry still reads properly if its task is
+  // renamed or deleted later — time logged is a record, not a pointer
+  const name=(label||(t?t.title:'')||'Untitled').slice(0,120);
+  const prev=running();
+  if(prev)stopTimer(true);
+  const e={id:uid(),taskId:taskId||null,
+    projectId:projectId||(t?t.projectId:null)||null,
+    label:name,start:now(),end:null,u:now()};
+  S.times.push(e);save();render();buzz(10);
+  toast(prev?`Switched to ${name}`:`Timing ${name}`);
+  return e;
+}
+function stopTimer(quiet){
+  const e=running();if(!e)return null;
+  e.end=now();e.u=now();
+  if(!quiet){save();render();buzz([8,40,12]);
+    toast(`${clockHM(elapsed(e))} on ${e.label}`,()=>{e.end=null;e.u=now();save();render();});}
+  return e;
+}
+/* A running clock must not go through render(): the list is patched by signature
+   and repainting it every second would fight every gesture on the page. So the
+   ticking digits are written straight into the two nodes that show them, and the
+   interval only exists while something is actually running. */
+let tickT=null;
+function tickClock(){
+  const e=running();
+  const chip=$('#runchip'),big=$('#runbig');
+  if(!e){
+    if(chip)chip.hidden=true;
+    clearInterval(tickT);tickT=null;
+    return;
+  }
+  const txt=clockHMS(elapsed(e));
+  if(chip){chip.hidden=false;$('#runchiptime').textContent=txt;
+    $('#runchiplabel').textContent=e.label;}
+  if(big)big.textContent=txt;
+}
+function syncTick(){
+  clearInterval(tickT);tickT=null;
+  tickClock();
+  if(running())tickT=setInterval(tickClock,1000);
+}
 /* ============ clearing out ============
    Archiving takes something off the list; it never took it out of the file. A
    job finished two years ago was still parsed on every load, held in memory on
@@ -2957,6 +3207,11 @@ function openDetail(id){
   $('#dpo').value=t.po||'';$('#dqty').value=t.qty||'';$('#deta').value=t.eta||'';
   $('#dstamps').innerHTML=stampsHTML(t);
   $('#dwait').innerHTML=WAITS.map(([v,l])=>`<option value="${v}" ${(t.wait||'')===v?'selected':''}>${l}</option>`).join('');
+  tallyTime();
+  {const r=running(),live=!!(r&&r.taskId===t.id),ms=timeOn(t.id);
+   $('#dtime').textContent=live?'Running now':ms>0?clockHM(ms)+' logged':'Nothing logged yet';
+   $('#dtime').style.color=live?'var(--green)':'var(--label2)';
+   $('#dtimebtn').textContent=live?'Stop':'Start';}
   $('#dstepnew').value='';renderSteps(t);
   renderTracks(t);
   $('#dproj').innerHTML='<option value="">No project</option>'
@@ -2998,6 +3253,7 @@ function openBoard(hash){
 function syncBoard(){
   const on=view.t==='board';
   document.body.toggleAttribute('data-board',on);
+  document.body.toggleAttribute('data-time',view.t==='time');
   if(!on){document.body.removeAttribute('data-boardmodal');return;}
   const f=$('#boardframe');
   // ?embed=1 is what tells the board to drop its own chrome. A deep link
@@ -3238,6 +3494,18 @@ function addStep(){
   t.u=now();$('#dstepnew').value='';save();renderSteps(t);render();
   $('#dstepnew').focus();                       // a punch list is typed in one go
 }
+$('#list').addEventListener('keydown',e=>{
+  if(e.key!=='Enter'||e.target.id!=='tmwhat')return;
+  e.preventDefault();
+  const label=e.target.value.trim();
+  if(label)startTimer({label,projectId:$('#tmproj').value||null});
+});
+$('#dtimebtn').addEventListener('click',()=>{
+  const t=S.tasks.find(x=>x.id===editing);if(!t)return;
+  const r=running();
+  if(r&&r.taskId===t.id)stopTimer();else startTimer({taskId:t.id});
+  if(editing===t.id)openDetail(t.id);          // redraw the row's own reading
+});
 $('#dstepadd').addEventListener('click',addStep);
 $('#dstepnew').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addStep();}});
 function renderTracks(t){
@@ -3596,6 +3864,7 @@ function renderCalendar(){
   }
   $('#calgrid').innerHTML=h;
 }
+$('#runchip').addEventListener('click',()=>{setView('time');buzz(4);});
 $('#calBtn').addEventListener('click',()=>{openCalendar();buzz(4);});
 $('#calprev').addEventListener('click',()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()-1);calMonth=d;renderCalendar();});
 $('#calnext').addEventListener('click',()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()+1);calMonth=d;renderCalendar();});
@@ -3997,6 +4266,28 @@ document.addEventListener('click',e=>{
 $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-m]'))return;
   if(e.target.closest('[data-noopen]'))return;   // tracking link: follow it, don't open the row
+  const tm=e.target.closest('[data-tm]');
+  if(tm){
+    const [k,arg]=tm.dataset.tm.split(':');
+    if(k==='stop')return stopTimer();
+    if(k==='open')return openDetail(arg);
+    if(k==='start'){
+      const what=$('#tmwhat');
+      const label=what?what.value.trim():'';
+      if(!label){what&&what.focus();return toast('Say what you are working on first.');}
+      return startTimer({label,projectId:$('#tmproj').value||null});
+    }
+    if(k==='again'){
+      const x=S.times.find(y=>y.id===arg);if(!x)return;
+      return startTimer({taskId:x.taskId,projectId:x.projectId,label:x.label});
+    }
+    if(k==='del'){
+      const i=S.times.findIndex(y=>y.id===arg);if(i<0)return;
+      const [x]=S.times.splice(i,1);S.tomb[x.id]=now();save();render();
+      toast('Entry removed',()=>{delete S.tomb[x.id];x.u=now();S.times.splice(i,0,x);save();render();});
+      return;
+    }
+  }
   const ac=e.target.closest('[data-a]');
   if(ac){
     if(ac.dataset.a==='new')return openComposer();
@@ -4053,6 +4344,7 @@ function openRowMenu(id,x,y){
     ['done',t.done?'Mark not done':'Complete'],
     ['flag',t.flagged?'Remove flag':'Flag'],
     ['wait',t.wait==='them'?'Not waiting on them':'Waiting on them'],
+    (running()&&running().taskId===t.id)?['tstop','Stop the timer']:['tstart','Start timer'],
     t.type==='shipment'?['stage',`Advance to ${STAGES[(t.stage+1)%5]}`]:null,
     ['today','Due today'],['tomorrow','Due tomorrow'],t.due?['nodate','Clear the date']:null,
     ['dup','Duplicate'],
@@ -4115,6 +4407,8 @@ $('#rowmenu').addEventListener('click',e=>{
   // The common case by a mile — you have just chased someone, or they answered.
   if(k==='wait'){t.wait=t.wait==='them'?null:'them';t.u=now();save();render();
     toast(t.wait?'Waiting on them':'Not waiting on them',undo);return;}
+  if(k==='tstart'){startTimer({taskId:t.id});return;}
+  if(k==='tstop'){stopTimer();return;}
   if(k==='arch'||k==='unarch'){t.arch=k==='arch'?now():null;t.u=now();save();render();
     toast(t.arch?'Archived':'Out of the archive',undo);return;}
   if(k==='today'||k==='tomorrow'){t.due=dayOff(k==='today'?0:1);t.u=now();save();render();toast('Due '+fmtDue(t.due),undo);return;}
@@ -4272,7 +4566,7 @@ function paletteRows(q){
   const push=(t,h,ico,col,run)=>{if(hit(t))out.push({t,h,ico,col,run});};
   for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],['week','Week',I.today,'var(--teal)'],
     ['flagged','Flagged',I.flag,'var(--orange)'],['waiting','Whose move',I.clock,'var(--pink)'],['shipments','Shipments',I.truck,'var(--purple)'],
-    ['all','All open',I.list,'var(--gray)'],['done','Completed',I.check,'var(--green)'],
+    ['all','All open',I.list,'var(--gray)'],['time','Time',I.clock,'var(--green)'],['done','Completed',I.check,'var(--green)'],
     ['projects','Projects',I.box,'var(--indigo)'],['archive','Archived',I.box,'var(--label3)']])
     push(l,'View',ico,col,()=>setView(v));
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
