@@ -27,6 +27,37 @@ The check runs at startup and whenever the app returns to the foreground
 (throttled to once a minute), so an installed Home Screen app notices a deploy
 without being asked.
 
+## Keeping Supabase awake
+
+A free Supabase project pauses after about seven days without database activity,
+and a paused project does not wake itself: each device carries on working from
+its own copy, the cloud icon turns red, and nothing syncs until the project is
+restored by hand in the dashboard.
+
+`.github/workflows/keepalive.yml` runs one query a day so that never happens. It
+needs two repository secrets — **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+| --- | --- |
+| `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+| `SUPABASE_ANON_KEY` | the anon public key, the same one in the app's sync sheet |
+
+The workspace key is deliberately not among them. The workflow calls
+`shipshape_pull` with a key belonging to nobody, which still runs a real `SELECT`
+— the thing that counts as activity — while reading none of your data.
+
+Use **Actions → Keep Supabase awake → Run workflow** to try it immediately. A red
+run is the useful signal: the messages distinguish a rejected key, missing SQL,
+and a project that could not be reached at all.
+
+Two things it is not:
+
+- Not a backup. The free plan keeps no server-side snapshots, so
+  **⋯ → Settings → Save a backup file** is still the only copy that exists.
+- Not eternal. GitHub disables scheduled workflows in a repository with no
+  activity for 60 days, emailing the owner first; any push re-enables it. That
+  covers a holiday comfortably.
+
 ## Deploying
 
 GitHub Pages serves the `main` branch. Anything not merged into `main` is not

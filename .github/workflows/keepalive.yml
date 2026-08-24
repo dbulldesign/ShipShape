@@ -1,0 +1,88 @@
+# Keep the Supabase project awake.
+#
+# A free Supabase project is paused after about seven days without database
+# activity, and a paused project does not wake itself up: the app keeps working
+# on each device, the cloud icon turns red, and nothing syncs until the project
+# is restored by hand in the dashboard. One harmless query a day means that
+# never happens.
+#
+# Two repository secrets, under Settings → Secrets and variables → Actions:
+#
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon public key — the same one in the app's sync sheet
+#
+# The workspace key is deliberately NOT needed here. This calls shipshape_pull
+# with a key that belongs to nobody, which still runs a real SELECT — the thing
+# that counts as activity — while reading none of your data and keeping the one
+# actual secret out of this repository.
+#
+# One caveat worth knowing: GitHub disables scheduled workflows in a repository
+# that has seen no activity for 60 days. It emails the owner first, and any push
+# re-enables it. So this covers a holiday comfortably; it is not a substitute for
+# the repository existing.
+
+name: Keep Supabase awake
+
+on:
+  schedule:
+    # Daily. Deliberately not on the hour — jobs scheduled at :00 queue behind
+    # everyone else's and can be delayed by a long way.
+    - cron: '17 9 * * *'
+  workflow_dispatch: {}
+
+# Nothing here reads or writes the repository.
+permissions: {}
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run one query against the database
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${URL:-}" ] || [ -z "${KEY:-}" ]; then
+            echo "::error::Set SUPABASE_URL and SUPABASE_ANON_KEY under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+          # `|| code=000` matters: curl exits non-zero when it cannot connect at
+          # all, and under `set -e` that would end the run before the case below
+          # could say why — which is the one case most worth explaining.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --max-time 30 --retry 3 --retry-delay 15 --retry-connrefused \
+            -X POST "${URL%/}/rest/v1/rpc/shipshape_pull" \
+            -H "apikey: ${KEY}" \
+            -H "Authorization: Bearer ${KEY}" \
+            -H 'Content-Type: application/json' \
+            -d '{"k":"github-keepalive"}') || code="000"
+
+          case "${code}" in
+            2*)
+              echo "Answered HTTP ${code} — the project is awake."
+              ;;
+            401|403)
+              echo "::error::HTTP ${code}. The anon key was rejected — check SUPABASE_ANON_KEY against Project Settings → API."
+              exit 1
+              ;;
+            404)
+              echo "::error::HTTP 404. The shipshape_pull function is missing — run the setup SQL from the app's sync sheet."
+              exit 1
+              ;;
+            000)
+              echo "::error::Could not reach ${URL%/} at all. Check SUPABASE_URL, and whether the project is already paused — a paused project is restored from the Supabase dashboard."
+              exit 1
+              ;;
+            *)
+              echo "::error::HTTP ${code}. No usable answer. The project may already be paused — restore it in the Supabase dashboard."
+              exit 1
+              ;;
+          esac
