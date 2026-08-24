@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.29.0">
+<meta name="app-version" content="1.30.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -294,6 +294,23 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trk .gotbtn.on{color:var(--green);font-weight:600}
 .trk .del{margin-left:auto;color:var(--red);font-size:13px}
 .trackadd{display:flex;gap:8px;padding:10px 14px 12px;background:var(--card2)}
+/* The checklist. A step is a line, not a card: eight of them under one task have
+   to stay scannable, and the tick is the only thing worth any weight. */
+.stepadd{display:flex;gap:8px;padding:9px 14px 12px;background:var(--card2)}
+.stepadd input{flex:1;min-width:0;background:var(--fill2);border:0;outline:none;font-size:15px;
+  padding:8px 11px;border-radius:9px}
+.step{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(--card2);border-top:.5px solid var(--sep)}
+.step .tk{flex:none;width:22px;height:22px;border-radius:50%;border:1.7px solid var(--label3);
+  display:grid;place-items:center;transition:transform .18s var(--ease),background .18s,border-color .18s}
+.step .tk:active{transform:scale(.88)}
+.step .tk svg{width:12px;height:12px;fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;
+  stroke-linejoin:round;opacity:0}
+.step.on .tk{background:var(--green);border-color:var(--green)}
+.step.on .tk svg{opacity:1}
+.step input.t{flex:1;min-width:0;background:transparent;border:0;outline:none;font-size:15.5px}
+.step.on input.t{color:var(--label3);text-decoration:line-through}
+.step .del{flex:none;color:var(--label3);font-size:18px;line-height:1;padding:0 2px}
+@media(hover:hover){.step .del{opacity:0;transition:opacity .15s}.step:hover .del{opacity:1}}
 .calnav{display:flex;align-items:center;gap:10px;padding:8px 14px 4px;font-weight:700;font-size:17px}
 .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px 10px 4px}
 .calgrid .wd{text-align:center;font-size:11px;font-weight:700;color:var(--label3);padding:2px 0}
@@ -550,6 +567,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="dremind">Remind me</label><select id="dremind"></select></div>
     <div class="field"><label for="drep">Repeats</label><select id="drep"></select></div>
     <div class="field"><label for="dflag">Flagged</label><input id="dflag" type="checkbox" style="flex:none;width:auto;transform:scale(1.2);accent-color:var(--orange)"></div>
+    <div class="field"><label for="dwait">Waiting on</label><select id="dwait"></select></div>
   </div>
   <div class="fgroup" id="shipfields">
     <div class="field"><label for="dmfr">Maker</label><input id="dmfr" list="l-mfr" placeholder="None"></div>
@@ -565,6 +583,14 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
       <button class="btn sec" id="dcheck" style="margin:0;font-size:14px;padding:8px 14px;display:none">Check status</button>
     </div>
     <div id="dstamps" class="stamps"></div>
+  </div>
+  <div class="fgroup">
+    <div class="trackhead"><span>Checklist</span><span id="dstepct" class="got"></span></div>
+    <div id="dsteps"></div>
+    <div class="stepadd">
+      <input id="dstepnew" placeholder="Add a step" autocomplete="off" enterkeyhint="done">
+      <button class="btn sec" id="dstepadd" style="margin:0;font-size:14px;padding:8px 14px">Add</button>
+    </div>
   </div>
   <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="dnotes">Notes</label><textarea id="dnotes" placeholder="Order numbers, contacts, next steps…"></textarea></div></div>
   <button class="danger" id="ddel">Delete</button>
@@ -911,8 +937,9 @@ const local={
 const STAGES=['Quote','Ordered','Making','Shipped','Delivered'];
 const SORTS=['smart','due','added','title','stage'];
 const SORT_LABEL={smart:'Smart',due:'Due date',added:'Recently added',title:'Title',stage:'Stage'};
-const GROUPS=['auto','project','maker','stage','none'];
-const GROUP_LABEL={auto:'By date',project:'By project',maker:'By maker',stage:'By stage',none:'No grouping'};
+const GROUPS=['auto','project','maker','stage','wait','none'];
+const GROUP_LABEL={auto:'By date',project:'By project',maker:'By maker',stage:'By stage',
+  wait:'By whose move',none:'No grouping'};
 const SC=['var(--gray)','var(--blue)','var(--orange)','var(--purple)','var(--green)'];
 /* Work that comes round again — quarterly lead-time checks, monthly invoicing.
    Completing one of these leaves the next one behind it. */
@@ -923,6 +950,12 @@ const REMINDS=[[0,'On the day'],[1,'1 day before'],[2,'2 days before'],[3,'3 day
 const REPS=[[null,'Never'],['weekly','Every week'],['biweekly','Every 2 weeks'],
   ['monthly','Every month'],['quarterly','Every 3 months'],['yearly','Every year']];
 const REP_SHORT={weekly:'weekly',biweekly:'2-weekly',monthly:'monthly',quarterly:'quarterly',yearly:'yearly'};
+/* Whose move it is. The stage bar says where a shipment has got to, which is not
+   the same question — a parcel can sit at "Ordered" for three weeks either
+   because the maker owes you a date or because you owe them a drawing, and only
+   one of those is yours to fix. */
+const WAITS=[['','Nobody'],['me','Me'],['them','Them']];
+const WAIT_LABEL={me:'My move',them:'Waiting on them'};
 function nextDue(from,rep){
   const d=fromISO(from);
   if(rep==='weekly')d.setDate(d.getDate()+7);
@@ -1064,6 +1097,11 @@ function migrate(){
     t.po=t.po||'';t.carrier=t.carrier||'';t.qty=t.qty||null;t.eta=t.eta||null;t.stamps=t.stamps||{};
     t.rep=REPS.some(r=>r[0]===t.rep)?t.rep:null;t.arch=t.arch||null;
     t.remind=Number.isFinite(t.remind)&&t.remind>0?t.remind:null;
+    t.wait=['me','them'].includes(t.wait)?t.wait:null;
+    // steps come from anywhere a synced document can, so shape them rather than trust them
+    t.steps=Array.isArray(t.steps)
+      ? t.steps.filter(s=>s&&typeof s.t==='string').map(s=>({id:s.id||uid(),t:s.t,d:!!s.d}))
+      : [];
     // one tracking string becomes the first entry in the parcel list
     if(!Array.isArray(t.tracks))t.tracks=t.tracking?[{id:uid(),n:t.tracking,carrier:t.carrier||'',got:null}]:[];
     delete t.assignee;
@@ -1716,6 +1754,7 @@ function filtered(){
   else if(v.t==='today')a=a.filter(t=>!t.done&&t.due&&diff(t.due)<=0);
   else if(v.t==='scheduled')a=a.filter(t=>!t.done&&t.due);
   else if(v.t==='flagged')a=a.filter(t=>!t.done&&t.flagged);
+  else if(v.t==='waiting')a=a.filter(t=>!t.done&&t.wait);
   else if(v.t==='all')a=a.filter(t=>!t.done);
   else if(v.t==='done')a=a.filter(t=>t.done);
   else if(v.t==='shipments')a=a.filter(t=>!t.done&&t.type==='shipment');
@@ -1748,6 +1787,9 @@ function groupOf(t){
   if(groupBy==='stage'){
     if(t.type!=='shipment')return {k:'s9',l:'Tasks',o:9};
     return {k:'s'+t.stage,l:STAGES[t.stage],o:t.stage};}
+  if(groupBy==='wait')return t.wait
+    ? {k:'w'+t.wait,l:WAIT_LABEL[t.wait],o:t.wait==='them'?0:1}
+    : {k:'w0',l:'Nobody waiting',o:2};
   /* Inside a week, "This week" as a heading says nothing — every row is in it.
      One heading per day is the whole point of the view. Ordered by the date read
      as a number, which sorts correctly because the format is fixed-width. */
@@ -1801,6 +1843,8 @@ function renderNav(){
   h+=navItem(I.today,'var(--teal)','Week',openT().filter(t=>{
     if(!t.due)return false;const d=weekDays();return t.due>=iso(d[0])&&t.due<=iso(d[6]);}).length,view.t==='week','data-v="week"');
   h+=navItem(I.flag,'var(--orange)','Flagged',openT().filter(t=>t.flagged).length,view.t==='flagged','data-v="flagged"');
+  {const w=openT().filter(t=>t.wait).length;
+   if(w||view.t==='waiting')h+=navItem(I.clock,'var(--pink)','Whose move',w,view.t==='waiting','data-v="waiting"');}
   h+=navItem(I.truck,'var(--purple)','Shipments',openT().filter(t=>t.type==='shipment').length,view.t==='shipments','data-v="shipments"');
   h+=navItem(I.list,'var(--gray)','All open',openT().length,view.t==='all','data-v="all"');
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
@@ -1824,7 +1868,7 @@ function renderNav(){
   $('#navlists').innerHTML=h;
   rollCounts();
 }
-const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',all:'All open',done:'Completed',
+const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',all:'All open',done:'Completed',
   projects:'Projects',shipments:'Shipments',archive:'Archived'};
 function renderHead(){
   const d=new Date();
@@ -1942,6 +1986,13 @@ function rowHTML(t){
   if(t.qty)chips.push(`<span class="chip">×${t.qty}</span>`);
   if(t.po)chips.push(`<span class="chip">${/^p\.?o\b/i.test(t.po.trim())?'':'PO '}${esc(t.po)}</span>`);
   if(t.rep)chips.push(`<span class="chip">↻ ${REP_SHORT[t.rep]}</span>`);
+  /* Whose move, on the row: the whole value of recording it is not having to open
+     anything to see it. "Them" is the one that needs chasing, so it is the one
+     that gets a colour. */
+  if(t.wait&&!t.done)chips.push(`<button class="chip go" data-v="waiting"
+    ${t.wait==='them'?'style="color:var(--orange)"':''}>${WAIT_LABEL[t.wait]}</button>`);
+  const st_=stepsOf(t);
+  if(st_.length)chips.push(`<span class="chip"${st_.every(s=>s.d)?' style="color:var(--green)"':''}>✓ ${st_.filter(s=>s.d).length}/${st_.length}</span>`);
   // an expected arrival later than the promised date is the thing worth seeing
   if(t.eta&&!t.done)chips.push(makerLate(t)
     ? `<span class="chip" style="color:var(--orange)">Maker ${-diff(t.eta)} d over</span>`
@@ -2101,6 +2152,8 @@ function emptyHTML(){
     week:['🗓',`Nothing due ${weekLabel(view.v)}`,'Seven clear days. Page to another week, or put something in one.',
       [A(),G('scheduled','See the whole list')]],
     flagged:['🚩','Nothing flagged','Flag anything you want to keep close.',
+      [G('all','Show everything open')]],
+    waiting:['🤝','Nobody is waiting','Set "Whose move" on a task and it lands here — the things you are chasing, and the things others are chasing you for.',
       [G('all','Show everything open')]],
     done:['✨','Nothing completed yet','Finished work collects here.',
       [G('all','Show everything open')]],
@@ -2718,6 +2771,8 @@ function openDetail(id){
   $('#dmfr').value=t.manufacturer||'';$('#ddest').value=t.destination||'';
   $('#dpo').value=t.po||'';$('#dqty').value=t.qty||'';$('#deta').value=t.eta||'';
   $('#dstamps').innerHTML=stampsHTML(t);
+  $('#dwait').innerHTML=WAITS.map(([v,l])=>`<option value="${v}" ${(t.wait||'')===v?'selected':''}>${l}</option>`).join('');
+  $('#dstepnew').value='';renderSteps(t);
   renderTracks(t);
   $('#dproj').innerHTML='<option value="">No project</option>'
     +S.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
@@ -2909,6 +2964,62 @@ function addTrack(t,n='',carrier=''){
   mirrorTracking(t);
   return t.tracks[t.tracks.length-1];
 }
+/* ============ checklist ============
+   A punch list is eight rooms under one task, not eight tasks. Kept on the task
+   so it moves, syncs and archives with it, and deliberately not wired to the
+   task's own tick: finishing every step is a fact about the steps, and deciding
+   the task is done stays a decision. */
+const stepsOf=t=>Array.isArray(t.steps)?t.steps:[];
+function renderSteps(t){
+  const list=stepsOf(t),done=list.filter(s=>s.d).length;
+  $('#dstepct').textContent=list.length?`${done} of ${list.length} done`:'';
+  $('#dsteps').innerHTML=list.map(s=>`<div class="step ${s.d?'on':''}" data-step="${s.id}">
+    <button class="tk" data-steptick="${s.id}" aria-label="${s.d?'Undo':'Done'}" role="checkbox" aria-checked="${s.d}">
+      <svg viewBox="0 0 14 14"><path d="M2.5 7.4 5.6 10.5 11.5 3.9"/></svg></button>
+    <input class="t" value="${esc(s.t)}" data-stepedit="${s.id}" aria-label="Step">
+    <button class="del" data-stepdel="${s.id}" aria-label="Remove this step">×</button></div>`).join('');
+}
+function withStep(id,fn){
+  const t=S.tasks.find(x=>x.id===editing);if(!t)return null;
+  t.steps=stepsOf(t);
+  const s=t.steps.find(x=>x.id===id);
+  if(s)fn(t,s);
+  return t;
+}
+$('#dsteps').addEventListener('click',e=>{
+  const tk=e.target.closest('[data-steptick]');
+  if(tk){const t=withStep(tk.dataset.steptick,(t,s)=>{s.d=!s.d;});
+    if(t){t.u=now();save();renderSteps(t);buzz(6);
+      // the last step going green is worth something, but a step is not a milestone
+      if(stepsOf(t).length&&stepsOf(t).every(s=>s.d))celebrate($('#dsteps'));}
+    return;}
+  const dl=e.target.closest('[data-stepdel]');
+  if(dl){const id=dl.dataset.stepdel;
+    const t=S.tasks.find(x=>x.id===editing);if(!t)return;
+    const was=stepsOf(t).find(s=>s.id===id);const at=stepsOf(t).indexOf(was);
+    t.steps=stepsOf(t).filter(s=>s.id!==id);t.u=now();save();renderSteps(t);render();
+    toast('Step removed',()=>{const x=S.tasks.find(y=>y.id===t.id);if(!x)return;
+      x.steps=stepsOf(x);x.steps.splice(at,0,was);x.u=now();save();
+      if(editing===x.id)renderSteps(x);render();});}
+});
+// Typed edits are saved on the way out of the field, like every other field here
+$('#dsteps').addEventListener('change',e=>{
+  const ed=e.target.closest('[data-stepedit]');if(!ed)return;
+  const v=ed.value.trim();
+  const t=withStep(ed.dataset.stepedit,(t,s)=>{s.t=v;});
+  if(!t)return;
+  if(!v){t.steps=stepsOf(t).filter(s=>s.t);renderSteps(t);}   // emptied means gone
+  t.u=now();save();render();
+});
+function addStep(){
+  const t=S.tasks.find(x=>x.id===editing);if(!t)return;
+  const v=$('#dstepnew').value.trim();if(!v)return;
+  t.steps=stepsOf(t);t.steps.push({id:uid(),t:v,d:false});
+  t.u=now();$('#dstepnew').value='';save();renderSteps(t);render();
+  $('#dstepnew').focus();                       // a punch list is typed in one go
+}
+$('#dstepadd').addEventListener('click',addStep);
+$('#dstepnew').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addStep();}});
 function renderTracks(t){
   const list=tracksOf(t);
   const got=list.filter(x=>x.got).length;
@@ -2992,6 +3103,7 @@ function saveDetail(){
   t.title=$('#dtitle').value.trim()||t.title;
   t.due=$('#ddue').value||null;
   t.flagged=$('#dflag').checked;t.notes=$('#dnotes').value;
+  t.wait=$('#dwait').value||null;
   const wasMaker=t.manufacturer;
   t.manufacturer=canonMaker($('#dmfr').value);t.destination=$('#ddest').value.trim();
   t.po=$('#dpo').value.trim();
@@ -3433,7 +3545,7 @@ $('#sugg').addEventListener('click',e=>{
   const b=e.target.closest('[data-ins]');if(!b)return;
   const ci=$('#ci');ci.value=ci.value.replace(/\s+$/,'')+' '+b.dataset.ins+' ';updatePreview();ci.focus();
 });
-['#dtitle','#ddue','#dflag','#dnotes','#dmfr','#ddest','#dpo','#dqty','#deta','#drep','#dremind'].forEach(s=>$(s).addEventListener('change',saveDetail));
+['#dtitle','#ddue','#dflag','#dwait','#dnotes','#dmfr','#ddest','#dpo','#dqty','#deta','#drep','#dremind'].forEach(s=>$(s).addEventListener('change',saveDetail));
 $('#dproj').addEventListener('change',e=>{
   if(e.target.value==='__new'){
     const id=editing;saveDetail();attachTo=id;editing=null;
@@ -3637,6 +3749,7 @@ function openRowMenu(id,x,y){
     ['open','Open'],
     ['done',t.done?'Mark not done':'Complete'],
     ['flag',t.flagged?'Remove flag':'Flag'],
+    ['wait',t.wait==='them'?'Not waiting on them':'Waiting on them'],
     t.type==='shipment'?['stage',`Advance to ${STAGES[(t.stage+1)%5]}`]:null,
     ['today','Due today'],['tomorrow','Due tomorrow'],t.due?['nodate','Clear the date']:null,
     ['dup','Duplicate'],
@@ -3696,6 +3809,9 @@ $('#rowmenu').addEventListener('click',e=>{
   const undo=()=>{Object.assign(t,before);t.u=now();save();render();};
   const dayOff=n=>{const d=new Date(midnight());d.setDate(d.getDate()+n);return iso(d);};
   if(k==='flag'){t.flagged=!t.flagged;t.u=now();save();render();toast(t.flagged?'Flagged':'Flag removed',undo);return;}
+  // The common case by a mile — you have just chased someone, or they answered.
+  if(k==='wait'){t.wait=t.wait==='them'?null:'them';t.u=now();save();render();
+    toast(t.wait?'Waiting on them':'Not waiting on them',undo);return;}
   if(k==='arch'||k==='unarch'){t.arch=k==='arch'?now():null;t.u=now();save();render();
     toast(t.arch?'Archived':'Out of the archive',undo);return;}
   if(k==='today'||k==='tomorrow'){t.due=dayOff(k==='today'?0:1);t.u=now();save();render();toast('Due '+fmtDue(t.due),undo);return;}
@@ -3851,7 +3967,7 @@ function paletteRows(q){
   const out=[],hit=s=>!q||(s||'').toLowerCase().includes(q);
   const push=(t,h,ico,col,run)=>{if(hit(t))out.push({t,h,ico,col,run});};
   for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],['week','Week',I.today,'var(--teal)'],
-    ['flagged','Flagged',I.flag,'var(--orange)'],['shipments','Shipments',I.truck,'var(--purple)'],
+    ['flagged','Flagged',I.flag,'var(--orange)'],['waiting','Whose move',I.clock,'var(--pink)'],['shipments','Shipments',I.truck,'var(--purple)'],
     ['all','All open',I.list,'var(--gray)'],['done','Completed',I.check,'var(--green)'],
     ['projects','Projects',I.box,'var(--indigo)'],['archive','Archived',I.box,'var(--label3)']])
     push(l,'View',ico,col,()=>setView(v));
