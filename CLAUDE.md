@@ -63,10 +63,29 @@ running — a day heading over a completed task is a lie.
 the All tab used to answer "All clear · Add a task to get going", which replies to
 a question nobody asked.
 
+## The composer's notation
+
+`#project @maker >destination !flag` plus dates, and one thing that is this
+business's own rather than general: **a PO is always five digits after `PO`**.
+`PO_RE` accepts `PO 41785`, `PO41785`, `PO#41785`, `PO: 41785`, `P.O. 41785`.
+
+- `(?!\d)` earns its place as much as `\d{5}`. A longer run is a tracking number
+  or a phone number, and half-eating one would be worse than ignoring it. Tested
+  against `PO 4178`, `PO 417850`, `PO 1234567890`, `Apollo 41785`, `POST 41785`,
+  `Repo 41785`, `Deposit 41785` — none of them match.
+- Taken out of the line **before** `extractDate` runs, so no date pattern can
+  reach into the digits.
+- A PO means something has been ordered, so it infers Shipment the way a maker or
+  a destination does. Picking Task keeps the number.
+- Typing nothing but `PO 41785` makes that the title. The composer will not submit
+  without one, and the number arriving before anyone has named the line is a real
+  way to work.
+
 ## Chips are doors
 
 A row chip that names something the app can show navigates to it: project, maker,
-destination, whose-move. This is the only way to reach the maker and destination
+destination, whose-move — and the PO chip runs `po:` search, because a PO gathers
+a whole order across several crates and makers. This is the only way to reach the maker and destination
 views from a phone. The class is `go`, not `nav` — `.nav` is the sidebar item and
 carries `width:100%`, which stretches a chip to its full 200px allowance and
 stacks them one per line. Not while `selMode`: there a tap anywhere in the row

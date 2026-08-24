@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.37.0">
+<meta name="app-version" content="1.37.1">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -775,7 +775,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="preview" id="prev"></div>
   <textarea id="ci" rows="2" placeholder="Approve shop drawings #Harbor Lofts fri"></textarea>
   <div class="sugg" id="sugg"></div>
-  <div class="hint"><span><code>#</code> project</span><span><code>@</code> maker</span><span><code>&gt;</code> ship to</span><span><code>!</code> flag</span><span><code>fri</code> · <code>oct 15</code> · <code>in 2 weeks</code></span></div>
+  <div class="hint"><span><code>#</code> project</span><span><code>@</code> maker</span><span><code>&gt;</code> ship to</span><span><code>!</code> flag</span><span><code>PO 41785</code> order no.</span><span><code>fri</code> · <code>oct 15</code> · <code>in 2 weeks</code></span></div>
   <div class="fgroup" id="cshipfields" style="margin:10px 0 0">
     <div class="field"><label for="cpo">PO number</label><input id="cpo" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
     <div class="field"><label for="ctrack">Tracking</label><input id="ctrack" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false">
@@ -1791,8 +1791,19 @@ function extractDate(text){
   for(const [re,fn] of tests){const m=text.match(re);if(m)return{date:fn(m),text:m[0],index:m.index};}
   return null;
 }
+/* A purchase order here is always five digits after PO. That is this business's
+   own notation rather than anything general, and it is worth teaching the parser
+   precisely because it is typed dozens of times a week.
+
+   Pulled out before the date is looked for, so no date pattern can reach into the
+   digits — and `(?!\d)` matters as much as `\d{5}`: a longer run is a tracking
+   number or a phone number, not a PO, and half-eating it would be worse than
+   ignoring it. */
+const PO_RE=/\bp\.?o\.?[\s#:]*(\d{5})(?!\d)/i;
 function parseInput(raw){
-  let text=' '+raw.trim()+' ',due=null,flagged=false;
+  let text=' '+raw.trim()+' ',due=null,flagged=false,po='';
+  const pm=text.match(PO_RE);
+  if(pm){po=pm[1];text=text.slice(0,pm.index)+' '+text.slice(pm.index+pm[0].length);}
   const d=extractDate(text);
   if(d){due=iso(d.date);text=text.slice(0,d.index)+' '+text.slice(d.index+d.text.length);}
   if(/\s!\s/.test(text)){flagged=true;text=text.replace(/\s!\s/g,' ');}
@@ -1803,7 +1814,10 @@ function parseInput(raw){
     const v=p[2].replace(/\s+/g,' ').trim();if(!v)continue;
     if(p[1]==='#')out.project=v;else if(p[1]==='@')out.manufacturer=v;else out.destination=v;
   }
-  return {title,due,flagged,...out};
+  /* Typing nothing but the number is a real way to work — the PO arrives before
+     anyone has decided what to call the line — and the composer will not submit
+     without a title, so the number becomes one. */
+  return {title:title||(po?'PO '+po:''),due,flagged,po,...out};
 }
 
 /* ============ helpers ============ */
@@ -2162,7 +2176,10 @@ function rowHTML(t){
   if(t.destination)chips.push(`<button class="chip go" data-v="dest" data-val="${esc(t.destination)}"
     aria-label="Show everything going to ${esc(t.destination)}">→ ${esc(t.destination)}</button>`);
   if(t.qty)chips.push(`<span class="chip">×${t.qty}</span>`);
-  if(t.po)chips.push(`<span class="chip">${/^p\.?o\b/i.test(t.po.trim())?'':'PO '}${esc(t.po)}</span>`);
+  /* A PO groups a whole order — several crates, several makers — so the chip runs
+     the search that gathers them rather than just stating the number. */
+  if(t.po)chips.push(`<button class="chip go" data-q="po:${esc(t.po.trim())}"
+    aria-label="Show everything on this PO">${/^p\.?o\b/i.test(t.po.trim())?'':'PO '}${esc(t.po)}</button>`);
   if(t.rep)chips.push(`<span class="chip">↻ ${REP_SHORT[t.rep]}</span>`);
   /* Whose move, on the row: the whole value of recording it is not having to open
      anything to see it. "Them" is the one that needs chasing, so it is the one
@@ -3118,7 +3135,7 @@ function composed(){
     manufacturer:p.manufacturer||c.manufacturer,
     destination:p.destination||c.destination,
     tracking:$('#ctrack').value.trim()||c.tracking||'',
-    po:$('#cpo').value.trim(),
+    po:$('#cpo').value.trim()||p.po||'',
     carrier:$('#ccarrier').value,
     due:p.due||c.due};
 }
@@ -3157,7 +3174,9 @@ document.addEventListener('keydown',e=>{
 },true);
 function updatePreview(){
   const p=composed();
-  if(!ctypeManual){const want=(p.manufacturer||p.destination||p.tracking||(ctx&&ctx.type==='shipment'))?'shipment':'task';if(want!==ctype)setType(want);}
+  // a PO is an order placed, which in this app is a shipment — overridable, like
+  // every other thing the composer infers, by picking Task
+  if(!ctypeManual){const want=(p.manufacturer||p.destination||p.tracking||p.po||(ctx&&ctx.type==='shipment'))?'shipment':'task';if(want!==ctype)setType(want);}
   const c=[];
   if(p.due)c.push(`<span class="pchip" style="color:var(--blue)">📅 <b>${fmtDue(p.due)}</b></span>`);
   if(p.project){const known=S.projects.find(x=>x.name.toLowerCase()===p.project.toLowerCase());
