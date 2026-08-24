@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.31.0">
+<meta name="app-version" content="1.32.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -399,6 +399,16 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
    with divs so an effect costs nothing to download. */
 .conf{position:fixed;width:7px;height:11px;border-radius:1.5px;z-index:70;pointer-events:none}
 .ember{position:fixed;border-radius:50%;z-index:70;pointer-events:none}
+/* Delivery is the only effect that comes downwards, so its pieces are drawn as
+   small parcels rather than paper — squarer, with a lid line across the top. */
+.drop{position:fixed;width:10px;height:9px;border-radius:2px;z-index:70;pointer-events:none;
+  box-shadow:inset 0 2.5px 0 rgba(255,255,255,.45)}
+/* A ripple, not an outline. It used to be a rounded rectangle the width of the
+   row, which looked right for one frame and wrong immediately after: completing
+   something re-sorts the list, so the box was left framing whichever unrelated
+   row had slid into that space. A circle at the point of impact belongs to the
+   effect rather than to whatever is underneath it. */
+.landing{position:fixed;border:2.5px solid var(--green);border-radius:50%;z-index:70;pointer-events:none}
 .flash{position:fixed;width:34px;height:34px;border-radius:50%;z-index:70;pointer-events:none;
   background:radial-gradient(circle,#fff 0%,var(--yellow) 45%,transparent 70%)}
 .sailing{position:fixed;width:18px;height:18px;z-index:70;pointer-events:none;
@@ -666,6 +676,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   </div>
   <div class="fxg"><div class="lab2">Row height</div><div class="seg" id="set-rows"></div></div>
   <div class="fxg"><div class="lab2">“Last seven days” on Today</div><div class="seg" id="set-digest"></div></div>
+  <div class="fxg"><div class="lab2">Days in a row</div><div class="seg" id="set-streak"></div></div>
+  <div class="blurb" id="setstreaknote" style="padding-top:0"></div>
 
   <div class="sethead">Finishing something</div>
   <div class="fxg"><div class="lab2">Style</div><div class="seg" id="fx-style"></div></div>
@@ -1069,7 +1081,7 @@ function trackInfo(t){
 let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
-let sortBy='smart',groupBy='auto',compact=false,sfx=false,digestOff=false;
+let sortBy='smart',groupBy='auto',compact=false,sfx=false,digestOff=false,streakOn=false;
 // how finishing something is marked; per device, like every other look-and-feel pref
 let fx={style:'confetti',when:'all',amount:'medium'};
 // draft holds what has been typed into the sync sheet but not turned on yet
@@ -1116,7 +1128,7 @@ async function loadAll(){
   if(vr){try{const v=JSON.parse(vr);
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
     if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;
-    compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;
+    compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;streakOn=!!v.streakOn;
     if(v.fx){
       if(FX_STYLES.some(x=>x[0]===v.fx.style))fx.style=v.fx.style;
       if(FX_WHEN.some(x=>x[0]===v.fx.when))fx.when=v.fx.when;
@@ -1214,7 +1226,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();}
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact,sfx,digestOff,fx}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact,sfx,digestOff,streakOn,fx}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -2020,6 +2032,26 @@ function seaStateHTML(){
 }
 /* What moved in the last seven days. The stage stamps make this free, and it is
    the one question a weekly review always starts with. */
+/* Days in a row on which something got finished.
+   Counted back from yesterday, not today: a streak that reads 0 until you tick
+   the first thing off each morning turns a quiet observation into a demand, and
+   this is meant to be neither a target nor a scold. Today still counts once it
+   has something in it, so the number goes up when you finish, never down while
+   you work. Off by default for the same reason.
+   Read from `completed` timestamps, which already exist and survive archiving —
+   no counter to keep, and nothing to go wrong across two devices. */
+function streak(){
+  const days=new Set();
+  for(const t of S.tasks)if(t.completed)days.add(iso(new Date(t.completed)));
+  if(!days.size)return 0;
+  const t0=midnight();
+  let n=0,i=days.has(iso(t0))?0:1;                  // today only if it has one
+  for(;;i++){
+    if(!days.has(iso(addDays(t0,-i))))break;
+    n++;
+  }
+  return n;
+}
 function digestHTML(){
   if(digestOff)return '';
   const since=now()-7*864e5;
@@ -2029,6 +2061,8 @@ function digestHTML(){
   const slipped=S.tasks.filter(t=>!t.done&&!t.arch&&t.due&&diff(t.due)<0&&diff(t.due)>=-7);
   const rows=[[done.length,'completed'],[shipped.length,'shipped'],[arrived.length,'arrived'],
     [slipped.length,'went past due']].filter(([n])=>n);
+  const sk=streakOn?streak():0;
+  if(sk>1)rows.push([sk,`day${sk===1?'':'s'} in a row with something finished`]);
   if(!rows.length)return '';        // an empty card is noise, not information
   return `<div class="digest"><h4>Last seven days<button data-m="nodigest">hide</button></h4>`
     +rows.map(([n,l])=>`<div class="d"><b>${n}</b><span>${l}</span></div>`).join('')+'</div>';
@@ -2512,7 +2546,11 @@ function toggleDone(id,el){
   if(t.done&&el){
     el.closest('.row').classList.add('done');
     const s=t.projectId?stats(t.projectId):null,whole=!!(s&&s.all&&s.open===0);
-    celebrate(el,{milestone:whole});
+    /* Ticking a shipment off is the same event as advancing it to Delivered — it
+       is how most of them get there — so it gets the same arriving effect rather
+       than the outward burst a task gets. A finished project outranks both. */
+    const ship=t.type==='shipment'&&!whole;
+    celebrate(el,{milestone:whole||ship,kind:ship?'deliver':''});
     if(whole)toast('Project complete 🎉');
   }
   save();
@@ -2572,8 +2610,12 @@ function bumpStage(id){
   if(t.stage===4){t.done=true;t.completed=now();}else if(prevDone){t.done=false;t.completed=null;}
   const bar=document.querySelector(`.rowwrap[data-id="${id}"] .stagebar`);
   if(t.stage===3&&prev<3)sail(bar);                 // it has left the maker
-  if(t.stage===4&&prev!==4){ping(660);celebrate(bar,{milestone:true});}
-  buzz();save();render();
+  if(t.stage===4&&prev!==4){ping(660);celebrate(bar,{milestone:true,kind:'deliver'});}
+  /* Advancing a stage is done on site, one-handed, often without looking — so it
+     answers in the hand. Delivered gets a pattern rather than a tick, because it
+     is the one advance that ends something. navigator.vibrate takes an array. */
+  buzz(t.stage===4?[16,55,30]:14);
+  save();render();
   slideStage(id,prev,t.stage);
   toast(`${STAGES[prev]} → ${STAGES[t.stage]}`,()=>{t.stage=prev;t.done=prevDone;t.u=now();save();render();});
 }
@@ -2637,7 +2679,9 @@ const FX_STYLES=[['sparks','Sparks'],['confetti','Confetti'],['fireworks','Firew
 const FX_WHEN=[['all','Everything'],['milestone','Milestones'],['never','Never']];
 const FX_AMOUNT=[['light','Light'],['medium','Medium'],['full','Full']];
 const FX_N={sparks:{light:10,medium:18,full:30},confetti:{light:14,medium:26,full:44},
-  fireworks:{light:12,medium:20,full:32}};
+  fireworks:{light:12,medium:20,full:32},
+  // fewer, because each one falls the whole height of the row and lands
+  deliver:{light:5,medium:9,full:14}};
 let fxLive=0;                         // concurrent effects, so a flurry cannot pile up
 function fxParticle(cls,x,y,bg,extra){
   const d=document.createElement('div');
@@ -2694,9 +2738,41 @@ function fxFireworks(cx,cy,n){
   shell(0,0,n,78,0,7);
   shell(26,-22,Math.max(6,Math.round(n*.55)),48,260,5);
 }
+/* Delivered — the one effect that arrives instead of bursting.
+   Everything else here throws outward from the row, which is the shape of "well
+   done". A parcel turning up is not that feeling: it comes from somewhere else
+   and stops. So the pieces fall in from above the row, overshoot, settle, and a
+   green ring closes around the row to say it has landed.
+   Deliberately not driven by fx.style — a shipment arriving is the same event
+   whichever style you picked for ticking tasks off. It still obeys the amount,
+   the reduced-motion check and the concurrency cap, because those are about how
+   much movement you want, not about which. */
+function fxDeliver(cx,cy,n,w){
+  // two rings, the second a beat behind, so the landing reads as an impact
+  for(const [size,delay,dur] of [[46,110,520],[46,230,560]]){
+    const ring=fxParticle('landing',cx,cy,null,
+      `width:${size}px;height:${size}px;margin-left:${-size/2}px;margin-top:${-size/2}px`);
+    fxGo(ring,[{transform:'scale(.35)',opacity:.95,offset:0},
+      {transform:'scale(2.4)',opacity:0,offset:1}],
+      {duration:dur,delay,easing:'cubic-bezier(.15,.75,.3,1)',fill:'backwards'});
+  }
+  for(let i=0;i<n;i++){
+    const d=fxParticle('drop',cx,cy,PAL[i%PAL.length]);
+    const dx=(i/Math.max(1,n-1)-.5)*Math.min(w*.5,150);
+    const from=-120-Math.random()*90;                 // above the row, off its own top edge
+    const tilt=(Math.random()<.5?-1:1)*(10+Math.random()*22);
+    fxGo(d,[
+      {transform:`translate(${dx*.35}px,${from}px) rotate(${tilt*2}deg)`,opacity:0,offset:0},
+      {transform:`translate(${dx*.7}px,${from*.35}px) rotate(${tilt}deg)`,opacity:1,offset:.28},
+      {transform:`translate(${dx}px,8px) rotate(${tilt*.3}deg)`,opacity:1,offset:.72},
+      {transform:`translate(${dx}px,-4px) rotate(0deg)`,opacity:1,offset:.85},
+      {transform:`translate(${dx}px,4px) rotate(0deg)`,opacity:0,offset:1}],
+      {duration:700+Math.random()*260,delay:i*26,easing:'cubic-bezier(.35,.05,.3,1)',fill:'backwards'});
+  }
+}
 /* The one entry point. `milestone` marks the completions that count even when
    effects are set to milestones only: a project finished, a shipment delivered. */
-function celebrate(el,{milestone=false,force=false}={}){
+function celebrate(el,{milestone=false,force=false,kind=''}={}){
   if(!el||reduced())return;
   // measure the row where there is one: the tick is 23px at the far left, so a
   // burst centred on it throws everything up and off the side of the screen
@@ -2709,6 +2785,10 @@ function celebrate(el,{milestone=false,force=false}={}){
   fxLive++;setTimeout(()=>fxLive--,900);
   const r=el.getBoundingClientRect();
   const cx=r.left+r.width/2,cy=r.top+r.height/2;
+  if(kind==='deliver'){
+    fxDeliver(cx,cy,FX_N.deliver[fx.amount]||9,Math.min(r.width,420));
+    return;
+  }
   const n=(FX_N[fx.style]||FX_N.sparks)[fx.amount]||18;
   (fx.style==='confetti'?fxConfetti:fx.style==='fireworks'?fxFireworks:fxSparks)(cx,cy,n);
 }
@@ -3423,7 +3503,36 @@ function addOptions(){
     :[task,ship,proj];
   // scanning is an add too, but it stays last wherever you are: the first entry
   // moving around is helpful, everything moving around is not
-  return [...order,idea,{k:'scan',l:'Scan a shipping label',ico:I.box,col:'var(--gray)'}];
+  const again=lastLike();
+  return [...order,
+    ...(again?[{k:'again',l:'Another '+likeLabel(again),ico:I.truck,col:'var(--teal)'}]:[]),
+    idea,{k:'scan',l:'Scan a shipping label',ico:I.box,col:'var(--gray)'}];
+}
+/* Repeat entry. The same maker, the same destination, the same job — four taps
+   of picking through datalists that the last thing added already knew.
+   Derived from the data rather than remembered in a variable: the most recently
+   created shipment that names somebody. Nothing to keep in sync, and it survives
+   a reload and a pull from another device. Only shipments, because "another task
+   in Harbor Lofts" saves nothing — the project chip already does that. */
+function lastLike(){
+  let best=null;
+  for(const t of S.tasks){
+    if(t.type!=='shipment'||t.arch)continue;
+    if(!t.manufacturer&&!t.destination)continue;
+    if(!best||(t.created||0)>(best.created||0))best=t;
+  }
+  return best;
+}
+const likeLabel=t=>[t.manufacturer&&`from ${t.manufacturer}`,t.destination&&`to ${t.destination}`]
+  .filter(Boolean).join(' ')||'like the last one';
+function openComposerLike(t){
+  if(!t)return openComposer();
+  openComposer('shipment');
+  // the view's guess is overridden, not merged: an explicit repeat is explicit
+  ctx.manufacturer=t.manufacturer||'';
+  ctx.destination=t.destination||'';
+  ctx.projectId=t.projectId||null;
+  updatePreview();
 }
 function closeAddMenu(){$('#addmenu').classList.remove('on');}
 function openAddMenu(anchor){
@@ -3456,13 +3565,33 @@ $('#addmenu').addEventListener('click',e=>{
   const b=e.target.closest('[data-add]');if(!b)return;
   const k=b.dataset.add;
   closeAddMenu();
+  if(k==='again')return openComposerLike(lastLike());
   if(k==='project')return openProject(null);
   if(k==='idea'){openIdea();return;}
   if(k==='scan')return openScanner('find');
   openComposer(k);
 });
 document.addEventListener('click',e=>{if(!e.target.closest('#addmenu'))closeAddMenu();});
-$('#fab').addEventListener('click',e=>{e.stopPropagation();openAddMenu($('#fab'));buzz(4);});
+/* Long-press the + skips the menu and goes straight to another of the last
+   thing. The menu entry above is the discoverable half of this; the press is for
+   when you are standing at a bench adding six crates from the same maker. */
+let fabT=null,fabRan=false;
+$('#fab').addEventListener('pointerdown',()=>{
+  fabRan=false;
+  const t=lastLike();if(!t)return;
+  fabT=setTimeout(()=>{fabRan=true;buzz(12);openComposerLike(t);},500);
+});
+// cancelled by movement, the same way the row's long-press is
+const fabOff=()=>clearTimeout(fabT);
+$('#fab').addEventListener('pointermove',fabOff);
+$('#fab').addEventListener('pointerup',fabOff);
+$('#fab').addEventListener('pointercancel',fabOff);
+$('#fab').addEventListener('pointerleave',fabOff);
+$('#fab').addEventListener('click',e=>{
+  e.stopPropagation();clearTimeout(fabT);
+  if(fabRan){fabRan=false;return;}        // the press already opened something
+  openAddMenu($('#fab'));buzz(4);
+});
 $('#addTop').addEventListener('click',e=>{e.stopPropagation();openAddMenu($('#addTop'));});
 $('#syncBtn').addEventListener('click',openSync);
 $('#scrim').addEventListener('click',closeSheets);
@@ -4299,6 +4428,13 @@ function renderSettings(){
   $('#setgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
   seg('set-rows',[['comfortable','Comfortable'],['compact','Compact']],compact?'compact':'comfortable');
   seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');
+  seg('set-streak',[['off','Off'],['on','On']],streakOn?'on':'off');
+  {const sk=streak();
+   $('#setstreaknote').textContent=!streakOn
+     ? 'Counts the days in a row you finished something. Off by default — it is an observation, not a target.'
+     : digestOff ? `${sk||'No'} day${sk===1?'':'s'} in a row. It shows on the “Last seven days” card, which is hidden, so turn that back on to see it.`
+     : sk>1 ? `${sk} days in a row. Shown on the “Last seven days” card once it passes one.`
+     : 'Shown on the “Last seven days” card once it passes one day.';}
   seg('fx-style',FX_STYLES,fx.style);
   seg('fx-when',FX_WHEN,fx.when);
   seg('fx-amount',FX_AMOUNT,fx.amount);
@@ -4335,6 +4471,7 @@ $('#setsheet').addEventListener('click',e=>{
   else if(id==='fx-amount')fx.amount=v;
   else if(id==='set-rows'){compact=v==='compact';$('#app').classList.toggle('compact',compact);render();}
   else if(id==='set-digest'){digestOff=v==='hidden';render();}
+  else if(id==='set-streak'){streakOn=v==='on';render();}
   saveView();renderSettings();
   // show what was just chosen, from the button that chose it
   if(id.startsWith('fx-')&&id!=='fx-sound'&&fx.when!=='never')celebrate(b,{force:true});
