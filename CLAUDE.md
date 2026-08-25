@@ -77,6 +77,11 @@ business's own rather than general: **a PO is always five digits after `PO`**.
   reach into the digits.
 - A PO means something has been ordered, so it infers Shipment the way a maker or
   a destination does. Picking Task keeps the number.
+- Read in three places, not one: the composer, the detail sheet's title (after
+  `#dpo` is read, or the field's own empty value overwrites it), and once over
+  every existing title at load, for numbers written before the parser existed.
+  The back-fill fills an empty field and never rewrites the title — reworded
+  titles are not migration's business.
 - Typing nothing but `PO 41785` makes that the title. The composer will not submit
   without one, and the number arriving before anyone has named the line is a real
   way to work.
@@ -177,9 +182,11 @@ answer.
   nothing else in the tracker changes. An end at or before the start means it ran
   past midnight, which is an evening rather than a mistake, so it rolls to the
   next day and says so. A running entry offers no end to edit.
-- The whole row opens the editor via a `.tmopen` laid *under* the contents, not
-  wrapped around them: the project chip, the restart and the delete all still have
-  to be clickable, and a button inside a button is not a thing.
+- The row opens the editor from a handler **on the row**, checked after the
+  restart, the delete and the project chip have had their say. It was first built
+  as a full-size target laid *under* the contents, which never worked: a tap on
+  the title hits the title, and `closest()` walks ancestors, not whatever happens
+  to be behind. Only the thin blank padding was ever clickable.
 - An entry's `label` is a snapshot taken at start. Time logged is a record, not a
   pointer: renaming or deleting the task must not make the hours unreadable, which
   is also why `prune()` leaves time entries alone.

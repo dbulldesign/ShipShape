@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.39.0">
+<meta name="app-version" content="1.40.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -76,7 +76,9 @@ body[data-board] #moreMenu .boardonly{display:block}
 /* The pane says when it has an overlay up: its own is fixed inside the iframe
    and cannot cover this bar, so this bar gets out of the way instead. */
 body[data-boardmodal] #tabbar{display:none}
-body[data-time] .hctl{display:none}
+/* Views that draw themselves rather than being a sorted, grouped list: the
+   list's own controls do not apply to them. */
+body[data-own] .hctl{display:none}
 body[data-board] .searchbar,body[data-board] .hctl,
 body[data-board] #calBtn,body[data-board] #addTop,body[data-board] #fab{display:none}
 .wrap{max-width:780px;margin:0 auto}
@@ -350,12 +352,23 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .startcard select{flex:1;min-width:0;background:var(--fill2);border:0;outline:none;
   font-size:14.5px;padding:10px 11px;border-radius:11px;color:var(--label)}
 .startcard .sh{font-size:12.5px;color:var(--label3);margin-top:9px}
+/* A PO is a header for a group of things, so it gets a row with room for two
+   lines of chips: what is on it, and who it is spread across. */
+.porow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:.5px solid var(--sep)}
+.porow:first-child{border-top:0}
+.porow.done{opacity:.62}
+.pomain{flex:1;min-width:0}
+.pomain .tt{font-size:16.5px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+.pomain .meta{margin-top:5px}
+.por{flex:none;text-align:center;min-width:44px}
+.poopen{display:block;font-family:var(--round);font-size:21px;font-weight:700;line-height:1.1}
+.polab{display:block;font-size:10.5px;font-weight:600;color:var(--label3);text-transform:uppercase;letter-spacing:.3px}
+@media(hover:hover){.porow:hover{background:var(--fill2)}}
+.porow:active{background:var(--fill2)}
 .tmrow{position:relative;display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:.5px solid var(--sep)}
-/* The whole row opens the editor, laid under its contents rather than wrapped
-   around them — the project chip, the restart and the delete all still need to be
-   reachable, and nesting a button inside a button is not a thing. */
-.tmopen{position:absolute;inset:0;z-index:0}
-.tmrow>*:not(.tmopen){position:relative;z-index:1}
+/* The row opens the editor. Handled on the row itself rather than with a target
+   laid under the contents: underneath, a tap on the title hits the title, and
+   closest() looks at ancestors, not at what happens to be behind. */
 @media(hover:hover){.tmrow:hover{background:var(--fill2)}}
 .tmrow:active{background:var(--fill2)}
 .tmrow:first-child{border-top:0}
@@ -730,6 +743,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <button class="tab" data-v="projects"><svg viewBox="0 0 24 24"><path d="M4 4h6l1.6 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg><span>Projects</span></button>
   <button class="tab" data-v="shipments"><svg viewBox="0 0 24 24"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h7A2.5 2.5 0 0 1 14 6.5V8h3l4 4.5V17h-2.1a2.9 2.9 0 0 1-5.8 0H9.9a2.9 2.9 0 0 1-5.8 0H2V6.5Z"/></svg><span>Shipments</span></button>
   <button class="tab" data-v="all"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Z"/></svg><span>All</span></button>
+  <button class="tab" data-v="pos"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13.5A1.5 1.5 0 0 1 18.5 22h-13A1.5 1.5 0 0 1 4 20.5v-17A1.5 1.5 0 0 1 5.5 2H6Zm8 1.8V8h4.2L14 3.8ZM7.5 11h9v1.8h-9V11Zm0 4h9v1.8h-9V15Z"/></svg><span>POs</span></button>
   <button class="tab" data-v="time"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm1 3a1 1 0 1 0-2 0v5.4l3.4 2a1 1 0 1 0 1-1.7L13 11.4V7Z"/></svg><span>Time</span></button>
   <button class="tab" data-v="board"><svg viewBox="0 0 24 24"><path d="M5 4h5.5v7H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8.5 0H19a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1h-5.5V4ZM5 13.5h5.5V20H5a1 1 0 0 1-1-1v-4.5a1 1 0 0 1 1-1Zm8.5-1H19a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-5.5v-7.5Z"/></svg><span>Board</span></button>
 </div></nav>
@@ -1254,6 +1268,11 @@ function migrate(){
     t.rep=REPS.some(r=>r[0]===t.rep)?t.rep:null;t.arch=t.arch||null;
     t.remind=Number.isFinite(t.remind)&&t.remind>0?t.remind:null;
     t.wait=['me','them'].includes(t.wait)?t.wait:null;
+    /* A PO already sitting in a title, from before the composer learned to read
+       them or from an edit made in the detail sheet. Only fills an empty field,
+       and deliberately leaves the title alone: rewriting words somebody already
+       typed is not migration's business. */
+    if(!t.po){const m=(t.title||'').match(PO_RE);if(m)t.po=m[1];}
     /* Links to the thing the task is actually about — nearly always an email.
        Held on the task rather than as their own kind: a URL is a hundred bytes
        and it is meaningless away from the task it explains. Shaped rather than
@@ -2078,6 +2097,8 @@ function renderNav(){
   h+=navItem(I.list,'var(--gray)','All open',openT().length,view.t==='all','data-v="all"');
   {const e=running();
    h+=navItem(I.clock,e?'var(--green)':'var(--label3)','Time',e?'●':'',view.t==='time','data-v="time"');}
+  {const n=new Set(S.tasks.filter(t=>!t.done&&!t.arch&&poKey(t)).map(poKey)).size;
+   if(n||view.t==='pos')h+=navItem(I.box,'var(--pink)','Purchase orders',n,view.t==='pos','data-v="pos"');}
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
   if(S.tasks.some(t=>t.arch))h+=navItem(I.box,'var(--label3)','Archived','',view.t==='archive','data-v="archive"');
   h+=navItem(I.list,'var(--yellow)','Everything Board','',view.t==='board','data-v="board"');
@@ -2099,7 +2120,7 @@ function renderNav(){
   $('#navlists').innerHTML=h;
   rollCounts();
 }
-const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',all:'All open',done:'Completed',
+const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',pos:'POs',all:'All open',done:'Completed',
   projects:'Projects',shipments:'Shipments',archive:'Archived'};
 function renderHead(){
   const d=new Date();
@@ -2111,6 +2132,7 @@ function renderHead(){
   if(view.t==='board')sub='Ideas, notes and images';
   if(view.t==='time'){const e=running();
     sub=e?'Running now':'Hours on the job';}
+  if(view.t==='pos')sub='Everything on order';
   if(view.t==='week'){
     name=weekLabel(view.v);
     const n=Math.round((weekStart(view.v)-weekStart())/6048e5);
@@ -2330,8 +2352,7 @@ function timeHTML(){
     for(const x of today){
       const p=x.projectId?P(x.projectId):null;
       h+=`<div class="tmrow" data-tmid="${x.id}">
-        <button class="tmopen" data-tmedit="${x.id}" aria-label="Edit this entry"></button>
-      <div class="tmmain"><div class="tt">${esc(x.label)}</div>
+        <div class="tmmain"><div class="tt">${esc(x.label)}</div>
           <div class="meta">
             <span class="chip">${hhmm(x.start)}–${x.end===null?'now':hhmm(x.end)}</span>
             ${p?`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`:''}
@@ -2364,6 +2385,57 @@ function timeHTML(){
     h+='</div>';
   }
   return h;
+}
+/* Every purchase order, gathered. A PO is the one identifier that crosses
+   everything else here — one order becomes several crates from several makers
+   going to several places — so this is the only view that groups by it. */
+const poKey=t=>(t.po||'').trim().replace(/^p\.?o\.?[\s#:]*/i,'');
+function posHTML(){
+  const by=new Map();
+  for(const t of S.tasks){
+    const k=poKey(t);if(!k)continue;
+    if(!by.has(k))by.set(k,[]);
+    by.get(k).push(t);
+  }
+  if(!by.size)return `<div class="empty"><div class="g">🧾</div><h3>No purchase orders yet</h3>
+    <p>Type <b>PO 41785</b> anywhere in the composer and the number is picked out and tracked. Five digits after PO.</p>
+    <div><button class="btn" data-a="new">New shipment</button></div></div>`;
+  /* Open orders first, then the most recently raised — a closed PO is history and
+     history belongs underneath. */
+  const rows=[...by.entries()].map(([k,items])=>{
+    const open=items.filter(t=>!t.done&&!t.arch).length;
+    return {k,items,open,last:Math.max(...items.map(t=>t.created||0))};
+  }).sort((a,b)=>(b.open>0)-(a.open>0)||b.last-a.last);
+  const live=rows.filter(r=>r.open>0).length;
+  let h=`<div class="grp">Purchase orders<span class="c">${rows.length}${live<rows.length?` · ${live} open`:''}</span></div><div class="card">`;
+  for(const r of rows){
+    const ships=r.items.filter(t=>t.type==='shipment');
+    const got=ships.filter(t=>t.stage===4||t.done).length;
+    const projs=[...new Set(r.items.map(t=>projectOf(t)).filter(Boolean))];
+    const makers=[...new Set(r.items.map(t=>t.manufacturer).filter(Boolean))];
+    const dests=[...new Set(r.items.map(t=>t.destination).filter(Boolean))];
+    const late=r.items.filter(t=>!t.done&&t.due&&diff(t.due)<0).length;
+    const eta=r.items.filter(t=>!t.done&&t.eta).map(t=>t.eta).sort()[0];
+    const done=r.open===0;
+    h+=`<div class="porow ${done?'done':''}" data-q="po:${esc(r.k)}">
+      <div class="pomain">
+        <div class="tt">PO ${esc(r.k)}</div>
+        <div class="meta">
+          <span class="chip">${r.items.length} item${r.items.length===1?'':'s'}</span>
+          ${ships.length?`<span class="chip"${got===ships.length?' style="color:var(--green)"':''}>${got}/${ships.length} arrived</span>`:''}
+          ${late?`<span class="chip" style="color:var(--red)">${late} late</span>`:''}
+          ${eta?`<span class="chip">ETA ${fmtDue(eta)}</span>`:''}
+        </div>
+        <div class="meta">
+          ${projs.map(p=>`<span class="chip"><i style="background:${p.color}"></i>${esc(p.name)}</span>`).join('')}
+          ${makers.map(m=>`<span class="chip">${esc(m)}</span>`).join('')}
+          ${dests.map(d=>`<span class="chip">→ ${esc(d)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="por">${done?'<span class="chip" style="color:var(--green)">Closed</span>':`<span class="poopen">${r.open}</span><span class="polab">open</span>`}</div>
+    </div>`;
+  }
+  return h+'</div>';
 }
 function projectsHTML(){
   if(!S.projects.length)return `<div class="empty"><div class="g">🗂</div><h3>No projects yet</h3>
@@ -2619,6 +2691,7 @@ function renderList(){
     +'|'+(r_?r_.taskId:'')+'|'+S.times.length;
   const chunk=(name,h)=>{if(h)out.push(...slot(name,h));};
   if(view.t==='time'&&!query){chunk('time',timeHTML());patch(el,out);syncTick();return;}
+  if(view.t==='pos'&&!query){chunk('pos',posHTML());patch(el,out);return;}
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
   if(view.t==='project')chunk('phead',projectHead());
   if(view.t==='mfr')chunk('mhead',makerHead());
@@ -3585,7 +3658,7 @@ function openBoard(hash){
 function syncBoard(){
   const on=view.t==='board';
   document.body.toggleAttribute('data-board',on);
-  document.body.toggleAttribute('data-time',view.t==='time');
+  document.body.toggleAttribute('data-own',view.t==='time'||view.t==='pos');
   if(!on){document.body.removeAttribute('data-boardmodal');return;}
   const f=$('#boardframe');
   // ?embed=1 is what tells the board to drop its own chrome. A deep link
@@ -3958,6 +4031,10 @@ function saveDetail(){
   const wasMaker=t.manufacturer;
   t.manufacturer=canonMaker($('#dmfr').value);t.destination=$('#ddest').value.trim();
   t.po=$('#dpo').value.trim();
+  /* A number typed into the title here rather than in the composer, which is
+     where one often turns up — on a task, whose PO field is not even on screen.
+     After the field is read, not before, or the field's own value overwrites it. */
+  if(!t.po){const m=t.title.match(PO_RE);if(m){t.po=m[1];$('#dpo').value=m[1];}}
   t.rep=$('#drep').value||null;
   const rd=parseInt($('#dremind').value,10);t.remind=Number.isFinite(rd)&&rd>0?rd:null;
   const q=parseInt($('#dqty').value,10);t.qty=Number.isFinite(q)&&q>0?q:null;
@@ -4629,8 +4706,6 @@ document.addEventListener('click',e=>{
 $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-m]'))return;
   if(e.target.closest('[data-noopen]'))return;   // tracking link: follow it, don't open the row
-  const te=e.target.closest('[data-tmedit]');
-  if(te)return openEntry(te.dataset.tmedit);
   const tm=e.target.closest('[data-tm]');
   if(tm){
     const [k,arg]=tm.dataset.tm.split(':');
@@ -4663,6 +4738,9 @@ $('#list').addEventListener('click',e=>{
      though: there a tap anywhere in the row means "pick this one". */
   const nv=e.target.closest('[data-v]');
   if(nv&&!selMode){buzz(4);return setView(nv.dataset.v,nv.dataset.val||undefined);}
+  /* Last, so the restart, the delete and the project chip all win first. */
+  const tr=e.target.closest('.tmrow[data-tmid]');
+  if(tr)return openEntry(tr.dataset.tmid);
   const ep=e.target.closest('[data-editproj]');if(ep)return openProject(ep.dataset.editproj);
   if(e.target.closest('[data-editmaker]'))return openMaker(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
@@ -4931,7 +5009,8 @@ function paletteRows(q){
   const push=(t,h,ico,col,run)=>{if(hit(t))out.push({t,h,ico,col,run});};
   for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],['week','Week',I.today,'var(--teal)'],
     ['flagged','Flagged',I.flag,'var(--orange)'],['waiting','Whose move',I.clock,'var(--pink)'],['shipments','Shipments',I.truck,'var(--purple)'],
-    ['all','All open',I.list,'var(--gray)'],['time','Time',I.clock,'var(--green)'],['done','Completed',I.check,'var(--green)'],
+    ['all','All open',I.list,'var(--gray)'],['time','Time',I.clock,'var(--green)'],
+    ['pos','Purchase orders',I.box,'var(--pink)'],['done','Completed',I.check,'var(--green)'],
     ['projects','Projects',I.box,'var(--indigo)'],['archive','Archived',I.box,'var(--label3)']])
     push(l,'View',ico,col,()=>setView(v));
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
