@@ -36,7 +36,8 @@ function detect(n: string): string {
   if (/^1Z[0-9A-Z]{16}$/.test(c)) return "ups";
   if (/^(\d{12}|\d{15}|\d{20}|\d{34})$/.test(c)) return "fedex";
   if (/^\d{10}$/.test(c)) return "dhl";
-  if (/^(94|93|92|94|95)\d{20}$/.test(c) || /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(c)) return "usps";
+  // 91–95 are the USPS IMpb prefixes; the first pass listed 94 twice and left 91 out
+  if (/^9[1-5]\d{20}$/.test(c) || /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(c)) return "usps";
   return "";
 }
 

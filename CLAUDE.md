@@ -116,6 +116,20 @@ carries `width:100%`, which stretches a chip to its full 200px allowance and
 stacks them one per line. Not while `selMode`: there a tap anywhere in the row
 means "pick this one".
 
+## Dates that are not simple arithmetic
+
+`setMonth` overflows: Jan 31 plus a month is Feb 31, which JavaScript normalises
+to **March 3rd**. A monthly job dated the 31st therefore skipped February and
+drifted further with every repeat. `addMonths()` clamps to the last day of the
+target month instead, and `repeatAfter()` counts periods from the *original* date
+rather than chaining off the last one — chaining loses the anchor, so a job on the
+31st would clamp to the 28th in February and stay there for ever.
+
+`local.set` is **async**. A bare `try{local.set(...)}catch{}` around a call that is
+not awaited catches nothing, and a full store threw straight past it as an
+unhandled rejection — from `saveNow()`, on pagehide, which is exactly when the
+store is most likely to be full.
+
 ## Storage is the constraint
 
 localStorage gives a page about 5MB — measured at 5056KB, not assumed. Most of
@@ -173,6 +187,9 @@ answer.
   while something runs.
 - The row shows a dot, not a clock, for the same reason — and the running task's
   id is in `rowCtx`, or the dot never appears or never leaves.
+- `timeVer` (count plus the newest `u`) goes into `rowCtx`, not `S.times.length`.
+  Correcting an entry changes what a task's row says it has taken without changing
+  how many entries exist, so a length alone left the row showing the old total.
 - `timeByTask` is tallied once per render. `timeOn()` used to filter the whole log
   per row, which is quadratic and only shows up on a long list.
 - An entry is editable after the fact, because a stopwatch is only honest if it
