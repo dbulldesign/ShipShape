@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.38.0">
+<meta name="app-version" content="1.39.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -350,7 +350,14 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .startcard select{flex:1;min-width:0;background:var(--fill2);border:0;outline:none;
   font-size:14.5px;padding:10px 11px;border-radius:11px;color:var(--label)}
 .startcard .sh{font-size:12.5px;color:var(--label3);margin-top:9px}
-.tmrow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:.5px solid var(--sep)}
+.tmrow{position:relative;display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:.5px solid var(--sep)}
+/* The whole row opens the editor, laid under its contents rather than wrapped
+   around them — the project chip, the restart and the delete all still need to be
+   reachable, and nesting a button inside a button is not a thing. */
+.tmopen{position:absolute;inset:0;z-index:0}
+.tmrow>*:not(.tmopen){position:relative;z-index:1}
+@media(hover:hover){.tmrow:hover{background:var(--fill2)}}
+.tmrow:active{background:var(--fill2)}
 .tmrow:first-child{border-top:0}
 .tmmain{flex:1;min-width:0}
 .tmmain .tt{font-size:15.5px;display:flex;align-items:center;gap:6px}
@@ -829,6 +836,20 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div style="padding:0 14px 16px;display:flex;gap:10px">
     <button class="btn sec" id="pdel" style="flex:1;margin:0;text-align:center">Delete project</button>
     <button class="btn" id="psave" style="flex:1;margin:0;text-align:center">Save</button></div>
+</div>
+
+<div class="sheet" role="dialog" aria-modal="true" id="tmsheet"><div class="grab"></div>
+  <div class="sheettitle"><span>Edit this entry</span><button class="x" id="tmclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="fgroup">
+    <div class="field"><label for="tmlabel">What</label><input id="tmlabel" placeholder="What you were working on"></div>
+    <div class="field"><label for="tmproject">Project</label><select id="tmproject"></select></div>
+    <div class="field"><label for="tmdate">Day</label><input id="tmdate" type="date"></div>
+    <div class="field"><label for="tmstart">Start</label><input id="tmstart" type="time" step="60"></div>
+    <div class="field" id="tmendrow"><label for="tmend">End</label><input id="tmend" type="time" step="60"></div>
+  </div>
+  <div class="blurb" id="tmdur"></div>
+  <div style="padding:4px 14px 0"><button class="btn" id="tmsave" style="width:calc(100% - 0px);margin:0">Save</button></div>
+  <button class="danger" id="tmdelete">Delete this entry</button>
 </div>
 
 <div class="sheet" role="dialog" aria-modal="true" id="calsheet"><div class="grab"></div>
@@ -2309,7 +2330,8 @@ function timeHTML(){
     for(const x of today){
       const p=x.projectId?P(x.projectId):null;
       h+=`<div class="tmrow" data-tmid="${x.id}">
-        <div class="tmmain"><div class="tt">${esc(x.label)}</div>
+        <button class="tmopen" data-tmedit="${x.id}" aria-label="Edit this entry"></button>
+      <div class="tmmain"><div class="tt">${esc(x.label)}</div>
           <div class="meta">
             <span class="chip">${hhmm(x.start)}–${x.end===null?'now':hhmm(x.end)}</span>
             ${p?`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`:''}
@@ -3142,6 +3164,85 @@ function syncTick(){
   tickClock();
   if(running())tickT=setInterval(tickClock,1000);
 }
+/* ============ editing an entry ============
+   A stopwatch is only honest if you can correct it. Timers get left running over
+   lunch, started on the wrong job, or not started at all until twenty minutes in —
+   so what a finished entry says and when it ran are both editable.
+
+   Times are edited as a day plus two clock times rather than two timestamps,
+   because that is how anyone thinks about it. `start` and `end` stay absolute
+   milliseconds underneath, so nothing else in the tracker has to change. */
+let entryId=null;
+function openEntry(id){
+  const x=S.times.find(y=>y.id===id);if(!x)return;
+  entryId=id;
+  const live=x.end===null;
+  $('#tmlabel').value=x.label||'';
+  $('#tmproject').innerHTML='<option value="">No project</option>'
+    +S.projects.map(p=>`<option value="${p.id}" ${x.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  const sd=new Date(x.start);
+  $('#tmdate').value=iso(sd);
+  $('#tmstart').value=`${String(sd.getHours()).padStart(2,'0')}:${String(sd.getMinutes()).padStart(2,'0')}`;
+  // a running entry has no end to edit; everything else about it still does
+  $('#tmendrow').style.display=live?'none':'';
+  if(!live){const ed=new Date(x.end);
+    $('#tmend').value=`${String(ed.getHours()).padStart(2,'0')}:${String(ed.getMinutes()).padStart(2,'0')}`;}
+  entryDur();
+  rememberFocus();$('#scrim').classList.add('on');$('#tmsheet').classList.add('on');
+}
+/* What the fields currently describe, or why they cannot be used. */
+function entryTimes(){
+  const x=S.times.find(y=>y.id===entryId);if(!x)return null;
+  const day=$('#tmdate').value,st=$('#tmstart').value;
+  if(!day||!st)return {err:'A day and a start time are needed.'};
+  const base=fromISO(day);
+  const [sh,sm]=st.split(':').map(Number);
+  const start=new Date(base);start.setHours(sh,sm,0,0);
+  if(x.end===null)return {start:+start,end:null};
+  const et=$('#tmend').value;
+  if(!et)return {err:'An end time is needed.'};
+  const [eh,em]=et.split(':').map(Number);
+  const end=new Date(base);end.setHours(eh,em,0,0);
+  /* Finishing at or before the start means it ran past midnight, which is a
+     normal evening rather than a mistake — so roll the end into the next day and
+     say so, instead of refusing something that really happened. */
+  let over=false;
+  if(+end<=+start){end.setDate(end.getDate()+1);over=true;}
+  return {start:+start,end:+end,over};
+}
+function entryDur(){
+  const t=entryTimes();
+  if(!t){$('#tmdur').textContent='';return;}
+  if(t.err){$('#tmdur').textContent=t.err;$('#tmdur').style.color='var(--red)';return;}
+  $('#tmdur').style.color='var(--label2)';
+  $('#tmdur').textContent=t.end===null
+    ? 'Still running — the end is set when you stop it.'
+    : clockHM(t.end-t.start)+(t.over?' · finishes the next day':'');
+}
+function saveEntry(){
+  const x=S.times.find(y=>y.id===entryId);if(!x)return;
+  const t=entryTimes();
+  if(!t||t.err)return toast(t&&t.err||'That cannot be saved.');
+  const before={label:x.label,projectId:x.projectId,start:x.start,end:x.end};
+  x.label=$('#tmlabel').value.trim().slice(0,120)||x.label;
+  x.projectId=$('#tmproject').value||null;
+  x.start=t.start;
+  if(x.end!==null)x.end=t.end;
+  x.u=now();
+  closeSheets();save();render();
+  toast('Entry updated',()=>{Object.assign(x,before);x.u=now();save();render();});
+}
+$('#tmclose').addEventListener('click',closeSheets);
+$('#tmsave').addEventListener('click',saveEntry);
+['#tmdate','#tmstart','#tmend'].forEach(sel=>$(sel).addEventListener('input',entryDur));
+$('#tmlabel').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveEntry();}});
+$('#tmdelete').addEventListener('click',()=>{
+  const i=S.times.findIndex(y=>y.id===entryId);if(i<0)return closeSheets();
+  const [x]=S.times.splice(i,1);S.tomb[x.id]=now();
+  closeSheets();save();render();
+  toast('Entry removed',()=>{delete S.tomb[x.id];x.u=now();S.times.splice(i,0,x);save();render();});
+});
+
 /* ============ clearing out ============
    Archiving takes something off the list; it never took it out of the file. A
    job finished two years ago was still parsed on every load, held in memory on
@@ -4528,6 +4629,8 @@ document.addEventListener('click',e=>{
 $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-m]'))return;
   if(e.target.closest('[data-noopen]'))return;   // tracking link: follow it, don't open the row
+  const te=e.target.closest('[data-tmedit]');
+  if(te)return openEntry(te.dataset.tmedit);
   const tm=e.target.closest('[data-tm]');
   if(tm){
     const [k,arg]=tm.dataset.tm.split(':');

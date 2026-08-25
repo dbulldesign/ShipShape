@@ -170,6 +170,16 @@ answer.
   id is in `rowCtx`, or the dot never appears or never leaves.
 - `timeByTask` is tallied once per render. `timeOn()` used to filter the whole log
   per row, which is quadratic and only shows up on a long list.
+- An entry is editable after the fact, because a stopwatch is only honest if it
+  can be corrected — timers get left running over lunch and started twenty
+  minutes late. Times are edited as a **day plus two clock times**, since that is
+  how anyone thinks about it; `start` and `end` stay absolute ms underneath so
+  nothing else in the tracker changes. An end at or before the start means it ran
+  past midnight, which is an evening rather than a mistake, so it rolls to the
+  next day and says so. A running entry offers no end to edit.
+- The whole row opens the editor via a `.tmopen` laid *under* the contents, not
+  wrapped around them: the project chip, the restart and the delete all still have
+  to be clickable, and a button inside a button is not a thing.
 - An entry's `label` is a snapshot taken at start. Time logged is a record, not a
   pointer: renaming or deleting the task must not make the hours unreadable, which
   is also why `prune()` leaves time entries alone.
