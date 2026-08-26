@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.42.0">
+<meta name="app-version" content="1.43.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2378,7 +2378,7 @@ function timeHTML(){
   // today
   const t0=midnight().getTime(),t1=t0+864e5;
   const today=S.times.filter(x=>x.start<t1&&(x.end===null||x.end>t0)).sort((a,b)=>b.start-a.start);
-  const dayTotal=today.reduce((n,x)=>n+elapsed(x),0);
+  const dayTotal=today.reduce((n,x)=>n+overlap(x,t0,t1),0);
   h+=`<div class="grp">Today<span class="c">${clockTotal(dayTotal)}</span></div>`;
   if(!today.length)h+=`<div class="card"><div class="tmempty">Nothing timed yet today.</div></div>`;
   else{
@@ -2388,7 +2388,7 @@ function timeHTML(){
       h+=`<div class="tmrow" data-tmid="${x.id}">
         <div class="tmmain"><div class="tt">${esc(x.label)}</div>
           <div class="meta">
-            <span class="chip">${hhmm(x.start)}–${x.end===null?'now':hhmm(x.end)}</span>
+            <span class="chip">${x.start<t0?`${WD[new Date(x.start).getDay()]} `:''}${hhmm(x.start)}–${x.end===null?'now':hhmm(x.end)}</span>
             ${p?`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`:''}
           </div></div>
         <div class="tmr"><span class="tmdur">${x.end===null?'running':clockHM(elapsed(x))}</span>
@@ -2404,7 +2404,7 @@ function timeHTML(){
     const by=new Map();
     for(const x of inWeek){
       const k=x.projectId||'';
-      by.set(k,(by.get(k)||0)+elapsed(x));
+      by.set(k,(by.get(k)||0)+overlap(x,lo,hi));
     }
     const rows=[...by.entries()].sort((a,b)=>b[1]-a[1]);
     const total=rows.reduce((n,r)=>n+r[1],0);
@@ -3215,6 +3215,13 @@ const running=()=>{
   return b;
 };
 const elapsed=x=>Math.max(0,(x.end===null?now():x.end)-x.start);
+/* How much of an entry falls inside a window. A shift from 22:00 to 01:30 belongs
+   to two days, and counting all of it against the second one made a day total
+   read 5h 30m when three and a half hours had actually been worked. The entry
+   still reports its own full length — that is what the entry is — but a day or a
+   week only ever counts its own share. */
+const overlap=(x,from,to)=>
+  Math.max(0,Math.min(x.end===null?now():x.end,to)-Math.max(x.start,from));
 let timeByTask=new Map(),timeVer='';
 function tallyTime(){
   timeByTask=new Map();
@@ -4647,7 +4654,8 @@ function doMenu(k){
   if(k==='newproj')openProject(null);
   if(k==='sample')loadSample();
   if(k==='export'){
-    const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+    // stamped, so a restore can say which backup it is about to lay down
+    const blob=new Blob([JSON.stringify({...S,savedAt:now()},null,2)],{type:'application/json'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download=`shipshape-${iso(new Date())}.json`;a.click();toast('Backup saved');
   }
@@ -4694,15 +4702,36 @@ function doMenu(k){
   if(k==='settings')openSettings();
   if(k==='fx')openSettings();
 }
+/* A restored record carries the time it was last edited, which is older than the
+   watermark this device has already pushed. So nothing was sent to the other
+   devices — and worse, the next pull found newer copies on the server and quietly
+   undid the restore on the very device that had just performed it, about fifteen
+   seconds after it appeared to work.
+
+   Restoring a backup is a statement that this is now the truth, so every record
+   is stamped as written now. `created` is left alone: when a thing was first made
+   is a fact about it, not a tiebreaker. */
+function restampAll(){
+  const t=now();
+  for(const key of Object.values(KINDS))
+    for(const x of S[key]||[])x.u=t;
+  for(const id in S.tomb)S.tomb[id]=t;
+}
 $('#fileIn').addEventListener('change',async e=>{
-  const f=e.target.files[0];if(!f)return;
+  const f=e.target.files[0];
+  e.target.value='';                       // so the same file can be picked twice
+  if(!f)return;
   try{
     const d=JSON.parse(await f.text());
     if(!Array.isArray(d.tasks))throw new Error('bad file');
+    const n=d.tasks.length,when=d.savedAt?` saved ${fmtAgo(d.savedAt)}`:'';
+    if(!confirm(`Restore ${n} item${n===1?'':'s'} from this backup${when}?\n\n`
+      +`Everything on this device is replaced by what is in the file.`
+      +(sync.on?' Sync is on, so the restored copy also goes out to your other devices and wins there.':'')))return;
     S=Object.assign({v:3,projects:[],tasks:[],tomb:{},started:true},d);
-    migrate();save();render();toast('Backup loaded');
+    migrate();restampAll();save();render();
+    toast(`Restored ${n} item${n===1?'':'s'}`);
   }catch(err){toast('That file is not a Shipshape backup.');}
-  e.target.value='';
 });
 function setView(t,v){
   // a docked detail column beside the board leaves neither enough room

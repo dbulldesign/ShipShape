@@ -130,6 +130,20 @@ not awaited catches nothing, and a full store threw straight past it as an
 unhandled rejection — from `saveNow()`, on pagehide, which is exactly when the
 store is most likely to be full.
 
+## Backups
+
+Export writes the whole of `S`, so it carries whatever record kinds exist at the
+time. Restoring is the part with the trap: a restored record keeps the `u` it was
+saved with, which is **older than the watermark this device has already pushed**.
+Nothing was sent, and the next pull found newer copies on the server and quietly
+undid the restore on the device that had just performed it — about fifteen
+seconds after it appeared to work. `restampAll()` stamps every record as written
+now, because a restore is a statement that this is the truth. `created` is left
+alone: when a thing was first made is a fact, not a tiebreaker.
+
+A restore merges rather than deletes — another device's newer work survives it.
+The confirm says so when sync is on.
+
 ## Storage is the constraint
 
 localStorage gives a page about 5MB — measured at 5056KB, not assumed. Most of
@@ -195,6 +209,12 @@ answer.
 - `timeVer` (count plus the newest `u`) goes into `rowCtx`, not `S.times.length`.
   Correcting an entry changes what a task's row says it has taken without changing
   how many entries exist, so a length alone left the row showing the old total.
+- A day or a week counts only its **own share** of an entry (`overlap`), not the
+  whole of it. A shift from 22:00 to 01:30 belongs to two days, and counting all
+  of it against the second made a day read 5h 30m for three and a half hours
+  worked. The row still shows the entry's full length — that is what the entry is
+  — and prefixes the weekday when it started on an earlier day, so the two
+  numbers do not look like they disagree.
 - `timeByTask` is tallied once per render. `timeOn()` used to filter the whole log
   per row, which is quadratic and only shows up on a long list.
 - An entry is editable after the fact, because a stopwatch is only honest if it
