@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.41.0">
+<meta name="app-version" content="1.42.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -325,13 +325,21 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
    on every view, and it says what as well as how long — "3:07:44" alone tells you
    nothing about which job it is billing. */
 #runchip{display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;
-  background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green);
   font-size:13px;font-weight:700;max-width:230px;min-width:0;
-  transition:transform .18s var(--ease)}
+  transition:transform .18s var(--ease),background .2s,color .2s}
+#runchip.on{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+#runchip.off{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
 #runchip:active{transform:scale(.95)}
+#runchip.on .pulse{background:var(--green)}
+/* Idle: a steady dot, not a beating one. Nothing is happening, and a pulse that
+   never stops is what people learn to stop seeing. */
+#runchip.off .pulse{background:var(--red);animation:none}
 #runchiplabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--label2)}
+#runchip.off #runchiplabel{color:var(--red);font-weight:700}
 #runchiptime{font-variant-numeric:tabular-nums;flex:none}
-@media (max-width:520px){#runchiplabel{display:none}}
+/* On a narrow phone the running chip drops its label and keeps the clock, which
+   still reads. The idle one has no clock, so it keeps its words instead. */
+@media (max-width:520px){#runchip.on #runchiplabel{display:none}}
 /* One dot, animated, meaning "now". Reused on the row and in the card. */
 .pulse{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none;display:block;
   animation:beat 1.6s ease-in-out infinite}
@@ -656,7 +664,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
       <div class="hrow">
         <h1><span class="sub" id="eyebrow">Today</span><span class="nm" id="title">Today</span></h1>
         <div class="hctl"><select id="hsort" aria-label="Sort by"></select><select id="hgroup" aria-label="Group by"></select></div>
-        <button id="runchip" data-v="time" hidden aria-label="A timer is running — open Time">
+        <button id="runchip" class="off" data-v="time">
           <span class="pulse"></span><span id="runchiplabel"></span><span id="runchiptime"></span></button>
         <button class="iconbtn" id="calBtn" aria-label="Open the calendar"><svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.5A2.5 2.5 0 0 1 21 6.5v12A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4H6V3a1 1 0 0 1 1-1ZM5 9v9.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V9H5Zm2.5 2h3v3h-3v-3Z"/></svg></button>
         <button class="iconbtn" id="syncBtn" aria-label="Sync"><svg viewBox="0 0 24 24"><path d="M6.5 19A5.5 5.5 0 0 1 5.7 8.06a6.5 6.5 0 0 1 12.34 1.6A4.5 4.5 0 0 1 17.5 19h-11Z"/></svg></button>
@@ -3271,17 +3279,32 @@ function stopTimer(quiet){
    ticking digits are written straight into the two nodes that show them, and the
    interval only exists while something is actually running. */
 let tickT=null;
+/* The chip is always there, and it is the answer to "am I on the clock right
+   now" — which has to be readable at a glance from any view, including the
+   answer "no". Hiding it when nothing runs made the two states look identical to
+   a header that simply had no room for it, and left the question unanswered. */
 function tickClock(){
   const e=running();
   const chip=$('#runchip'),big=$('#runbig');
   if(!e){
-    if(chip)chip.hidden=true;
-    clearInterval(tickT);tickT=null;
+    if(chip){
+      chip.classList.remove('on');chip.classList.add('off');
+      $('#runchiplabel').textContent='No timer';
+      $('#runchiptime').textContent='';
+      chip.setAttribute('aria-label','No timer running — open Time to start one');
+      chip.title='Nothing is being timed';
+    }
+    clearInterval(tickT);tickT=null;                 // nothing to count while idle
     return;
   }
   const txt=clockHMS(elapsed(e));
-  if(chip){chip.hidden=false;$('#runchiptime').textContent=txt;
-    $('#runchiplabel').textContent=e.label;}
+  if(chip){
+    chip.classList.remove('off');chip.classList.add('on');
+    $('#runchiptime').textContent=txt;
+    $('#runchiplabel').textContent=e.label;
+    chip.setAttribute('aria-label',`Timing ${e.label} — open Time`);
+    chip.title=`Timing ${e.label}`;
+  }
   if(big)big.textContent=txt;
 }
 function syncTick(){

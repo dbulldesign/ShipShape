@@ -181,6 +181,11 @@ answer.
   a pull, not only at load, and because it writes, the result has to be pushed.
 - `running()` takes the latest `start` in a single pass rather than the first
   match, so even the transient two-live state reads the same everywhere.
+- The header chip is always there and has two states: green and beating while
+  something runs, red and steady while nothing does. Hiding it when idle made
+  "nothing is being timed" look identical to a header with no room for it, and
+  left the one question it exists to answer unanswered. The idle dot does not
+  pulse — a pulse that never stops is one people stop seeing.
 - The ticking digits are written straight into their two nodes by `tickClock()`.
   Never through `render()`: the list is patched by signature, and repainting it
   every second would fight every gesture on the page. The interval only exists
