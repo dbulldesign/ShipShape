@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.46.0">
+<meta name="app-version" content="1.47.0">
 <meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -1989,26 +1989,87 @@ function fmtDue(s){
   return `${MO[d.getMonth()]} ${d.getDate()}`;
 }
 const MOI={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
-const DYI={sun:0,mon:1,tue:2,tues:2,wed:3,thu:4,thur:4,thurs:4,fri:5,sat:6};
+const DYI={sun:0,mon:1,tue:2,tues:2,wed:3,weds:3,thu:4,thur:4,thurs:4,fri:5,sat:6};
+/* "in two weeks" is how anyone writes it; "in 2 weeks" is how a parser wants it. */
+const NUMW={a:1,an:1,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12};
+const NUMS='\\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve';
+const numOf=s=>/^\d+$/.test(s)?+s:(NUMW[String(s).toLowerCase()]||1);
+const DAYRE='sun|mon|tues|tue|weds|wed|thurs|thur|thu|fri|sat';
+const DAYTAIL='(?:day|nesday|rsday|urday)?';
+/* Words that introduce a date and mean nothing without it, so they leave with it.
+   "Call the site on friday" has to become "Call the site", not "Call the site on"
+   — a stranded preposition is the whole complaint about a parser that takes the
+   date and leaves the sentence broken. Absorbed only when they sit immediately in
+   front of the date they introduce. */
+const DATE_LEAD=/(?:\b(?:on|by|due|for|before|after|from|until|till|starting|start|this|at|the)\s+)+$/i;
+/* A due date here has no time of day, so "monday morning" leaving "morning"
+   behind on its own is debris rather than detail. */
+const DATE_TAIL=/^\s*\b(?:morning|afternoon|evening|night|noon|am|pm)\b/i;
 function extractDate(text){
   const t=midnight(),add=n=>{const d=new Date(t);d.setDate(d.getDate()+n);return d;};
   const fix=d=>{if((d-t)/864e5<-180)d.setFullYear(d.getFullYear()+1);return d;};
+  const dayOf=s=>DYI[s.toLowerCase()];
   const tests=[
-    [/\btoday\b/i,()=>add(0)],
-    [/\b(tomorrow|tmrw|tmw|tom)\b/i,()=>add(1)],
-    [/\bin (\d+) ?(days?|d)\b/i,m=>add(+m[1])],
-    [/\bin (\d+) ?(weeks?|wks?|w)\b/i,m=>add(+m[1]*7)],
-    [/\bin (\d+) ?(months?|mos?)\b/i,m=>{const d=new Date(t);d.setMonth(d.getMonth()+ +m[1]);return d;}],
+    // Anything meaning "before the day is out". eod and asap are not dates, but
+    // what someone wants from writing them is a task dated today.
+    [/\b(today|tonight|asap|eod|end of (the )?day|this (morning|afternoon|evening))\b/i,()=>add(0)],
+    // No bare "tom": "Call Tom about the shades" is a likelier line in this
+    // business than any abbreviation of tomorrow, and it dated the task and ate
+    // the name. tmrw and tmw are nobody's name.
+    [/\b(tomorrow|tomo|tmrw|tmw)\b/i,()=>add(1)],
+    [/\byesterday\b/i,()=>add(-1)],
+    [new RegExp(`\\bin (${NUMS}) ?(days?|d)\\b`,'i'),m=>add(numOf(m[1]))],
+    [new RegExp(`\\bin (${NUMS}) ?(weeks?|wks?|w)\\b`,'i'),m=>add(numOf(m[1])*7)],
+    // setMonth overflows — Jan 31 plus a month normalises to March 3rd — so
+    // months go through addMonths, which clamps to the end of the target month
+    [new RegExp(`\\bin (${NUMS}) ?(months?|mos?)\\b`,'i'),m=>addMonths(iso(t),numOf(m[1]))],
     [/\bnext week\b/i,()=>add(7)],
-    [/\b(eow|end of week)\b/i,()=>add((5-t.getDay()+7)%7)],
-    [/\b(eom|end of month)\b/i,()=>new Date(t.getFullYear(),t.getMonth()+1,0)],
-    [/\b(next )?(sun|mon|tues|tue|wed|thurs|thur|thu|fri|sat)(day|nesday|rsday|urday)?\b/i,m=>{
-      const tgt=DYI[m[2].toLowerCase()];let n=(tgt-t.getDay()+7)%7;if(m[1])n=n===0?7:n+7;return add(n);}],
+    [/\bnext month\b/i,()=>addMonths(iso(t),1)],
+    [/\bnext year\b/i,()=>{const d=new Date(t);d.setFullYear(d.getFullYear()+1);return d;}],
+    [/\b(eow|end of (the )?week|this week)\b/i,()=>add((5-t.getDay()+7)%7)],
+    [/\b(eom|end of (the )?month)\b/i,()=>new Date(t.getFullYear(),t.getMonth()+1,0)],
+    // "a week from friday" means the Friday after next, and taking only the
+    // weekday out of it left "a week" sitting in the title
+    [new RegExp(`\\b(?:a|one|1) week from (${DAYRE})${DAYTAIL}\\b`,'i'),
+      m=>{const n=(dayOf(m[1])-t.getDay()+7)%7;return add((n===0?7:n)+7);}],
+    [new RegExp(`\\b(next )?(${DAYRE})${DAYTAIL}\\b`,'i'),m=>{
+      const tgt=dayOf(m[2]);let n=(tgt-t.getDay()+7)%7;if(m[1])n=n===0?7:n+7;return add(n);}],
+    [/\b(\d{4})-(\d{2})-(\d{2})\b/,m=>new Date(+m[1],+m[2]-1,+m[3])],
     [/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/,m=>{const y=m[3]?(+m[3]<100?2000+ +m[3]:+m[3]):t.getFullYear();return fix(new Date(y,+m[1]-1,+m[2]));}],
     [/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.? (\d{1,2})(?:st|nd|rd|th)?\b/i,m=>fix(new Date(t.getFullYear(),MOI[m[1].toLowerCase()],+m[2]))],
     [/\b(\d{1,2})(?:st|nd|rd|th)? (jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i,m=>fix(new Date(t.getFullYear(),MOI[m[2].toLowerCase()],+m[1]))],
+    /* "due on the 15th" — a day of this month, or next month's if that one has
+       gone. Only when nothing follows it: this trade numbers its floors and its
+       fixes, and "on the 3rd floor" must stay a place rather than become a date. */
+    [/\bthe (\d{1,2})(?:st|nd|rd|th)\b(?!\s+[A-Za-z])/i,m=>{
+      const n=+m[1];
+      // null for a day that month has not got, rather than February the 31st
+      const mk=(y,mo)=>n>=1&&n<=new Date(y,mo+1,0).getDate()?new Date(y,mo,n):null;
+      const here=mk(t.getFullYear(),t.getMonth());
+      if(here&&here>=t)return here;
+      const nx=new Date(t.getFullYear(),t.getMonth()+1,1);   // gone by, so next month's
+      return mk(nx.getFullYear(),nx.getMonth());}],
   ];
-  for(const [re,fn] of tests){const m=text.match(re);if(m)return{date:fn(m),text:m[0],index:m.index};}
+  for(const [re,fn] of tests){
+    const m=text.match(re);if(!m)continue;
+    /* A due date is a modifier, and this trade puts nouns exactly where one would
+       sit: "Sat nav", "Sun shades", "Wednesday report", "Today's list". So a date
+       word that opens the line with more words behind it is a label rather than a
+       date — taking it leaves the title starting mid-sentence, which is how "Sat
+       nav for the van" became "nav for the van" due Saturday. Introduced by a
+       preposition it is never ambiguous, and there the match does not open the
+       line: "on friday call the site" still dates. */
+    if(!text.slice(0,m.index).trim()&&text.slice(m.index+m[0].length).trim())continue;
+    const date=fn(m);if(!date)continue;
+    /* The words taken out are the match plus whatever only introduced it and
+       whatever trails it as a time of day, so the sentence left behind reads. */
+    let i=m.index,len=m[0].length;
+    const lead=text.slice(0,i).match(DATE_LEAD);
+    if(lead){i-=lead[0].length;len+=lead[0].length;}
+    const tail=text.slice(i+len).match(DATE_TAIL);
+    if(tail)len+=tail[0].length;
+    return {date,text:text.substr(i,len),index:i};
+  }
   return null;
 }
 /* A purchase order here is always five digits after PO. That is this business's
@@ -2020,15 +2081,25 @@ function extractDate(text){
    number or a phone number, not a PO, and half-eating it would be worse than
    ignoring it. */
 const PO_RE=/\bp\.?o\.?[\s#:]*(\d{5})(?!\d)/i;
+/* Left behind where something has already been lifted out. It has to be visible
+   to what runs next rather than blanked to a space: the date parser refuses a
+   date that opens the line, and "PO 41785 oct 15" would otherwise look as though
+   the date opened it once the number had gone. Removed on the way out. */
+const GAP='\u0001';
+/* Close the gap a lifted-out phrase leaves, and drop the punctuation that was
+   holding it on. A trailing full stop is left alone — that is somebody's writing,
+   not debris. */
+const tidyTitle=s=>s.split(GAP).join(' ').replace(/\s+/g,' ')
+  .replace(/^[\s,;:·—–-]+/,'').replace(/[\s,;:·—–-]+$/,'').trim();
 function parseInput(raw){
   let text=' '+raw.trim()+' ',due=null,flagged=false,po='';
   const pm=text.match(PO_RE);
-  if(pm){po=pm[1];text=text.slice(0,pm.index)+' '+text.slice(pm.index+pm[0].length);}
+  if(pm){po=pm[1];text=text.slice(0,pm.index)+GAP+text.slice(pm.index+pm[0].length);}
   /* A pasted URL is a link, not part of the title. Out before the date is looked
      for, so nothing in a query string can be mistaken for one. */
   let link='';
   const lm=text.match(URL_RE);
-  if(lm){link=lm[0];text=text.slice(0,lm.index)+' '+text.slice(lm.index+lm[0].length);}
+  if(lm){link=lm[0];text=text.slice(0,lm.index)+GAP+text.slice(lm.index+lm[0].length);}
   const d=extractDate(text);
   if(d){due=iso(d.date);text=text.slice(0,d.index)+' '+text.slice(d.index+d.text.length);}
   if(/\s!\s/.test(text)){flagged=true;text=text.replace(/\s!\s/g,' ');}
@@ -2039,10 +2110,13 @@ function parseInput(raw){
      parser reads a title being edited, where an address nobody meant as notation
      can already be sitting in it. */
   const parts=[...text.matchAll(/([#@>])([^#@>]*)/g)]
-    .filter(p=>p.index===0||/\s/.test(text[p.index-1]));
-  const title=(parts.length?text.slice(0,parts[0].index):text).replace(/\s+/g,' ').trim();
+    .filter(p=>p.index===0||/[\s\u0001]/.test(text[p.index-1]));
+  /* Lifting a date out of the middle of a line leaves the punctuation that
+     attached it: "due monday, chase the drawings" became ", chase the drawings",
+     and "call the site, friday" became "call the site,". */
+  const title=tidyTitle(parts.length?text.slice(0,parts[0].index):text);
   for(const p of parts){
-    const v=p[2].replace(/\s+/g,' ').trim();if(!v)continue;
+    const v=tidyTitle(p[2]);if(!v)continue;
     if(p[1]==='#')out.project=v;else if(p[1]==='@')out.manufacturer=v;else out.destination=v;
   }
   /* Typing nothing but the number is a real way to work — the PO arrives before

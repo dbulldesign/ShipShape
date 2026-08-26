@@ -119,6 +119,42 @@ the one they started from.
 Absence is not an instruction: deleting `!` from a title does not unflag, and
 deleting a date does not clear the due date. Only what is present is applied.
 
+## Reading a date out of a line
+
+`extractDate` takes the first pattern that matches, so the list is ordered by
+specificity. What it returns is not just the match: it is the match **plus what
+only introduced it and what trails it as a time of day**, because a parser that
+takes the date and leaves the sentence broken is the whole complaint. "Call the
+site on friday" has to leave "Call the site", not "Call the site on"; "monday
+morning" must not leave "morning" stranded, since a due date here has no time of
+day to put it in. `DATE_LEAD` and `DATE_TAIL` do that, and `tidyTitle` closes the
+gap and drops the punctuation that was holding the phrase on — `", chase the
+drawings"` was a real result.
+
+**A date word that opens the line with words behind it is not a date.** This
+trade puts nouns exactly where a date would sit: "Sat nav", "Sun shades",
+"Wednesday report", "Monday meeting notes", "Today's list". Taking those left the
+title starting mid-sentence. A preposition in front makes it unambiguous, and
+there the match no longer opens the line, so "on friday call the site" still
+dates. A date that is the *whole* line still counts.
+
+- `GAP` (`U+0001`) is what a lifted-out PO or URL leaves behind, rather than a
+  space. The leading rule above reads what is in front of the match, and
+  `PO 41785 oct 15` would otherwise look as though the date opened the line once
+  the number had gone — which silently stopped dating it. It has to be visible to
+  what runs next and invisible on the way out, which is what `tidyTitle` is for.
+  The marker filter counts it as a word boundary too, or `PO 41785#Cedar` loses
+  its project.
+- **No bare `tom` for tomorrow.** "Call Tom about the shades" dated the task and
+  ate the name. `tmrw`, `tmw` and `tomo` are nobody's name.
+- `the 15th` is only read as a day of the month when **nothing follows it**. This
+  trade numbers its floors and its fixes, and "on the 3rd floor" must stay a
+  place. It rolls to next month once this month's has gone, and returns null for a
+  day the month has not got rather than inventing February the 31st.
+- `eod` and `asap` are not dates, but a task dated today is what anyone writing
+  them wants.
+- Month arithmetic goes through `addMonths`, never `setMonth` — see below.
+
 ## Emails, and what a drop can carry
 
 `t.links` holds URLs on the task — a hundred bytes each and meaningless away from
