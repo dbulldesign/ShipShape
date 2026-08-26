@@ -77,14 +77,47 @@ business's own rather than general: **a PO is always five digits after `PO`**.
   reach into the digits.
 - A PO means something has been ordered, so it infers Shipment the way a maker or
   a destination does. Picking Task keeps the number.
-- Read in three places, not one: the composer, the detail sheet's title (after
-  `#dpo` is read, or the field's own empty value overwrites it), and once over
-  every existing title at load, for numbers written before the parser existed.
-  The back-fill fills an empty field and never rewrites the title — reworded
-  titles are not migration's business.
+- Read in three places, not one: the composer, a title being edited in the detail
+  sheet (see below), and once over every existing title at load, for numbers
+  written before the parser existed. The back-fill fills an empty field and never
+  rewrites the title — reworded titles are not migration's business.
 - Typing nothing but `PO 41785` makes that the title. The composer will not submit
   without one, and the number arriving before anyone has named the line is a real
   way to work.
+- A marker only counts **at the start of a word**. Without that, "Email
+  dana@luminastudio.com about it" made a maker called "luminastudio.com about it"
+  and a task called "Email dana" — which matters far more now that the same
+  parser reads a title being edited, where an address nobody meant as notation
+  can already be sitting in it.
+
+## The same notation, in a title being edited
+
+`readTitleNotation` runs the composer's parser over a title the detail sheet has
+just changed, because a PO, a project or a date most often turns up *after* the
+task exists. What it finds is applied and taken out of the title, exactly as the
+composer does with it. One parser, one set of rules.
+
+Two guards, both of which are the whole difficulty.
+
+- `saveDetail` runs on **every** field, so this only looks when the title has
+  actually changed. Otherwise clearing the PO by hand put it straight back from
+  words nobody had touched.
+- It only acts when the notation has changed *with* the title, which is why both
+  the new and the old title are parsed and compared. A title that has always read
+  "Deliver to bay #3" parses to a project called "3"; without the comparison, the
+  first typo fixed anywhere in that line would silently eat the `#3` and file the
+  task under a project nobody asked for. A marker already in the title stays put;
+  only a newly typed one is acted on.
+
+It writes back into the sheet's own inputs as well as the record — `projSelectHTML`
+and `showKind` exist so a notation-created project appears in the select and a
+task that has just become a shipment shows the fields it now has. And it is the
+one place in the app that rewrites words somebody has just typed, so it is
+undoable, and the title the undo restores is the raw one they typed rather than
+the one they started from.
+
+Absence is not an instruction: deleting `!` from a title does not unflag, and
+deleting a date does not clear the due date. Only what is present is applied.
 
 ## Emails, and what a drop can carry
 

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.45.0">
+<meta name="app-version" content="1.46.0">
 <meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2033,7 +2033,13 @@ function parseInput(raw){
   if(d){due=iso(d.date);text=text.slice(0,d.index)+' '+text.slice(d.index+d.text.length);}
   if(/\s!\s/.test(text)){flagged=true;text=text.replace(/\s!\s/g,' ');}
   const out={project:'',manufacturer:'',destination:''};
-  const parts=[...text.matchAll(/([#@>])([^#@>]*)/g)];
+  /* A marker only counts at the start of a word. Without that, "Email
+     dana@luminastudio.com about it" made a maker called "luminastudio.com about
+     it" and a task called "Email dana" — which matters far more now the same
+     parser reads a title being edited, where an address nobody meant as notation
+     can already be sitting in it. */
+  const parts=[...text.matchAll(/([#@>])([^#@>]*)/g)]
+    .filter(p=>p.index===0||/\s/.test(text[p.index-1]));
   const title=(parts.length?text.slice(0,parts[0].index):text).replace(/\s+/g,' ').trim();
   for(const p of parts){
     const v=p[2].replace(/\s+/g,' ').trim();if(!v)continue;
@@ -4043,17 +4049,27 @@ function submitComposer(keep){
   else{closeSheets();if(moved)toast('Added to All');}
 }
 
-/* ============ detail ============ */
+/* ============ detail ============
+   Two things the sheet shows are recomputed in more than one place — the project
+   list, which a notation-created project has to appear in immediately, and the
+   fields that only a shipment has. One definition each, or the sheet and the
+   record disagree until it is reopened. */
+const projSelectHTML=sel=>'<option value="">No project</option>'
+  +S.projects.map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
+  +'<option value="__new">New project…</option>';
+function showKind(t){
+  $('#dkind').textContent=t.type==='shipment'?'Shipment':'Task';
+  $$('#dtype button').forEach(b=>b.classList.toggle('on',b.dataset.t===t.type));
+  $('#shipfields').style.display=t.type==='shipment'?'':'none';
+  $('#dstages').style.display=t.type==='shipment'?'':'none';
+}
 function openDetail(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
   // docked, clicking another row swaps the pane without closing it, so the task
   // being left has to be written back here rather than on close
   if(editing&&editing!==id)saveDetail();
   editing=id;
-  $('#dkind').textContent=t.type==='shipment'?'Shipment':'Task';
-  $$('#dtype button').forEach(b=>b.classList.toggle('on',b.dataset.t===t.type));
-  $('#shipfields').style.display=t.type==='shipment'?'':'none';
-  $('#dstages').style.display=t.type==='shipment'?'':'none';
+  showKind(t);
   $('#dtitle').value=t.title;detailTitle0=t.title;$('#ddue').value=t.due||'';
   $('#dflag').checked=t.flagged;$('#dnotes').value=t.notes||'';
   $('#dmfr').value=t.manufacturer||'';$('#ddest').value=t.destination||'';
@@ -4069,9 +4085,7 @@ function openDetail(id){
   $('#dlinknew').value='';renderLinks(t);
   $('#dstepnew').value='';renderSteps(t);
   renderTracks(t);
-  $('#dproj').innerHTML='<option value="">No project</option>'
-    +S.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
-    +'<option value="__new">New project…</option>';
+  $('#dproj').innerHTML=projSelectHTML(t.projectId);
   $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
   $('#drep').innerHTML=REPS.map(([v,l])=>`<option value="${v||''}" ${(t.rep||'')===(v||'')?'selected':''}>${l}</option>`).join('');
   $('#dremind').innerHTML=REMINDS.map(([v,l])=>`<option value="${v}" ${(t.remind||0)===v?'selected':''}>${l}</option>`).join('');
@@ -4483,27 +4497,89 @@ function saveDetail(){
   const wasMaker=t.manufacturer;
   t.manufacturer=canonMaker($('#dmfr').value);t.destination=$('#ddest').value.trim();
   t.po=$('#dpo').value.trim();
-  /* A number typed into the title here rather than in the composer, which is
-     where one often turns up — on a task, whose PO field is not even on screen.
-     After the field is read, not before, or the field's own value overwrites it.
-     Only when the title has actually just changed, though: saveDetail runs on
-     every field, so reading the title every time meant clearing the PO by hand
-     put it straight back from words the user had not touched. */
-  if(!t.po&&t.title!==detailTitle0){const m=t.title.match(PO_RE);if(m){t.po=m[1];$('#dpo').value=m[1];}}
-  detailTitle0=t.title;
   t.rep=$('#drep').value||null;
   const rd=parseInt($('#dremind').value,10);t.remind=Number.isFinite(rd)&&rd>0?rd:null;
   const q=parseInt($('#dqty').value,10);t.qty=Number.isFinite(q)&&q>0?q:null;
   const cst=parseFloat($('#dcost').value);t.cost=Number.isFinite(cst)&&cst>=0?cst:null;
   t.eta=$('#deta').value||null;
-  // naming the maker fills in what they quoted, if nothing is expected yet
+  const pv=$('#dproj').value;
+  if(pv!=='__new')t.projectId=pv||null;
+  readTitleNotation(t);
+  // naming the maker fills in what they quoted, if nothing is expected yet —
+  // including a maker the title just named, which is why this comes after
   if(!t.eta&&t.manufacturer&&t.manufacturer!==wasMaker){
     t.eta=leadEta(t.manufacturer)||null;
     if(t.eta)$('#deta').value=t.eta;
   }
-  const pv=$('#dproj').value;
-  if(pv!=='__new')t.projectId=pv||null;
+  detailTitle0=t.title;
   t.u=now();save();render();
+}
+/* The composer's notation, read out of a title being edited — because a PO, a
+   project or a date most often turns up after the task exists, and typing
+   "#Cedar Hotel oct 15" is how this app has always been told those things.
+   Whatever is found is applied and taken out of the title, exactly as the
+   composer does with it. One parser, so there is one set of rules.
+
+   Two guards, both learned the hard way.
+
+   `saveDetail` runs on every field, so this only looks when the title has
+   actually changed — otherwise clearing the PO by hand put it straight back from
+   words nobody had touched.
+
+   And it only acts when the notation has changed *with* the title. A title that
+   has always read "Deliver to bay #3" parses to a project called "3", and
+   without this, the first typo fixed anywhere in that line would silently eat
+   the "#3" and file the task under a project nobody asked for. Comparing the two
+   parses means a marker already in the title stays where it is, and only one
+   newly typed is acted on. */
+function readTitleNotation(t){
+  if(t.title===detailTitle0)return;
+  const np=parseInput(t.title),op=parseInput(detailTitle0);
+  const fresh=k=>np[k]&&np[k]!==op[k];
+  /* Taken before anything moves. This is the one place the app rewrites words
+     somebody has just typed, so it has to be possible to say "no, I meant that
+     literally" — and the title restored is the raw one they typed, not the one
+     they started from. `eta` is in here because the lead-time fill downstream
+     keys off the maker this may have set. */
+  const snap={title:t.title,projectId:t.projectId,due:t.due,po:t.po,
+    manufacturer:t.manufacturer,destination:t.destination,flagged:t.flagged,
+    type:t.type,eta:t.eta,links:linksOf(t).slice()};
+  const got=[];let took=false;
+  if(fresh('project')){
+    t.projectId=findProjectId(np.project);
+    $('#dproj').innerHTML=projSelectHTML(t.projectId);
+    got.push(P(t.projectId).name);took=true;
+  }
+  if(fresh('due')){t.due=np.due;$('#ddue').value=np.due;got.push(fmtDue(np.due));took=true;}
+  if(fresh('po')){t.po=np.po;$('#dpo').value=np.po;got.push('PO '+np.po);took=true;}
+  if(fresh('manufacturer')){
+    t.manufacturer=canonMaker(np.manufacturer);$('#dmfr').value=t.manufacturer;
+    got.push(t.manufacturer);took=true;
+  }
+  if(fresh('destination')){
+    t.destination=np.destination;$('#ddest').value=np.destination;
+    got.push('→ '+np.destination);took=true;
+  }
+  // a flag is a fact about the task; the absence of "!" is not "unflag it"
+  if(np.flagged&&!op.flagged){t.flagged=true;$('#dflag').checked=true;got.push('flagged');took=true;}
+  if(fresh('link')&&addLink(t,np.link,'')){renderLinks(t);got.push(linkKind(np.link).label);took=true;}
+  if(!took)return;
+  /* A maker, a destination or a PO all mean something has been ordered, so the
+     same inference the composer makes applies here: this is a shipment. Without
+     it the maker just named would land in fields a task does not show. */
+  if(t.type!=='shipment'&&(fresh('manufacturer')||fresh('destination')||fresh('po'))){
+    t.type='shipment';showKind(t);got.push('now a shipment');
+  }
+  // the notation comes out of the title. Not if it was the whole of it — an
+  // empty title is worse than a title that still says what you typed.
+  if(np.title){t.title=np.title;$('#dtitle').value=np.title;}
+  toast('Picked up '+got.join(' · '),()=>{
+    const x=S.tasks.find(y=>y.id===t.id);if(!x)return;
+    Object.assign(x,snap);x.u=now();
+    detailTitle0=x.title;                 // or closing the sheet reads it all again
+    if(editing===x.id)openDetail(x.id);
+    save();render();
+  });
 }
 
 /* ============ project sheet ============ */
