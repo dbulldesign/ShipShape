@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.40.1">
+<meta name="app-version" content="1.41.0">
 <meta name="app-build" content="2026-08-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -360,6 +360,14 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pomain{flex:1;min-width:0}
 .pomain .tt{font-size:16.5px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
 .pomain .meta{margin-top:5px}
+/* The line items. Quieter than the number above them — this is what the order is
+   about, not what it is called — and each on its own line, because two of them
+   run together read as one long title. */
+.poitems{margin-top:3px}
+.poit{font-size:14px;color:var(--label2);line-height:1.35;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.poit.was{color:var(--label3);text-decoration:line-through}
+.poit.more{color:var(--label3);font-size:13px}
 .por{flex:none;text-align:center;min-width:44px}
 .poopen{display:block;font-family:var(--round);font-size:21px;font-weight:700;line-height:1.1}
 .polab{display:block;font-size:10.5px;font-weight:600;color:var(--label3);text-transform:uppercase;letter-spacing:.3px}
@@ -2435,11 +2443,20 @@ function posHTML(){
     const late=r.items.filter(t=>!t.done&&t.due&&diff(t.due)<0).length;
     const eta=r.items.filter(t=>!t.done&&t.eta).map(t=>t.eta).sort()[0];
     const done=r.open===0;
+    /* What is actually on the order. A number on its own tells you nothing —
+       "PO 41785" is only meaningful once you can see it is the lobby pendants.
+       Open items first, since those are the ones still in question, and capped so
+       a fifteen-line order does not push everything else off the screen. */
+    const named=r.items.slice().sort((a,b)=>(a.done?1:0)-(b.done?1:0)||(a.created||0)-(b.created||0));
+    const SHOWN=4,rest=named.length-SHOWN;
     h+=`<div class="porow ${done?'done':''}" data-q="po:${esc(r.k)}">
       <div class="pomain">
         <div class="tt">PO ${esc(r.k)}</div>
+        <div class="poitems">
+          ${named.slice(0,SHOWN).map(t=>`<div class="poit ${t.done?'was':''}">${esc(t.title)}</div>`).join('')}
+          ${rest>0?`<div class="poit more">and ${rest} more</div>`:''}
+        </div>
         <div class="meta">
-          <span class="chip">${r.items.length} item${r.items.length===1?'':'s'}</span>
           ${ships.length?`<span class="chip"${got===ships.length?' style="color:var(--green)"':''}>${got}/${ships.length} arrived</span>`:''}
           ${late?`<span class="chip" style="color:var(--red)">${late} late</span>`:''}
           ${eta?`<span class="chip">ETA ${fmtDue(eta)}</span>`:''}
