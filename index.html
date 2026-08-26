@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.43.0">
-<meta name="app-build" content="2026-08-24">
+<meta name="app-version" content="1.44.0">
+<meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -360,6 +360,51 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .startcard select{flex:1;min-width:0;background:var(--fill2);border:0;outline:none;
   font-size:14.5px;padding:10px 11px;border-radius:11px;color:var(--label)}
 .startcard .sh{font-size:12.5px;color:var(--label3);margin-top:9px}
+/* One order's own page. The numbers across the top are the four questions a PO
+   gets asked — how many, how many here, what it comes to, when the rest lands. */
+.pohead{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px;margin:2px 0 12px}
+.ph1{display:flex;align-items:flex-start;gap:10px}
+.pohead h2{margin:0;font-size:23px;font-weight:700;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.pohead .l{font-size:13px;color:var(--label3);margin-top:2px}
+.postats{display:flex;flex-wrap:wrap;gap:18px;margin:12px 0 10px}
+.postats div{min-width:0}
+.postats b{display:block;font-family:var(--round);font-size:20px;font-weight:700;line-height:1.15;
+  font-variant-numeric:tabular-nums}
+.postats span{display:block;font-size:11px;font-weight:600;color:var(--label3);
+  text-transform:uppercase;letter-spacing:.3px;margin-top:1px}
+/* Printing an order. Everything that is chrome goes; what is left is the head and
+   the lines, in black on white, because this is going to a maker rather than
+   staying on a screen. */
+@media print{
+  /* #head goes wholesale: the order's own heading carries the identity, and the
+     app's would print it twice. The group headings go too — "No date" is a
+     bucket in a task list, not a line on a purchase order. */
+  #head,#sidebar,#tabbar,#fab,#addTop,#runchip,#toast,#scrim,.sheet,#boardpane,
+  .act,.check,.stagebar,.chip.go,#ptr,.grp,[data-po="print"]{display:none!important}
+  html,body,#app,#main,#scroll{height:auto!important;overflow:visible!important;background:#fff!important}
+  #scroll{padding:0!important}
+  *{color:#000!important;box-shadow:none!important;background:#fff!important}
+  .pohead,.card,.row{border:0!important;border-radius:0!important}
+  .pohead{padding:0 0 10px;border-bottom:1.5px solid #000!important;margin-bottom:8px}
+  .postats{gap:26px}
+  .row{padding:7px 0!important;border-bottom:.5px solid #bbb!important;page-break-inside:avoid}
+  .chip{border:.5px solid #999!important;padding:1px 5px!important}
+  /* the order's lines run together, so each needs its own separation */
+  .card{margin:0!important}
+  @page{margin:16mm}
+}
+/* The nudge card on Today. Deliberately unlike the digest: the digest reports,
+   this one asks for something back, so its rows are buttons that lead somewhere. */
+.chase{background:var(--card);border-radius:16px;box-shadow:var(--shadow);margin:2px 0 12px;overflow:hidden}
+.chase h4{display:flex;align-items:center;margin:0;padding:12px 14px 8px;font-size:15px;font-weight:700}
+.chase h4 button{margin-left:auto;color:var(--blue);font-size:13px;font-weight:600}
+.crow{display:block;width:100%;text-align:left;padding:8px 14px;border-top:.5px solid var(--sep)}
+.crow:active{background:var(--fill2)}
+@media(hover:hover){.crow:hover{background:var(--fill2)}}
+.cn{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--orange);font-weight:600;margin-top:2px}
+.cm i{width:7px;height:7px;border-radius:2px;flex:none;display:block}
+.cmore{padding:8px 14px;font-size:12.5px;color:var(--label3);border-top:.5px solid var(--sep)}
 /* A PO is a header for a group of things, so it gets a row with room for two
    lines of chips: what is on it, and who it is spread across. */
 .porow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:.5px solid var(--sep)}
@@ -417,7 +462,7 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body[data-dropping] #app::after{content:'';position:fixed;inset:0;z-index:55;pointer-events:none;
   border:2.5px dashed var(--blue);border-radius:14px;background:color-mix(in srgb,var(--blue) 7%,transparent)}
 body[data-dropping] .rowwrap{transition:transform .14s var(--ease)}
-.rowwrap.dropon .row{background:color-mix(in srgb,var(--blue) 16%,var(--card));
+.rowwrap.dropon .row,.phead.dropon{background:color-mix(in srgb,var(--blue) 16%,var(--card));
   outline:2px solid var(--blue);outline-offset:-2px}
 /* The checklist. A step is a line, not a card: eight of them under one task have
    to stay scannable, and the tick is the only thing worth any weight. */
@@ -720,6 +765,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="dmfr">Maker</label><input id="dmfr" list="l-mfr" placeholder="None"></div>
     <div class="field"><label for="ddest">Ship to</label><input id="ddest" list="l-dest" placeholder="None"></div>
     <div class="field"><label for="dqty">Quantity</label><input id="dqty" type="number" min="0" step="1" inputmode="numeric" placeholder="None"></div>
+    <div class="field"><label for="dcost">Cost</label><input id="dcost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="None"></div>
     <div class="field"><label for="deta">Expected</label><input id="deta" type="date"></div>
     <div class="field"><label for="dpo">PO number</label><input id="dpo" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
     <div class="trackhead"><span>Tracking</span><span id="dgot" class="got"></span></div>
@@ -795,6 +841,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="fxg"><div class="lab2">Row height</div><div class="seg" id="set-rows"></div></div>
   <div class="fxg"><div class="lab2">“Last seven days” on Today</div><div class="seg" id="set-digest"></div></div>
   <div class="fxg"><div class="lab2">Days in a row</div><div class="seg" id="set-streak"></div></div>
+  <div class="fxg"><div class="lab2">Chase what has gone quiet</div><div class="seg" id="set-chase"></div></div>
+  <div class="blurb" id="setchasenote" style="padding-top:0"></div>
   <div class="blurb" id="setstreaknote" style="padding-top:0"></div>
 
   <div class="sethead">Finishing something</div>
@@ -861,6 +909,15 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="pname">Name</label><input id="pname" placeholder="Harbor Lofts"></div>
     <div class="field"><label for="pclient">Client</label><input id="pclient" placeholder="Optional"></div>
     <div class="field"><label for="pdue">Target date</label><input id="pdue" type="date"></div>
+  </div>
+  <div class="fgroup">
+    <div class="trackhead"><span>Links</span><span id="plinkct" class="got"></span></div>
+    <div id="plinks"></div>
+    <div class="stepadd">
+      <input id="plinknew" placeholder="Paste a link — the job's email thread, a drawing set" autocomplete="off"
+        autocapitalize="off" spellcheck="false" enterkeyhint="done">
+      <button class="btn sec" id="plinkadd" style="margin:0;font-size:14px;padding:8px 14px">Add</button>
+    </div>
   </div>
   <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="pnotes">Notes</label><textarea id="pnotes" placeholder="Scope, addresses, PO numbers…"></textarea></div></div>
   <div style="padding:0 14px 16px;display:flex;gap:10px">
@@ -1132,6 +1189,11 @@ const REP_SHORT={weekly:'weekly',biweekly:'2-weekly',monthly:'monthly',quarterly
    because the maker owes you a date or because you owe them a drawing, and only
    one of those is yours to fix. */
 const WAITS=[['','Nobody'],['me','Me'],['them','Them']];
+/* How long is too long to hear nothing. A week by default, because that is
+   roughly when somebody who has gone quiet stops being busy and starts being a
+   problem, and because a shorter one would nag about things chased yesterday. */
+const CHASE_DAYS=[[3,'3 days'],[5,'5 days'],[7,'A week'],[14,'2 weeks'],[0,'Never']];
+const waitDays=t=>t.waitAt?Math.floor((now()-t.waitAt)/864e5):0;
 const WAIT_LABEL={me:'My move',them:'Waiting on them'};
 /* Adding a month to the 31st has to land on the last day of the target month,
    not overflow into the one after. setMonth alone gives Jan 31 + 1 = Feb 31,
@@ -1218,7 +1280,7 @@ function trackInfo(t){
 let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
-let sortBy='smart',groupBy='auto',compact=false,sfx=false,digestOff=false,streakOn=false;
+let sortBy='smart',groupBy='auto',compact=false,sfx=false,digestOff=false,streakOn=false,chaseAfter=7;
 // how finishing something is marked; per device, like every other look-and-feel pref
 let fx={style:'confetti',when:'all',amount:'medium'};
 // draft holds what has been typed into the sync sheet but not turned on yet
@@ -1271,6 +1333,7 @@ async function loadAll(){
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
     if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;
     compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;streakOn=!!v.streakOn;
+    if(CHASE_DAYS.some(c=>c[0]===v.chaseAfter))chaseAfter=v.chaseAfter;
     if(v.fx){
       if(FX_STYLES.some(x=>x[0]===v.fx.style))fx.style=v.fx.style;
       if(FX_WHEN.some(x=>x[0]===v.fx.when))fx.when=v.fx.when;
@@ -1293,9 +1356,13 @@ function migrate(){
   for(const t of S.tasks){
     t.type=t.type||'task';t.tracking=t.tracking||'';t.stage=t.stage||0;t.u=t.u||t.created||now();
     t.po=t.po||'';t.carrier=t.carrier||'';t.qty=t.qty||null;t.eta=t.eta||null;t.stamps=t.stamps||{};
+    // what the line costs, so an order has a total. Optional everywhere.
+    t.cost=Number.isFinite(t.cost)&&t.cost>=0?t.cost:null;
     t.rep=REPS.some(r=>r[0]===t.rep)?t.rep:null;t.arch=t.arch||null;
     t.remind=Number.isFinite(t.remind)&&t.remind>0?t.remind:null;
     t.wait=['me','them'].includes(t.wait)?t.wait:null;
+    // when it started waiting, so "how long has this been sitting" has an answer
+    t.waitAt=t.wait?(Number.isFinite(t.waitAt)?t.waitAt:(t.u||now())):null;
     /* A PO already sitting in a title, from before the composer learned to read
        them or from an edit made in the detail sheet. Only fills an empty field,
        and deliberately leaves the title alone: rewriting words somebody already
@@ -1319,7 +1386,16 @@ function migrate(){
     if(!Array.isArray(t.tracks))t.tracks=t.tracking?[{id:uid(),n:t.tracking,carrier:t.carrier||'',got:null}]:[];
     delete t.assignee;
   }
-  for(const p of S.projects){p.u=p.u||now();delete p.lead;}
+  for(const p of S.projects){
+    p.u=p.u||now();delete p.lead;
+    /* The email that started the job belongs to the job, not to whichever task
+       happened to be open when it arrived. Same shape and same http(s)-only rule
+       as a task's. */
+    p.links=Array.isArray(p.links)
+      ? p.links.filter(l=>l&&typeof l.url==='string'&&/^https?:\/\//i.test(l.url))
+          .map(l=>({id:l.id||uid(),url:l.url,title:String(l.title||''),at:l.at||now()})).slice(0,12)
+      : [];
+  }
   S.makers=Array.isArray(S.makers)?S.makers:[];
   /* Time entries come off the wire like everything else, so they are shaped
      rather than trusted. `end:null` is what running means — elapsed is computed
@@ -1403,7 +1479,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();}
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact,sfx,digestOff,streakOn,fx}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact,sfx,digestOff,streakOn,chaseAfter,fx}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -2043,6 +2119,7 @@ function filtered(){
   else if(v.t==='project')a=a.filter(t=>t.projectId===v.v);
   else if(v.t==='mfr')a=a.filter(t=>t.manufacturer===v.v&&!t.done);
   else if(v.t==='dest')a=a.filter(t=>t.destination===v.v&&!t.done);
+  else if(v.t==='po')a=a.filter(t=>poKey(t)===v.v);      // done ones too: an order is a record
   return a.sort(bySort);
 }
 function bySort(x,y){
@@ -2167,6 +2244,7 @@ function renderHead(){
   if(view.t==='time'){const e=running();
     sub=e?'Running now':'Hours on the job';}
   if(view.t==='pos')sub='Everything on order';
+  if(view.t==='po'){name='PO '+view.v;sub='Purchase order';}
   if(view.t==='week'){
     name=weekLabel(view.v);
     const n=Math.round((weekStart(view.v)-weekStart())/6048e5);
@@ -2267,6 +2345,22 @@ function streak(){
   }
   return n;
 }
+/* Anything you are waiting on somebody for that has gone quiet. Whose move
+   answers "what am I chasing"; this answers the one nobody thinks to ask, which
+   is "what have I stopped chasing without deciding to". */
+function chaseHTML(){
+  if(!chaseAfter)return '';
+  const due=openT().filter(t=>t.wait==='them'&&waitDays(t)>=chaseAfter)
+    .sort((a,b)=>(a.waitAt||0)-(b.waitAt||0));
+  if(!due.length)return '';
+  return `<div class="chase"><h4>Nothing heard<button data-v="waiting">Whose move</button></h4>`
+    +due.slice(0,5).map(t=>{const p=projectOf(t),d=waitDays(t);
+      return `<button class="crow" data-opentask="${t.id}">
+        <span class="cn">${esc(t.title)}</span>
+        <span class="cm">${p?`<i style="background:${p.color}"></i>${esc(p.name)} · `:''}${
+          d>=14?`${Math.floor(d/7)} weeks`:`${d} days`}</span></button>`;}).join('')
+    +(due.length>5?`<div class="cmore">and ${due.length-5} more</div>`:'')+'</div>';
+}
 function digestHTML(){
   if(digestOff)return '';
   const since=now()-7*864e5;
@@ -2296,6 +2390,7 @@ function rowHTML(t){
   if(t.destination)chips.push(`<button class="chip go" data-v="dest" data-val="${esc(t.destination)}"
     aria-label="Show everything going to ${esc(t.destination)}">→ ${esc(t.destination)}</button>`);
   if(t.qty)chips.push(`<span class="chip">×${t.qty}</span>`);
+  if(t.cost!=null)chips.push(`<span class="chip">${money(t.cost)}</span>`);
   /* A PO groups a whole order — several crates, several makers — so the chip runs
      the search that gathers them rather than just stating the number. */
   if(t.po)chips.push(`<button class="chip go" data-q="po:${esc(t.po.trim())}"
@@ -2379,7 +2474,7 @@ function timeHTML(){
   const t0=midnight().getTime(),t1=t0+864e5;
   const today=S.times.filter(x=>x.start<t1&&(x.end===null||x.end>t0)).sort((a,b)=>b.start-a.start);
   const dayTotal=today.reduce((n,x)=>n+overlap(x,t0,t1),0);
-  h+=`<div class="grp">Today<span class="c">${clockTotal(dayTotal)}</span></div>`;
+  h+=`<div class="grp">Today<span class="c">${clockTotal(dayTotal)}</span><button data-tm="add">Add an entry</button></div>`;
   if(!today.length)h+=`<div class="card"><div class="tmempty">Nothing timed yet today.</div></div>`;
   else{
     h+='<div class="card">';
@@ -2457,7 +2552,7 @@ function posHTML(){
        a fifteen-line order does not push everything else off the screen. */
     const named=r.items.slice().sort((a,b)=>(a.done?1:0)-(b.done?1:0)||(a.created||0)-(b.created||0));
     const SHOWN=4,rest=named.length-SHOWN;
-    h+=`<div class="porow ${done?'done':''}" data-q="po:${esc(r.k)}">
+    h+=`<div class="porow ${done?'done':''}" data-poopen="${esc(r.k)}">
       <div class="pomain">
         <div class="tt">PO ${esc(r.k)}</div>
         <div class="poitems">
@@ -2479,6 +2574,41 @@ function posHTML(){
     </div>`;
   }
   return h+'</div>';
+}
+/* One purchase order, on its own page. The items are the normal list, so every
+   row behaves as it does everywhere else; what this adds is the head — who it is
+   with, where it goes, what it comes to — and a layout that prints as an order. */
+function poHead(){
+  const k=view.v,items=S.tasks.filter(t=>poKey(t)===k);
+  if(!items.length)return '';
+  const ships=items.filter(t=>t.type==='shipment');
+  const got=ships.filter(t=>t.stage===4||t.done).length;
+  const projs=[...new Set(items.map(t=>projectOf(t)).filter(Boolean))];
+  const makers=[...new Set(items.map(t=>t.manufacturer).filter(Boolean))];
+  const dests=[...new Set(items.map(t=>t.destination).filter(Boolean))];
+  const priced=items.filter(t=>t.cost!=null);
+  const total=priced.reduce((n,t)=>n+t.cost,0);
+  const eta=items.filter(t=>!t.done&&t.eta).map(t=>t.eta).sort()[0];
+  const late=items.filter(t=>!t.done&&t.due&&diff(t.due)<0).length;
+  const raised=Math.min(...items.map(t=>t.created||now()));
+  return `<div class="pohead">
+    <div class="ph1">
+      <div style="flex:1;min-width:0"><h2>PO ${esc(k)}</h2>
+        <div class="l">Raised ${fmtAgo(raised)}${projs.length?` · ${projs.map(p=>esc(p.name)).join(', ')}`:''}</div></div>
+      <button class="iconbtn" data-po="print" aria-label="Print this order"><svg viewBox="0 0 20 20"><path d="M6 2h8v3H6V2Zm-2 4h12a2 2 0 0 1 2 2v5h-3v3H5v-3H2V8a2 2 0 0 1 2-2Zm3 8h6v3H7v-3Z"/></svg></button>
+    </div>
+    <div class="postats">
+      <div><b>${items.length}</b><span>item${items.length===1?'':'s'}</span></div>
+      ${ships.length?`<div><b${got===ships.length?' style="color:var(--green)"':''}>${got}/${ships.length}</b><span>arrived</span></div>`:''}
+      ${priced.length?`<div><b>${money(total)}</b><span>total${priced.length<items.length?` · ${priced.length} priced`:''}</span></div>`:''}
+      ${eta?`<div><b>${fmtDue(eta)}</b><span>next expected</span></div>`:''}
+      ${late?`<div><b style="color:var(--red)">${late}</b><span>late</span></div>`:''}
+    </div>
+    ${makers.length||dests.length?`<div class="meta" style="padding:0 2px 2px">
+      ${makers.map(m=>`<button class="chip go" data-v="mfr" data-val="${esc(m)}">${esc(m)}</button>`).join('')}
+      ${dests.map(d=>`<button class="chip go" data-v="dest" data-val="${esc(d)}">→ ${esc(d)}</button>`).join('')}
+    </div>`:''}
+  </div>`;
 }
 function projectsHTML(){
   if(!S.projects.length)return `<div class="empty"><div class="g">🗂</div><h3>No projects yet</h3>
@@ -2527,6 +2657,9 @@ function projectHead(){
       <span>${s.done}/${s.all} done</span>${p.client?`<span>· ${esc(p.client)}</span>`:''}
       ${p.due?`<span style="${diff(p.due)<0?'color:var(--red)':''}">· target ${fmtDue(p.due)}</span>`:''}
       ${boardCards(p.id)?`<button data-board="#p=ss:${p.id}" style="color:var(--blue);font-weight:600">· ✳ ${boardCards(p.id)} board card${boardCards(p.id)===1?'':'s'}</button>`:''}</div>
+      ${linksOf(p).length?`<div class="meta" style="margin-top:6px">${linksOf(p).map(l=>{const k=linkKind(l.url);
+        return `<a class="chip track" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" data-noopen="1"
+          title="${esc(l.title||l.url)}">${k.mail?'✉':'🔗'} ${esc(l.title||k.label)} ↗</a>`;}).join('')}</div>`:''}
       ${p.notes?`<div class="l" style="color:var(--label3)">${esc(p.notes)}</div>`:''}</div>
     <button class="iconbtn" data-editproj="${p.id}" aria-label="Edit project"><svg viewBox="0 0 20 20"><path d="M14.1 2.6a1.4 1.4 0 0 1 2 0l1.3 1.3a1.4 1.4 0 0 1 0 2l-1 1-3.3-3.3 1-1ZM12 4.7 3.4 13.3 2.5 17l3.7-.9 8.6-8.6L12 4.7Z"/></svg></button>
     <button class="iconbtn" data-a="new" aria-label="Add to this project" style="background:var(--blue)"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
@@ -2627,7 +2760,9 @@ function emptyHTML(){
     mfr:['📦','Nothing open from this maker','Everything from them has arrived, or nothing is on order yet.',
       [A('Add shipment'),G('shipments','All shipments')]],
     dest:['🚚','Nothing going here','No open shipment has this destination.',
-      [A('Add shipment'),G('shipments','All shipments')]]}[view.t]
+      [A('Add shipment'),G('shipments','All shipments')]],
+    po:['🧾','Nothing left on this order','Every item that carried this number has gone.',
+      [G('pos','All purchase orders')]]}[view.t]
     ||['📋','Nothing here','Nothing to show in this view.',[A()]];
   return wrap(m[0],m[1],m[2],m[3]);
 }
@@ -2738,6 +2873,7 @@ function renderList(){
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
   if(view.t==='project')chunk('phead',projectHead());
   if(view.t==='mfr')chunk('mhead',makerHead());
+  if(view.t==='po')chunk('pohead',poHead());
   /* The two ways of looking at dated work, side by side, because a week view
      nobody can find is not a week view. One tap from the phone, where the
      sidebar and the palette are both out of reach. */
@@ -2747,7 +2883,7 @@ function renderList(){
       <button data-v="week" ${view.t==='week'?'class="on" aria-selected="true"':''} role="tab">Week</button></div>`);
   if(view.t==='week'&&!query)chunk('week',weekGridHTML());
   if((view.t==='today'||view.t==='scheduled')&&!query)chunk('strip',stripHTML());
-  if(view.t==='today'&&!query&&!selDay){chunk('sea',seaStateHTML());chunk('digest',digestHTML());}
+  if(view.t==='today'&&!query&&!selDay){chunk('sea',seaStateHTML());chunk('chase',chaseHTML());chunk('digest',digestHTML());}
   if(query)chunk('sprojects',searchProjectsHTML());   // projects are searchable too, not just tasks
   const items=filtered();
   if(!items.length){chunk('empty',emptyHTML());patch(el,out);return;}
@@ -3135,9 +3271,17 @@ async function describeDrop(dt){
   if(!lines.length)return null;
   return {title:lines[0].slice(0,160),notes:lines.slice(1,6).join('\n'),what:'text'};
 }
-async function handleDrop(dt,onto){
+async function handleDrop(dt,onto,ontoProj){
   const d=await describeDrop(dt);
   if(!d)return toast('Nothing in that I could use.');
+  /* Dropped on the project's own header rather than on one of its rows: the
+     email is about the job, not about any single line of it. */
+  if(ontoProj&&d.url){
+    const p=P(ontoProj);if(!p)return;
+    if(!addLink(p,d.url,d.title))return toast('That link is already on this project.');
+    save();render();
+    return toast(`${linkKind(d.url).mail?'Email':'Link'} attached to ${p.name}`);
+  }
   if(onto){
     const t=S.tasks.find(x=>x.id===onto);if(!t)return;
     if(d.url){
@@ -3181,6 +3325,9 @@ addEventListener('dragover',e=>{
   const w=e.target.closest&&e.target.closest('.rowwrap[data-id]');
   $$('.rowwrap.dropon').forEach(x=>{if(x!==w)x.classList.remove('dropon')});
   if(w)w.classList.add('dropon');
+  const ph=e.target.closest&&e.target.closest('.phead');
+  $$('.phead.dropon').forEach(x=>{if(x!==ph)x.classList.remove('dropon')});
+  if(ph)ph.classList.add('dropon');
 });
 addEventListener('dragleave',e=>{
   if(!outsideDrag(e))return;
@@ -3188,15 +3335,15 @@ addEventListener('dragleave',e=>{
 });
 function clearDropUI(){
   dropDepth=0;document.body.removeAttribute('data-dropping');
-  $$('.rowwrap.dropon').forEach(x=>x.classList.remove('dropon'));
+  $$('.dropon').forEach(x=>x.classList.remove('dropon'));
 }
 addEventListener('drop',e=>{
   if(!outsideDrag(e))return;
   e.preventDefault();
   const w=e.target.closest&&e.target.closest('.rowwrap[data-id]');
-  const onto=w?w.dataset.id:null;
+  const ph=e.target.closest&&e.target.closest('.phead');
   clearDropUI();
-  handleDrop(e.dataTransfer,onto);
+  handleDrop(e.dataTransfer,w?w.dataset.id:null,ph&&view.t==='project'?view.v:null);
 });
 
 /* ============ the clock ============
@@ -3258,6 +3405,9 @@ function clockHM(ms){
 }
 // A heading counts a day that may hold nothing, where "under a minute" is a lie.
 const clockTotal=ms=>ms<1000?'0m':clockHM(ms);
+/* Money, plainly. No currency symbol is stored — this is one business in one
+   country, and guessing wrong is worse than not guessing at all. */
+const money=n=>n==null?'':n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 const hhmm=ts=>{const d=new Date(ts);
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;};
 function startTimer({taskId=null,projectId=null,label=''}={}){
@@ -3328,10 +3478,24 @@ function syncTick(){
    because that is how anyone thinks about it. `start` and `end` stay absolute
    milliseconds underneath, so nothing else in the tracker has to change. */
 let entryId=null,detailTitle0='';
+/* Work that was never timed at all — the phone stayed in a pocket, or the timer
+   was simply forgotten. The same sheet, opened against a blank entry rather than
+   an existing one, because "what, which job, when from, when to" is the same
+   question either way. Defaults to an hour ending now, which is the shape of
+   "I have just finished something and want to record it". */
+function openNewEntry(){
+  const end=Math.round(now()/6e4)*6e4;
+  openEntry({id:null,taskId:null,projectId:view.t==='project'?view.v:null,
+    label:'',start:end-36e5,end,u:0});
+}
 function openEntry(id){
-  const x=S.times.find(y=>y.id===id);if(!x)return;
-  entryId=id;
+  const isNew=id&&typeof id==='object';
+  const x=isNew?id:S.times.find(y=>y.id===id);if(!x)return;
+  entryId=isNew?null:id;entryDraft=isNew?x:null;
   const live=x.end===null;
+  $('#tmsheet').querySelector('.sheettitle span').textContent=isNew?'Add an entry':'Edit this entry';
+  $('#tmdelete').style.display=isNew?'none':'';
+  $('#tmsave').textContent=isNew?'Add it':'Save';
   $('#tmlabel').value=x.label||'';
   $('#tmproject').innerHTML='<option value="">No project</option>'
     +S.projects.map(p=>`<option value="${p.id}" ${x.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
@@ -3346,8 +3510,10 @@ function openEntry(id){
   rememberFocus();$('#scrim').classList.add('on');$('#tmsheet').classList.add('on');
 }
 /* What the fields currently describe, or why they cannot be used. */
+let entryDraft=null;
+const editingEntry=()=>entryDraft||S.times.find(y=>y.id===entryId)||null;
 function entryTimes(){
-  const x=S.times.find(y=>y.id===entryId);if(!x)return null;
+  const x=editingEntry();if(!x)return null;
   const day=$('#tmdate').value,st=$('#tmstart').value;
   if(!day||!st)return {err:'A day and a start time are needed.'};
   const base=fromISO(day);
@@ -3375,9 +3541,20 @@ function entryDur(){
     : clockHM(t.end-t.start)+(t.over?' · finishes the next day':'');
 }
 function saveEntry(){
-  const x=S.times.find(y=>y.id===entryId);if(!x)return;
+  const x=editingEntry();if(!x)return;
   const t=entryTimes();
   if(!t||t.err)return toast(t&&t.err||'That cannot be saved.');
+  if(entryDraft){
+    const label=$('#tmlabel').value.trim().slice(0,120);
+    if(!label){$('#tmlabel').focus();return toast('Say what the time was spent on.');}
+    const e={id:uid(),taskId:null,projectId:$('#tmproject').value||null,
+      label,start:t.start,end:t.end,u:now()};
+    S.times.push(e);entryDraft=null;
+    closeSheets();save();render();
+    toast(`Added ${clockHM(elapsed(e))}`,()=>{
+      S.times=S.times.filter(y=>y.id!==e.id);S.tomb[e.id]=now();save();render();});
+    return;
+  }
   const before={label:x.label,projectId:x.projectId,start:x.start,end:x.end};
   x.label=$('#tmlabel').value.trim().slice(0,120)||x.label;
   x.projectId=$('#tmproject').value||null;
@@ -3614,7 +3791,7 @@ function closeSheets(){
   if(a&&a.closest&&a.closest('.sheet'))a.blur();
   $('#scrim').classList.remove('on');
   $$('.sheet').forEach(s=>s.classList.remove('on','dock'));
-  editing=null;editProj=null;
+  editing=null;editProj=null;entryDraft=null;
   if(lastFocus&&document.contains(lastFocus)){lastFocus.focus();lastFocus=null;}
 }
 /* Keyboard users could tab out of an open sheet into the list behind it. Keep
@@ -3691,6 +3868,7 @@ function openDetail(id){
   $('#dflag').checked=t.flagged;$('#dnotes').value=t.notes||'';
   $('#dmfr').value=t.manufacturer||'';$('#ddest').value=t.destination||'';
   $('#dpo').value=t.po||'';$('#dqty').value=t.qty||'';$('#deta').value=t.eta||'';
+  $('#dcost').value=t.cost==null?'':t.cost;
   $('#dstamps').innerHTML=stampsHTML(t);
   $('#dwait').innerHTML=WAITS.map(([v,l])=>`<option value="${v}" ${(t.wait||'')===v?'selected':''}>${l}</option>`).join('');
   tallyTime();
@@ -4109,7 +4287,9 @@ function saveDetail(){
   t.title=$('#dtitle').value.trim()||t.title;
   t.due=$('#ddue').value||null;
   t.flagged=$('#dflag').checked;t.notes=$('#dnotes').value;
-  t.wait=$('#dwait').value||null;
+  {const w=$('#dwait').value||null;
+   if(w!==t.wait)t.waitAt=w?now():null;      // the clock restarts when the answer changes
+   t.wait=w;}
   const wasMaker=t.manufacturer;
   t.manufacturer=canonMaker($('#dmfr').value);t.destination=$('#ddest').value.trim();
   t.po=$('#dpo').value.trim();
@@ -4124,6 +4304,7 @@ function saveDetail(){
   t.rep=$('#drep').value||null;
   const rd=parseInt($('#dremind').value,10);t.remind=Number.isFinite(rd)&&rd>0?rd:null;
   const q=parseInt($('#dqty').value,10);t.qty=Number.isFinite(q)&&q>0?q:null;
+  const cst=parseFloat($('#dcost').value);t.cost=Number.isFinite(cst)&&cst>=0?cst:null;
   t.eta=$('#deta').value||null;
   // naming the maker fills in what they quoted, if nothing is expected yet
   if(!t.eta&&t.manufacturer&&t.manufacturer!==wasMaker){
@@ -4145,9 +4326,46 @@ function openProject(id){
   $('#pname').value=p?p.name:'';$('#pclient').value=p?p.client||'':'';
   $('#pdue').value=p?p.due||'':'';$('#pnotes').value=p?p.notes||'':'';
   $('#pdel').style.display=p?'':'none';
+  $('#plinknew').value='';renderProjLinks(p);
   rememberFocus();$('#scrim').classList.add('on');$('#psheet').classList.add('on');
   if(!p)setTimeout(()=>$('#pname').focus(),300);
 }
+/* The links list is written straight to the project rather than gathered on
+   save, so pasting one and closing the sheet does not lose it. A new project has
+   nowhere to put them yet, so the section only appears once it exists. */
+function renderProjLinks(p){
+  const box=$('#plinks').parentElement;
+  box.style.display=p?'':'none';
+  if(!p)return;
+  const ls=linksOf(p);
+  $('#plinkct').textContent=ls.length?String(ls.length):'';
+  $('#plinks').innerHTML=ls.map(l=>{const k=linkKind(l.url);
+    return `<div class="lrow">
+      <span class="lk">${k.mail?'✉':'🔗'}</span>
+      <a class="lt" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
+        <b>${esc(l.title||k.label)}</b><span>${esc(l.url.slice(0,72))}${l.url.length>72?'…':''}</span></a>
+      <button class="del" data-plinkdel="${l.id}" aria-label="Remove this link">×</button></div>`;}).join('');
+  $('#plinks').style.display=ls.length?'':'none';
+}
+function addProjLink(){
+  const p=editProj?P(editProj):null;if(!p)return;
+  const v=$('#plinknew').value.trim();if(!v)return;
+  const m=v.match(URL_RE);
+  if(!m)return toast('That needs to be a web link, starting http.');
+  if(!addLink(p,m[0],''))return toast('That link is already on this project.');
+  $('#plinknew').value='';save();renderProjLinks(p);render();
+}
+$('#plinkadd').addEventListener('click',addProjLink);
+$('#plinknew').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addProjLink();}});
+$('#plinks').addEventListener('click',e=>{
+  const d=e.target.closest('[data-plinkdel]');if(!d)return;
+  const p=editProj?P(editProj):null;if(!p)return;
+  const i=linksOf(p).findIndex(l=>l.id===d.dataset.plinkdel);if(i<0)return;
+  const [l]=p.links.splice(i,1);p.u=now();save();renderProjLinks(p);render();
+  toast('Link removed',()=>{const x=P(p.id);if(!x)return;
+    x.links=linksOf(x);x.links.splice(i,0,l);x.u=now();save();render();
+    if(editProj===x.id)renderProjLinks(x);});
+});
 function saveProject(){
   const name=$('#pname').value.trim();
   if(!name){toast('Give the project a name');return;}
@@ -4609,7 +4827,7 @@ $('#sugg').addEventListener('click',e=>{
   const b=e.target.closest('[data-ins]');if(!b)return;
   const ci=$('#ci');ci.value=ci.value.replace(/\s+$/,'')+' '+b.dataset.ins+' ';updatePreview();ci.focus();
 });
-['#dtitle','#ddue','#dflag','#dwait','#dnotes','#dmfr','#ddest','#dpo','#dqty','#deta','#drep','#dremind'].forEach(s=>$(s).addEventListener('change',saveDetail));
+['#dtitle','#ddue','#dflag','#dwait','#dnotes','#dmfr','#ddest','#dpo','#dqty','#dcost','#deta','#drep','#dremind'].forEach(s=>$(s).addEventListener('change',saveDetail));
 $('#dproj').addEventListener('change',e=>{
   if(e.target.value==='__new'){
     const id=editing;saveDetail();attachTo=id;editing=null;
@@ -4814,10 +5032,13 @@ document.addEventListener('click',e=>{
 $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-m]'))return;
   if(e.target.closest('[data-noopen]'))return;   // tracking link: follow it, don't open the row
+  const ot=e.target.closest('[data-opentask]');
+  if(ot)return openDetail(ot.dataset.opentask);
   const tm=e.target.closest('[data-tm]');
   if(tm){
     const [k,arg]=tm.dataset.tm.split(':');
     if(k==='stop')return stopTimer();
+    if(k==='add')return openNewEntry();
     if(k==='open')return openDetail(arg);
     if(k==='start'){
       const what=$('#tmwhat');
@@ -4849,6 +5070,9 @@ $('#list').addEventListener('click',e=>{
   /* Last, so the restart, the delete and the project chip all win first. */
   const tr=e.target.closest('.tmrow[data-tmid]');
   if(tr)return openEntry(tr.dataset.tmid);
+  const po=e.target.closest('[data-poopen]');
+  if(po)return setView('po',po.dataset.poopen);
+  if(e.target.closest('[data-po="print"]'))return window.print();
   const ep=e.target.closest('[data-editproj]');if(ep)return openProject(ep.dataset.editproj);
   if(e.target.closest('[data-editmaker]'))return openMaker(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
@@ -4956,7 +5180,7 @@ $('#rowmenu').addEventListener('click',e=>{
   const dayOff=n=>{const d=new Date(midnight());d.setDate(d.getDate()+n);return iso(d);};
   if(k==='flag'){t.flagged=!t.flagged;t.u=now();save();render();toast(t.flagged?'Flagged':'Flag removed',undo);return;}
   // The common case by a mile — you have just chased someone, or they answered.
-  if(k==='wait'){t.wait=t.wait==='them'?null:'them';t.u=now();save();render();
+  if(k==='wait'){t.wait=t.wait==='them'?null:'them';t.waitAt=t.wait?now():null;t.u=now();save();render();
     toast(t.wait?'Waiting on them':'Not waiting on them',undo);return;}
   if(k==='tstart'){startTimer({taskId:t.id});return;}
   if(k==='tstop'){stopTimer();return;}
@@ -5281,6 +5505,12 @@ function renderSettings(){
   seg('set-rows',[['comfortable','Comfortable'],['compact','Compact']],compact?'compact':'comfortable');
   seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');
   seg('set-streak',[['off','Off'],['on','On']],streakOn?'on':'off');
+  seg('set-chase',CHASE_DAYS.map(([v,l])=>[String(v),l]),String(chaseAfter));
+  {const n=chaseAfter?openT().filter(t=>t.wait==='them'&&waitDays(t)>=chaseAfter).length:0;
+   $('#setchasenote').textContent=!chaseAfter
+     ? 'Off. Things set to "waiting on them" are only in the Whose move view.'
+     : n ? `${n} thing${n===1?' has':'s have'} been waiting longer than ${chaseAfter} days, and show on Today.`
+         : `Anything waiting on somebody else for more than ${chaseAfter} days shows on Today. Nothing is, right now.`;}
   {const sk=streak();
    $('#setstreaknote').textContent=!streakOn
      ? 'Counts the days in a row you finished something. Off by default — it is an observation, not a target.'
@@ -5323,6 +5553,7 @@ $('#setsheet').addEventListener('click',e=>{
   else if(id==='set-rows'){compact=v==='compact';$('#app').classList.toggle('compact',compact);render();}
   else if(id==='set-digest'){digestOff=v==='hidden';render();}
   else if(id==='set-streak'){streakOn=v==='on';render();}
+  else if(id==='set-chase'){chaseAfter=+v;render();}
   saveView();renderSettings();
   // show what was just chosen, from the button that chose it
   if(id.startsWith('fx-')&&id!=='fx-sound'&&fx.when!=='never')celebrate(b,{force:true});

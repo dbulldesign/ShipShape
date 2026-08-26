@@ -106,6 +106,14 @@ message*, and everything else is a fallback:
 - `outsideDrag()` gates all of it on `dragId` being null. An internal row drag
   means "file this under that project" and must not be read as an inbound drop.
 
+**A project has links too**, `p.links`, the same shape and the same http(s) rule.
+Half the email about a job is about the job and not about any one crate, and
+filing it under an arbitrary task loses it. `handleDrop` looks for a `.phead`
+under the pointer *before* it looks for a row, and finding one attaches rather
+than making a task — a drop on the project heading is unambiguous, and a new task
+called "Email" is not what anyone meant by it. The heading carries the chips, so
+they open from the phone, where the detail sheet is the only other way in.
+
 ## Chips are doors
 
 A row chip that names something the app can show navigates to it: project, maker,
@@ -115,6 +123,23 @@ views from a phone. The class is `go`, not `nav` — `.nav` is the sidebar item 
 carries `width:100%`, which stretches a chip to its full 200px allowance and
 stacks them one per line. Not while `selMode`: there a tap anywhere in the row
 means "pick this one".
+
+## A PO is a page, not a search
+
+The POs tab lists orders; `view.t==='po'` with `view.v` holding the number is one
+order. It was a `po:` search first, and a search cannot carry a heading — the
+things anyone asks of an order (how many, how many landed, what it came to, when
+the next crate is due, what is late) have nowhere to live in a list of results.
+
+- It shows **completed items too**. Everywhere else in the app finished work goes
+  quiet, but "1 of 4 arrived" is a lie if the arrived one has been hidden.
+- `t.cost` is per item and optional. The total says how many of the items are
+  priced beside it — `21,230.50 total · 3 priced` — because a total over three of
+  four lines is not the order's total and should not pretend to be.
+- Print is the reason the page is worth having on paper, so printing hides `#head`,
+  the day groupings and the print button itself. The first cut printed all three
+  and produced a duplicated title, a button on the page, and a `NO DATE` heading
+  over items that simply have no delivery date yet.
 
 ## Dates that are not simple arithmetic
 
@@ -232,6 +257,29 @@ answer.
 - An entry's `label` is a snapshot taken at start. Time logged is a record, not a
   pointer: renaming or deleting the task must not make the hours unreadable, which
   is also why `prune()` leaves time entries alone.
+- **An entry can be written from nothing**, because the commonest failure of a
+  stopwatch is forgetting to press it. "Add an entry" sits in the Today heading of
+  the tracker and opens the *same* sheet the editor uses, so there is one set of
+  rules about days, clock times and past-midnight rather than two. A new entry is
+  a record that does not exist yet, so it cannot be looked up by id: `entryDraft`
+  holds it and `editingEntry()` prefers it, which is also what makes cancelling
+  leave nothing behind. It defaults to the hour ending now, rounded to the minute
+  — a guess close enough to correct rather than a blank to fill in — and takes the
+  project you were looking at, if you were looking at one.
+
+## Waiting on someone
+
+`t.wait` says whose move it is; `waitAt` is when it became theirs. Without the
+second there is no such thing as "waiting too long", so every write of `wait`
+stamps it, and re-marking an item that is already theirs restarts the clock —
+that is what answering and re-asking looks like.
+
+The nudge is a card on Today, not a view: a view is somewhere you go, and the
+whole point is arriving without going. `chaseAfter` is a per-device preference in
+Settings (3 / 5 / 7 / 14 days, or Never), because how long is too long is a
+matter of temperament rather than a fact about the data. Never means the card
+never appears, and it is the only setting that removes it — an empty card is not
+a state worth painting.
 
 ## Settings
 
