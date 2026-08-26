@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.44.0">
+<meta name="app-version" content="1.45.0">
 <meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -158,6 +158,23 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .weeklate{display:block;width:100%;margin-top:9px;padding:8px 11px;border-radius:11px;background:var(--fill2);
   font-size:13px;font-weight:600;color:var(--red);text-align:left;transition:transform .18s var(--ease)}
 .weeklate:active{transform:scale(.985)}
+/* A month of hours. Same cell as the week grid — one idea of what a day looks
+   like — but the weekday runs along the top once instead of inside every cell,
+   because a month has five of each and repeating it thirty times is noise. */
+.mwd{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;padding:0 0 4px}
+.mwd span{text-align:center;font-size:9.5px;font-weight:700;letter-spacing:.3px;
+  color:var(--label3);text-transform:uppercase}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.mgrid .wcell{padding:6px 0 4px}
+.mgrid .blank{background:transparent;box-shadow:none;pointer-events:none}
+.mgrid .wcell.none .n{color:var(--label3);font-weight:600}
+.mgrid .wcell.on{border-color:color-mix(in srgb,var(--green) 55%,transparent)}
+/* Crossed midnight. The row says how long the entry was; this says which day it
+   ended on, so a day total that counts only its own share cannot look wrong. */
+.tmover{font-size:10.5px;font-weight:700;color:var(--label3);margin-left:1px}
+.tmmore{display:block;width:100%;margin-top:9px;padding:9px 11px;border-radius:11px;background:var(--fill2);
+  font-size:13.5px;font-weight:600;color:var(--blue);transition:transform .18s var(--ease)}
+.tmmore:active{transform:scale(.985)}
 /* The seg is a sheet component; in the list it needs the list's own gutter. */
 .listseg{margin:2px 0 12px}
 /* Group headings hold their place at the top of the scroll area, so a long list
@@ -392,6 +409,21 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* the order's lines run together, so each needs its own separation */
   .card{margin:0!important}
   @page{margin:16mm}
+  /* The log printed is a timesheet, which is a thing anyone actually wants on
+     paper — so on the time views the two hides above are put back: the day
+     headings carry the dates and their totals, and the project chip is the
+     column you bill from. Additive, so the purchase order keeps its own rules. */
+  body[data-view="timelog"] .grp,body[data-view="timecal"] .grp,
+  body[data-view="timelog"] .chip.go,body[data-view="timecal"] .chip.go{display:flex!important}
+  body[data-view="timelog"] .grp,body[data-view="timecal"] .grp{
+    border-bottom:.5px solid #000!important;padding:12px 0 3px!important;page-break-after:avoid}
+  body[data-view="timelog"] .grp button,body[data-view="timecal"] .grp button,
+  body[data-view="timelog"] .seg,body[data-view="timecal"] .seg,
+  body[data-view="timelog"] .tmmore,body[data-view="timecal"] .tmmore,
+  .tmagain,.tmdel,.runcard,.startcard,.tmbar{display:none!important}
+  .tmrow{padding:5px 0!important;border-top:.5px solid #ddd!important;page-break-inside:avoid}
+  .mgrid .wcell{border:.5px solid #999!important;border-radius:0!important}
+  .weekbar .wnav{display:none!important}
 }
 /* The nudge card on Today. Deliberately unlike the digest: the digest reports,
    this one asks for something back, so its rows are buttons that lead somewhere. */
@@ -2206,8 +2238,11 @@ function renderNav(){
    if(w||view.t==='waiting')h+=navItem(I.clock,'var(--pink)','Whose move',w,view.t==='waiting','data-v="waiting"');}
   h+=navItem(I.truck,'var(--purple)','Shipments',openT().filter(t=>t.type==='shipment').length,view.t==='shipments','data-v="shipments"');
   h+=navItem(I.list,'var(--gray)','All open',openT().length,view.t==='all','data-v="all"');
+  /* One sidebar entry for all three, because the segment at the top of the view
+     is how you move between them — the same bargain Week does not make, but the
+     sidebar is long enough already and Log and Calendar are one tap in. */
   {const e=running();
-   h+=navItem(I.clock,e?'var(--green)':'var(--label3)','Time',e?'●':'',view.t==='time','data-v="time"');}
+   h+=navItem(I.clock,e?'var(--green)':'var(--label3)','Time',e?'●':'',TIMEV.has(view.t),'data-v="time"');}
   {const n=new Set(S.tasks.filter(t=>!t.done&&!t.arch&&poKey(t)).map(poKey)).size;
    if(n||view.t==='pos')h+=navItem(I.box,'var(--pink)','Purchase orders',n,view.t==='pos','data-v="pos"');}
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
@@ -2231,7 +2266,7 @@ function renderNav(){
   $('#navlists').innerHTML=h;
   rollCounts();
 }
-const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',pos:'POs',all:'All open',done:'Completed',
+const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',timelog:'Time',timecal:'Time',pos:'POs',all:'All open',done:'Completed',
   projects:'Projects',shipments:'Shipments',archive:'Archived'};
 function renderHead(){
   const d=new Date();
@@ -2243,6 +2278,8 @@ function renderHead(){
   if(view.t==='board')sub='Ideas, notes and images';
   if(view.t==='time'){const e=running();
     sub=e?'Running now':'Hours on the job';}
+  if(view.t==='timelog')sub='Every entry';
+  if(view.t==='timecal')sub='Hours by month';
   if(view.t==='pos')sub='Everything on order';
   if(view.t==='po'){name='PO '+view.v;sub='Purchase order';}
   if(view.t==='week'){
@@ -2251,7 +2288,11 @@ function renderHead(){
     sub=n===0?'This week':n===1?'Next week':n===-1?'Last week':n>0?`In ${n} weeks`:`${-n} weeks ago`;
   }
   $('#title').textContent=name;$('#eyebrow').innerHTML=sub;
-  $$('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===view.t));
+  // print rules differ by view — an order and a timesheet want opposite things
+  document.body.dataset.view=view.t;
+  // Log and Calendar are the Time tab, so the tab must not go dark on them
+  const tabV=TIMEV.has(view.t)?'time':view.t;
+  $$('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===tabV));
 }
 /* Fifteen days is what a phone can show. A desktop has room for a month, and the
    strip was the only way to reach a date without opening the calendar. */
@@ -2444,6 +2485,167 @@ function rowHTML(t){
       <div class="rright">${t.flagged?'<svg class="flag" viewBox="0 0 20 20"><use href="#i-flag"/></svg>':''}
       ${t.due?`<span class="due ${cls}">${fmtDue(t.due)}</span>`:''}</div></div></div>`;
 }
+/* ============ the three ways of looking at time ============
+   Now answers "what am I on, and what have I done today". That was the whole of
+   it, and it is the right default — but it is bounded at both ends, and the one
+   question it cannot answer is "what did I do", which is the question anyone
+   asks when they come to bill for it. So: Now, a Log of every entry there has
+   ever been, and a Calendar of the hours by month.
+
+   They are three views rather than a mode, for the same reason `week` is: the
+   calendar's month lives in `view.v`, so paging and a re-render agree on which
+   month you were looking at. */
+const TIMEV=new Set(['time','timelog','timecal']);
+/* One row, shared by all three, so an entry looks the same everywhere and there
+   is one place that decides what it says. `from`/`to` are the window it is being
+   listed under: an entry that runs past the end of its own day says which day it
+   landed on, because the day heading counts only its own share of it. */
+function tmRowHTML(x,from,to){
+  const p=x.projectId?P(x.projectId):null;
+  const startedEarlier=from!=null&&x.start<from;
+  const ends=x.end===null?now():x.end;
+  const overruns=to!=null&&ends>to;
+  return `<div class="tmrow" data-tmid="${x.id}">
+    <div class="tmmain"><div class="tt">${esc(x.label)}</div>
+      <div class="meta">
+        <span class="chip">${startedEarlier?`${WD[new Date(x.start).getDay()]} `:''}${hhmm(x.start)}–${x.end===null?'now':hhmm(x.end)}</span>
+        ${overruns&&!startedEarlier?`<span class="tmover">→ ${WD[new Date(ends).getDay()]}</span>`:''}
+        ${p?`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`:''}
+        ${x.taskId&&S.tasks.find(y=>y.id===x.taskId)?`<button class="chip go" data-opentask="${x.taskId}">↗ the task</button>`:''}
+      </div></div>
+    <div class="tmr"><span class="tmdur">${x.end===null?'running':clockHM(elapsed(x))}</span>
+      <button class="tmagain" data-tm="again:${x.id}" aria-label="Start this again">↻</button>
+      <button class="tmdel" data-tm="del:${x.id}" aria-label="Remove this entry">×</button></div></div>`;
+}
+/* Where a stretch of time went, by project — the number an invoice is written
+   from. Shared by the week on Now and the month on the calendar, because "how
+   long is the stretch" is the only difference between them. */
+function tmByProjectHTML(label,lo,hi){
+  const inside=S.times.filter(x=>x.start<hi&&(x.end===null||x.end>lo));
+  if(!inside.length)return '';
+  const by=new Map();
+  for(const x of inside){const k=x.projectId||'';by.set(k,(by.get(k)||0)+overlap(x,lo,hi));}
+  const rows=[...by.entries()].sort((a,b)=>b[1]-a[1]);
+  const total=rows.reduce((n,r)=>n+r[1],0);
+  let h=`<div class="grp">${label}<span class="c">${clockTotal(total)}</span></div><div class="card">`;
+  for(const [pid,ms] of rows){
+    const p=pid?P(pid):null;
+    h+=`<div class="tmrow"><div class="tmmain"><div class="tt">
+      ${p?`<i class="dot" style="background:${p.color}"></i>${esc(p.name)}`:'<span style="color:var(--label3)">No project</span>'}</div></div>
+      <div class="tmr"><span class="tmdur">${clockHM(ms)}</span>
+      <span class="tmbar"><i style="width:${total?Math.round(ms/total*100):0}%;background:${p?p.color:'var(--gray)'}"></i></span></div></div>`;
+  }
+  return h+'</div>';
+}
+/* A day heading in the log or under the calendar. Its total is the day's own
+   share of everything that touches it, which is the same arithmetic the Today
+   card has always used — one idea of what a day's hours are. */
+function tmDayHead(k){
+  const lo=fromISO(k).getTime(),hi=lo+864e5;
+  const ms=S.times.reduce((n,x)=>n+overlap(x,lo,hi),0);
+  const d=fromISO(k),n=diff(k);
+  const name=n===0?'Today':n===-1?'Yesterday':`${WD[d.getDay()]} · ${MO[d.getMonth()]} ${d.getDate()}`;
+  const yr=d.getFullYear()!==new Date().getFullYear()?` ${d.getFullYear()}`:'';
+  return `<div class="grp">${name}${yr}<span class="c">${clockTotal(ms)}</span></div>`;
+}
+/* Every entry there has ever been, newest first, under the day it started on.
+   Ninety days by default and the rest one tap away: the log has to be able to
+   reach back for ever, and it must not render three years of rows to say so.
+   `view.v==='all'` is what has been asked for, kept in the view so a re-render
+   does not quietly fold it back up. */
+function timeLogHTML(){
+  const all=[...S.times].sort((a,b)=>b.start-a.start);
+  if(!all.length)return `<div class="grp">The log<span class="c">nothing yet</span></div>
+    <div class="card"><div class="tmempty">No time has been logged. Start a timer, or add an entry by hand from Now.</div></div>`;
+  const total=all.reduce((n,x)=>n+elapsed(x),0);
+  const cut=midnight().getTime()-90*864e5, capped=view.v!=='all'&&all.some(x=>x.start<cut);
+  const show=capped?all.filter(x=>(x.end===null?now():x.end)>=cut):all;
+  const hidden=all.length-show.length;
+  let h=`<div class="grp">The log<span class="c">${all.length} ${all.length===1?'entry':'entries'} · ${clockTotal(total)}</span></div>`;
+  if(!show.length)h+=`<div class="card"><div class="tmempty">Nothing in the last 90 days.</div></div>`;
+  /* Under every day it touches, not only the one it started on. A day heading
+     counts its own share of a shift that ran past midnight, so listing that
+     shift under the earlier day alone left the later day's total accounting for
+     an entry with no row beneath it. It appears under both, prefixed with the
+     weekday going back and marked with the day it lands on going forward —
+     which is exactly how the Today card has always shown one. */
+  const days=new Map();
+  for(const x of show){
+    /* end-1, so a shift ending exactly at midnight belongs to the day it was
+       worked and not to the next one. The step cap is for a record that cannot
+       be trusted — a timer left running for a year, or a bad merge — which must
+       not turn into a loop that draws three hundred day headings. */
+    const last=iso(new Date(x.end===null?now():Math.max(x.start,x.end-1)));
+    let d=new Date(x.start);
+    for(let n=0;n<32;n++,d=addDays(d,1)){
+      const k=iso(d);
+      if(!days.has(k))days.set(k,[]);
+      days.get(k).push(x);
+      if(k>=last)break;
+    }
+  }
+  for(const k of [...days.keys()].sort().reverse()){
+    const lo=fromISO(k).getTime();
+    h+=tmDayHead(k)+'<div class="card">'
+      +days.get(k).sort((a,b)=>b.start-a.start).map(x=>tmRowHTML(x,lo,lo+864e5)).join('')+'</div>';
+  }
+  if(capped){
+    const first=new Date(all[all.length-1].start);   // sorted newest first, so this is the oldest
+    h+=`<button class="tmmore" data-tm="all">Show the other ${hidden} ${hidden===1?'entry':'entries'}, back to ${MO[first.getMonth()]} ${first.getFullYear()} ›</button>`;
+  }
+  else if(view.v==='all'&&all.length>60)h+=`<button class="tmmore" data-tm="recent">Just the last 90 days</button>`;
+  return h;
+}
+/* A month of hours. Sunday first, to match the week grid and the month calendar
+   — there is one idea in this app of where a week begins. Every day of the month
+   is drawn, empty ones included: a blank Thursday is information. */
+function timeCalHTML(){
+  const base=view.v?fromISO(view.v):new Date(new Date().getFullYear(),new Date().getMonth(),1);
+  const y=base.getFullYear(),m=base.getMonth();
+  const lo=new Date(y,m,1).getTime(),hi=new Date(y,m+1,1).getTime();
+  const days=new Date(y,m+1,0).getDate();
+  const total=S.times.reduce((n,x)=>n+overlap(x,lo,hi),0);
+  const here=y===new Date().getFullYear()&&m===new Date().getMonth();
+  let cells='';
+  for(let i=0;i<new Date(y,m,1).getDay();i++)cells+='<div class="wcell blank"></div>';
+  for(let d=1;d<=days;d++){
+    const k=iso(new Date(y,m,d)),a=fromISO(k).getTime(),b=a+864e5;
+    const touch=S.times.filter(x=>x.start<b&&(x.end===null||x.end>a));
+    const ms=touch.reduce((n,x)=>n+overlap(x,a,b),0);
+    const seen=new Set(),pips=[];
+    for(const x of touch){const p=x.projectId?P(x.projectId):null;const key=p?p.id:'';
+      if(seen.has(key))continue;seen.add(key);
+      if(pips.length<4)pips.push(`<i style="background:${p?p.color:'var(--gray)'}"></i>`);}
+    cells+=`<button class="wcell ${diff(k)===0?'today':''} ${ms?'on':'none'} ${[0,6].includes(new Date(y,m,d).getDay())?'weekend':''} ${selDay===k?'sel':''}"
+      data-day="${k}" aria-label="${WD[new Date(y,m,d).getDay()]} ${MO[m]} ${d}, ${ms?clockHM(ms):'nothing logged'}">
+      <div class="n">${d}</div><div class="pips">${pips.join('')}</div>
+      <div class="ct">${ms?clockCell(ms):''}</div></button>`;
+  }
+  let h=`<div class="weekwrap">
+    <div class="weekbar">
+      <button class="wnav" data-mo="prev" aria-label="Previous month">‹</button>
+      <div class="wlab"><b>${base.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</b><span>${clockTotal(total)} logged</span></div>
+      <button class="wnav" data-mo="next" aria-label="Next month">›</button>
+      ${here?'':'<button class="wnav now" data-mo="now">This month</button>'}
+    </div>
+    <div class="mwd">${['S','M','T','W','T','F','S'].map(d=>`<span>${d}</span>`).join('')}</div>
+    <div class="mgrid">${cells}</div></div>`;
+  /* A tapped day shows its own entries; untapped, the month is worth more as the
+     by-project total, which is what anyone opening a month is actually after. */
+  if(selDay){
+    const a=fromISO(selDay).getTime(),b=a+864e5;
+    // newest first, as on the Today card and in the log — one order everywhere
+    const on=S.times.filter(x=>x.start<b&&(x.end===null||x.end>a)).sort((p,q)=>q.start-p.start);
+    h+=tmDayHead(selDay);
+    h+=on.length?'<div class="card">'+on.map(x=>tmRowHTML(x,a,b)).join('')+'</div>'
+      :`<div class="card"><div class="tmempty">Nothing logged that day.</div></div>`;
+  }else{
+    h+=tmByProjectHTML('By project',lo,hi)
+      ||`<div class="grp">By project<span class="c">0m</span></div>
+         <div class="card"><div class="tmempty">Nothing logged this month.</div></div>`;
+  }
+  return h;
+}
 /* The Time view. Three things and no more: what is running, what you did today,
    and where the week went. Anything else belongs in a timesheet, not here. */
 function timeHTML(){
@@ -2476,43 +2678,14 @@ function timeHTML(){
   const dayTotal=today.reduce((n,x)=>n+overlap(x,t0,t1),0);
   h+=`<div class="grp">Today<span class="c">${clockTotal(dayTotal)}</span><button data-tm="add">Add an entry</button></div>`;
   if(!today.length)h+=`<div class="card"><div class="tmempty">Nothing timed yet today.</div></div>`;
-  else{
-    h+='<div class="card">';
-    for(const x of today){
-      const p=x.projectId?P(x.projectId):null;
-      h+=`<div class="tmrow" data-tmid="${x.id}">
-        <div class="tmmain"><div class="tt">${esc(x.label)}</div>
-          <div class="meta">
-            <span class="chip">${x.start<t0?`${WD[new Date(x.start).getDay()]} `:''}${hhmm(x.start)}–${x.end===null?'now':hhmm(x.end)}</span>
-            ${p?`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`:''}
-          </div></div>
-        <div class="tmr"><span class="tmdur">${x.end===null?'running':clockHM(elapsed(x))}</span>
-          <button class="tmagain" data-tm="again:${x.id}" aria-label="Start this again">↻</button>
-          <button class="tmdel" data-tm="del:${x.id}" aria-label="Remove this entry">×</button></div></div>`;
-    }
-    h+='</div>';
-  }
+  else h+='<div class="card">'+today.map(x=>tmRowHTML(x,t0,t1)).join('')+'</div>';
   // the week, by project — the number you actually invoice from
   const wk=weekDays(),lo=fromISO(iso(wk[0])).getTime(),hi=fromISO(iso(wk[6])).getTime()+864e5;
-  const inWeek=S.times.filter(x=>x.start<hi&&(x.end===null||x.end>lo));
-  if(inWeek.length){
-    const by=new Map();
-    for(const x of inWeek){
-      const k=x.projectId||'';
-      by.set(k,(by.get(k)||0)+overlap(x,lo,hi));
-    }
-    const rows=[...by.entries()].sort((a,b)=>b[1]-a[1]);
-    const total=rows.reduce((n,r)=>n+r[1],0);
-    h+=`<div class="grp">This week<span class="c">${clockTotal(total)}</span></div><div class="card">`;
-    for(const [pid,ms] of rows){
-      const p=pid?P(pid):null;
-      h+=`<div class="tmrow"><div class="tmmain"><div class="tt">
-        ${p?`<i class="dot" style="background:${p.color}"></i>${esc(p.name)}`:'<span style="color:var(--label3)">No project</span>'}</div></div>
-        <div class="tmr"><span class="tmdur">${clockHM(ms)}</span>
-        <span class="tmbar"><i style="width:${Math.round(ms/total*100)}%;background:${p?p.color:'var(--gray)'}"></i></span></div></div>`;
-    }
-    h+='</div>';
-  }
+  h+=tmByProjectHTML('This week',lo,hi);
+  /* Now is bounded at today and this week, so on its own it hides everything
+     before them. It must say where the rest is rather than leave it to be found. */
+  const older=S.times.filter(x=>x.start<lo).length;
+  if(older)h+=`<button class="tmmore" data-v="timelog">${older} earlier ${older===1?'entry':'entries'} in the log ›</button>`;
   return h;
 }
 /* Every purchase order, gathered. A PO is the one identifier that crosses
@@ -2868,7 +3041,17 @@ function renderList(){
   rowCtx=view.t+'|'+iso(midnight())+'|'+S.projects.map(p=>p.id+p.u).join(',')
     +'|'+(r_?r_.taskId:'')+'|'+timeVer;
   const chunk=(name,h)=>{if(h)out.push(...slot(name,h));};
-  if(view.t==='time'&&!query){chunk('time',timeHTML());patch(el,out);syncTick();return;}
+  /* The three time views, side by side at the top of each, for the same reason
+     Scheduled and Week are: a view nobody can find is not a view, and the
+     sidebar and the palette are both out of reach on a phone. */
+  if(TIMEV.has(view.t)&&!query){
+    chunk('tmmode',`<div class="seg listseg" role="tablist">
+      <button data-v="time" ${view.t==='time'?'class="on" aria-selected="true"':''} role="tab">Now</button>
+      <button data-v="timelog" ${view.t==='timelog'?'class="on" aria-selected="true"':''} role="tab">Log</button>
+      <button data-v="timecal" ${view.t==='timecal'?'class="on" aria-selected="true"':''} role="tab">Calendar</button></div>`);
+    chunk('time',view.t==='timelog'?timeLogHTML():view.t==='timecal'?timeCalHTML():timeHTML());
+    patch(el,out);syncTick();return;
+  }
   if(view.t==='pos'&&!query){chunk('pos',posHTML());patch(el,out);return;}
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
   if(view.t==='project')chunk('phead',projectHead());
@@ -3405,6 +3588,13 @@ function clockHM(ms){
 }
 // A heading counts a day that may hold nothing, where "under a minute" is a lie.
 const clockTotal=ms=>ms<1000?'0m':clockHM(ms);
+/* A calendar cell is about four characters wide, so "2h 45m" does not fit and
+   "under a minute" is out of the question. Whole hours drop the minutes. */
+function clockCell(ms){
+  const m=Math.round(ms/60000);
+  if(m<60)return m<1?'·':`${m}m`;
+  return m%60?`${Math.floor(m/60)}h${String(m%60).padStart(2,'0')}`:`${Math.floor(m/60)}h`;
+}
 /* Money, plainly. No currency symbol is stored — this is one business in one
    country, and guessing wrong is worse than not guessing at all. */
 const money=n=>n==null?'':n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -5039,6 +5229,8 @@ $('#list').addEventListener('click',e=>{
     const [k,arg]=tm.dataset.tm.split(':');
     if(k==='stop')return stopTimer();
     if(k==='add')return openNewEntry();
+    // how far back the log reaches, kept in the view so a re-render honours it
+    if(k==='all'||k==='recent'){view.v=k==='all'?'all':undefined;renderList();$('#scroll').scrollTop=0;buzz(4);return;}
     if(k==='open')return openDetail(arg);
     if(k==='start'){
       const what=$('#tmwhat');
@@ -5076,6 +5268,17 @@ $('#list').addEventListener('click',e=>{
   const ep=e.target.closest('[data-editproj]');if(ep)return openProject(ep.dataset.editproj);
   if(e.target.closest('[data-editmaker]'))return openMaker(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
+  /* Paging keeps the month in view.v for the same reason the week does: a
+     re-render, and the pull that provoked it, must land on the month you were
+     looking at rather than back on this one. */
+  const mo=e.target.closest('[data-mo]');
+  if(mo){
+    const k=mo.dataset.mo;
+    if(k==='now')view.v=undefined;
+    else{const b=view.v?fromISO(view.v):new Date(new Date().getFullYear(),new Date().getMonth(),1);
+      view.v=iso(new Date(b.getFullYear(),b.getMonth()+(k==='prev'?-1:1),1));}
+    selDay=null;buzz(4);renderList();$('#scroll').scrollTop=0;return;
+  }
   const wk=e.target.closest('[data-wk]');
   if(wk){
     const k=wk.dataset.wk;
@@ -5342,6 +5545,7 @@ function paletteRows(q){
   for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],['week','Week',I.today,'var(--teal)'],
     ['flagged','Flagged',I.flag,'var(--orange)'],['waiting','Whose move',I.clock,'var(--pink)'],['shipments','Shipments',I.truck,'var(--purple)'],
     ['all','All open',I.list,'var(--gray)'],['time','Time',I.clock,'var(--green)'],
+    ['timelog','Time log',I.clock,'var(--green)'],['timecal','Time calendar',I.today,'var(--green)'],
     ['pos','Purchase orders',I.box,'var(--pink)'],['done','Completed',I.check,'var(--green)'],
     ['projects','Projects',I.box,'var(--indigo)'],['archive','Archived',I.box,'var(--label3)']])
     push(l,'View',ico,col,()=>setView(v));

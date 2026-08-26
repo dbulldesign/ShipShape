@@ -267,6 +267,44 @@ answer.
   — a guess close enough to correct rather than a blank to fill in — and takes the
   project you were looking at, if you were looking at one.
 
+## Three ways of looking at time
+
+Now, Log and Calendar — three real views (`time`, `timelog`, `timecal`), not a
+mode, for the same reason `week` is: the calendar's month lives in `view.v`, so
+paging and the re-render a background pull provokes agree on which month you were
+looking at. They sit behind one segmented control at the top of each, like
+Scheduled and Week, and behind one sidebar entry and one tab — `TIMEV` is what
+the head, the nav and the tab all ask, or Log and Calendar leave the Time tab
+looking unselected.
+
+Now was the whole of the tracker and is still the right default, but it is
+bounded at today and this week, and the question it cannot answer is "what did I
+do", which is the question anyone asks when they come to bill for it. It says how
+many entries lie before its own horizon and leads to them, rather than leaving
+them to be found.
+
+- **One row shared by all three** (`tmRowHTML`), so an entry reads the same
+  everywhere and one place decides what it says.
+- A day heading counts the day's **own share** of everything that touches it —
+  the same `overlap` the Today card has always used. So the log lists an entry
+  under **every day it touches**, not the day it started: a shift from 22:00 to
+  01:30 under the earlier day alone left the later day's total accounting for an
+  entry with no row beneath it. It appears under both, prefixed with the weekday
+  going back and marked `→ Wed` going forward, which is how the Today card has
+  always shown one. The day-expansion loop is capped: a timer left running for a
+  year must not draw three hundred day headings.
+- `end-1` when working out the last day an entry touches, or a shift ending
+  exactly at midnight is filed under a day nobody worked.
+- Newest first, in the log, on Today and under a tapped calendar day. One order.
+- The log reaches back for ever but draws 90 days, and `view.v==='all'` is what
+  has been asked for — kept in the view so a re-render does not fold it up again.
+- A month cell is about four characters wide, which is why `clockCell` exists
+  and `clockHM` will not do: `2h45` fits where `2h 45m` does not.
+- **Printing the log is a timesheet**, which is a thing anyone wants on paper. The
+  print rules were written for the purchase order, which hides `.grp` and
+  `.chip.go` — exactly what a timesheet needs. `body[data-view]` scopes the
+  exception, so the log puts both back without touching the order's own rules.
+
 ## Waiting on someone
 
 `t.wait` says whose move it is; `waitAt` is when it became theirs. Without the
