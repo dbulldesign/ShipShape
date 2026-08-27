@@ -119,6 +119,36 @@ the one they started from.
 Absence is not an instruction: deleting `!` from a title does not unflag, and
 deleting a date does not clear the due date. Only what is present is applied.
 
+## Invoices, and a flag with three states
+
+The word does the work. `INV_RE` matches `invoice`, `invoices`, `invoiced`,
+`invoicing` — and unlike a PO or a date, **the word stays in the title**. "Send
+the deposit invoice to accounting" is a sentence and the word is its object, not
+notation attached to it; taking it out would leave "Send the deposit to
+accounting", which says something else. There is no invoice number: a PO already
+covers "a number that gathers several things", and an invoice here has none worth
+parsing.
+
+`t.inv` is tri-state, and that is the whole design:
+
+- `true` — the parser saw the word, or the box was ticked by hand.
+- `false` — somebody cleared the box. It stays cleared **even though the title
+  still says "invoice"**, which is the case a boolean could not express.
+- unset — nobody has said, so `isInvoice()` reads the title.
+
+So the tab works on everything already written without migration touching a
+single record, and `migrate()` deliberately only *shapes* the field rather than
+inferring it — a back-fill guarded the way the PO one is (`if(!t.po)`) would undo
+a cleared box on every load.
+
+The Invoices tab replaced All open in the bottom bar, which is the only place it
+was removed from: the view, its sidebar entry and its palette entry all remain,
+and `revealTask()` still lands there.
+
+It **shows completed ones**, like the PO page: "have I invoiced this yet" is the
+question, and an invoice that has been sent and hidden makes the answer look like
+no. They fall into the Completed group at the bottom on their own.
+
 ## Reading a date out of a line
 
 `extractDate` takes the first pattern that matches, so the list is ordered by

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.47.0">
+<meta name="app-version" content="1.48.0">
 <meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -789,6 +789,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="dremind">Remind me</label><select id="dremind"></select></div>
     <div class="field"><label for="drep">Repeats</label><select id="drep"></select></div>
     <div class="field"><label for="dflag">Flagged</label><input id="dflag" type="checkbox" style="flex:none;width:auto;transform:scale(1.2);accent-color:var(--orange)"></div>
+    <div class="field"><label for="dinv">Invoice</label><input id="dinv" type="checkbox" style="flex:none;width:auto;transform:scale(1.2);accent-color:var(--teal)"></div>
     <div class="field"><label for="dwait">Waiting on</label><select id="dwait"></select></div>
     <div class="field" id="dtimerow"><label>Time</label><span id="dtime" style="flex:1"></span>
       <button class="btn sec" id="dtimebtn" style="margin:0;font-size:13.5px;padding:6px 12px">Start</button></div>
@@ -836,7 +837,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <button class="tab" data-v="scheduled"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm1 5a1 1 0 1 0-2 0v5.3l3.5 2.4a1 1 0 0 0 1.1-1.6L13 11.4V7Z"/></svg><span>Scheduled</span></button>
   <button class="tab" data-v="projects"><svg viewBox="0 0 24 24"><path d="M4 4h6l1.6 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg><span>Projects</span></button>
   <button class="tab" data-v="shipments"><svg viewBox="0 0 24 24"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h7A2.5 2.5 0 0 1 14 6.5V8h3l4 4.5V17h-2.1a2.9 2.9 0 0 1-5.8 0H9.9a2.9 2.9 0 0 1-5.8 0H2V6.5Z"/></svg><span>Shipments</span></button>
-  <button class="tab" data-v="all"><svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Zm0 6h16a1 1 0 1 1 0 2H4a1 1 0 1 1 0-2Z"/></svg><span>All</span></button>
+  <button class="tab" data-v="invoices"><svg viewBox="0 0 24 24"><path d="M5 2h14a1 1 0 0 1 1 1v18.2a.8.8 0 0 1-1.2.7L16 20l-2.4 1.8a1 1 0 0 1-1.2 0L10 20l-2.4 1.8a1 1 0 0 1-1.2 0L4 20.2V3a1 1 0 0 1 1-1Zm2.5 5h9v1.8h-9V7Zm0 4h9v1.8h-9V11Zm0 4h5.5v1.8H7.5V15Z"/></svg><span>Invoices</span></button>
   <button class="tab" data-v="pos"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13.5A1.5 1.5 0 0 1 18.5 22h-13A1.5 1.5 0 0 1 4 20.5v-17A1.5 1.5 0 0 1 5.5 2H6Zm8 1.8V8h4.2L14 3.8ZM7.5 11h9v1.8h-9V11Zm0 4h9v1.8h-9V15Z"/></svg><span>POs</span></button>
   <button class="tab" data-v="time"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm1 3a1 1 0 1 0-2 0v5.4l3.4 2a1 1 0 1 0 1-1.7L13 11.4V7Z"/></svg><span>Time</span></button>
   <button class="tab" data-v="board"><svg viewBox="0 0 24 24"><path d="M5 4h5.5v7H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8.5 0H19a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1h-5.5V4ZM5 13.5h5.5V20H5a1 1 0 0 1-1-1v-4.5a1 1 0 0 1 1-1Zm8.5-1H19a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-5.5v-7.5Z"/></svg><span>Board</span></button>
@@ -1393,6 +1394,11 @@ function migrate(){
     t.rep=REPS.some(r=>r[0]===t.rep)?t.rep:null;t.arch=t.arch||null;
     t.remind=Number.isFinite(t.remind)&&t.remind>0?t.remind:null;
     t.wait=['me','them'].includes(t.wait)?t.wait:null;
+    /* Shaped, never inferred. A true or a false here is somebody's decision and
+       migration has no business overwriting it; anything else means nobody has
+       said, and isInvoice() reads the title instead — so there is nothing to
+       back-fill and no way for a load to undo a box somebody cleared. */
+    t.inv=t.inv===true?true:t.inv===false?false:null;
     // when it started waiting, so "how long has this been sitting" has an answer
     t.waitAt=t.wait?(Number.isFinite(t.waitAt)?t.waitAt:(t.u||now())):null;
     /* A PO already sitting in a title, from before the composer learned to read
@@ -2081,6 +2087,20 @@ function extractDate(text){
    number or a phone number, not a PO, and half-eating it would be worse than
    ignoring it. */
 const PO_RE=/\bp\.?o\.?[\s#:]*(\d{5})(?!\d)/i;
+/* An invoice is the other thing this business writes down constantly, and unlike
+   a PO it has no number worth parsing — the word itself is the whole signal.
+   Which is why, unlike a PO or a date, **the word stays in the title**: "Send the
+   deposit invoice to accounting" is a sentence, and the word is its object rather
+   than notation attached to it. Taking it out would leave "Send the deposit to
+   accounting", which says something else. */
+const INV_RE=/\binvoic(?:e|es|ed|ing)\b/i;
+/* Three states, not two. `true` and `false` are somebody's decision — the parser
+   noticed the word, or the checkbox was ticked or cleared by hand. Unset means
+   nobody has said, so the title is asked instead, which is what makes the tab
+   work on everything already written without a migration touching a single
+   record. Clearing the box therefore sticks, even on a task whose title still
+   says "invoice". */
+const isInvoice=t=>t.inv===true||(t.inv==null&&INV_RE.test(t.title||''));
 /* Left behind where something has already been lifted out. It has to be visible
    to what runs next rather than blanked to a space: the date parser refuses a
    date that opens the line, and "PO 41785 oct 15" would otherwise look as though
@@ -2103,6 +2123,8 @@ function parseInput(raw){
   const d=extractDate(text);
   if(d){due=iso(d.date);text=text.slice(0,d.index)+' '+text.slice(d.index+d.text.length);}
   if(/\s!\s/.test(text)){flagged=true;text=text.replace(/\s!\s/g,' ');}
+  // read, not removed — see INV_RE. The word belongs to the sentence.
+  const inv=INV_RE.test(text);
   const out={project:'',manufacturer:'',destination:''};
   /* A marker only counts at the start of a word. Without that, "Email
      dana@luminastudio.com about it" made a maker called "luminastudio.com about
@@ -2122,7 +2144,7 @@ function parseInput(raw){
   /* Typing nothing but the number is a real way to work — the PO arrives before
      anyone has decided what to call the line — and the composer will not submit
      without a title, so the number becomes one. */
-  return {title:title||(po?'PO '+po:'')||(link?linkKind(link).label:''),due,flagged,po,link,...out};
+  return {title:title||(po?'PO '+po:'')||(link?linkKind(link).label:''),due,flagged,po,link,inv,...out};
 }
 
 /* ============ helpers ============ */
@@ -2138,7 +2160,7 @@ function stats(pid){
     late:all.filter(t=>!t.done&&t.due&&diff(t.due)<0).length};
 }
 /* Search understands a few filters alongside free text:
-   is:shipment  is:task  is:done  is:flagged  is:archived  is:repeating
+   is:shipment  is:task  is:done  is:flagged  is:archived  is:repeating  is:invoice
    is:latemaker  late:  stage:shipped
    maker:lumina  to:chicago  project:harbor  po:4417                        */
 function parseQuery(q){
@@ -2192,6 +2214,7 @@ function matches(t){
     if(v==='flagged'&&!t.flagged)return false;
     if(v==='archived'&&!t.arch)return false;
     if(v==='repeating'&&!t.rep)return false;
+    if(v==='invoice'&&!isInvoice(t))return false;
     if(v==='latemaker'&&!makerLate(t))return false;
   }
   if(f.late&&!(t.due&&!t.done&&diff(t.due)<0))return false;
@@ -2226,6 +2249,10 @@ function filtered(){
   else if(v.t==='flagged')a=a.filter(t=>!t.done&&t.flagged);
   else if(v.t==='waiting')a=a.filter(t=>!t.done&&t.wait);
   else if(v.t==='all')a=a.filter(t=>!t.done);
+  /* Done ones stay: "have I invoiced this yet" is the question, and an invoice
+     that has been sent and hidden makes the answer look like no. They fall into
+     the Completed group at the bottom on their own. */
+  else if(v.t==='invoices')a=a.filter(isInvoice);
   else if(v.t==='done')a=a.filter(t=>t.done);
   else if(v.t==='shipments')a=a.filter(t=>!t.done&&t.type==='shipment');
   else if(v.t==='project')a=a.filter(t=>t.projectId===v.v);
@@ -2325,6 +2352,8 @@ function renderNav(){
    h+=navItem(I.clock,e?'var(--green)':'var(--label3)','Time',e?'●':'',TIMEV.has(view.t),'data-v="time"');}
   {const n=new Set(S.tasks.filter(t=>!t.done&&!t.arch&&poKey(t)).map(poKey)).size;
    if(n||view.t==='pos')h+=navItem(I.box,'var(--pink)','Purchase orders',n,view.t==='pos','data-v="pos"');}
+  {const n=openT().filter(t=>!t.arch&&isInvoice(t)).length;
+   if(n||view.t==='invoices')h+=navItem(I.check,'var(--teal)','Invoices',n,view.t==='invoices','data-v="invoices"');}
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
   if(S.tasks.some(t=>t.arch))h+=navItem(I.box,'var(--label3)','Archived','',view.t==='archive','data-v="archive"');
   h+=navItem(I.list,'var(--yellow)','Everything Board','',view.t==='board','data-v="board"');
@@ -2346,7 +2375,7 @@ function renderNav(){
   $('#navlists').innerHTML=h;
   rollCounts();
 }
-const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',timelog:'Time',timecal:'Time',pos:'POs',all:'All open',done:'Completed',
+const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',timelog:'Time',timecal:'Time',pos:'POs',invoices:'Invoices',all:'All open',done:'Completed',
   projects:'Projects',shipments:'Shipments',archive:'Archived'};
 function renderHead(){
   const d=new Date();
@@ -2361,6 +2390,7 @@ function renderHead(){
   if(view.t==='timelog')sub='Every entry';
   if(view.t==='timecal')sub='Hours by month';
   if(view.t==='pos')sub='Everything on order';
+  if(view.t==='invoices')sub='Everything invoiced';
   if(view.t==='po'){name='PO '+view.v;sub='Purchase order';}
   if(view.t==='week'){
     name=weekLabel(view.v);
@@ -2516,6 +2546,9 @@ function rowHTML(t){
      the search that gathers them rather than just stating the number. */
   if(t.po)chips.push(`<button class="chip go" data-q="po:${esc(t.po.trim())}"
     aria-label="Show everything on this PO">${/^p\.?o\b/i.test(t.po.trim())?'':'PO '}${esc(t.po)}</button>`);
+  // not on the Invoices view itself, where every row would carry the same chip
+  if(view.t!=='invoices'&&isInvoice(t))chips.push(`<button class="chip go" data-v="invoices"
+    aria-label="Show every invoice">🧾 Invoice</button>`);
   if(t.rep)chips.push(`<span class="chip">↻ ${REP_SHORT[t.rep]}</span>`);
   /* Whose move, on the row: the whole value of recording it is not having to open
      anything to see it. "Them" is the one that needs chasing, so it is the one
@@ -3015,7 +3048,10 @@ function emptyHTML(){
     dest:['🚚','Nothing going here','No open shipment has this destination.',
       [A('Add shipment'),G('shipments','All shipments')]],
     po:['🧾','Nothing left on this order','Every item that carried this number has gone.',
-      [G('pos','All purchase orders')]]}[view.t]
+      [G('pos','All purchase orders')]],
+    // The word does the work, so the empty state is the place to say so
+    invoices:['🧾','No invoices yet','Write <b>invoice</b> anywhere in a task and it lands here. Or tick Invoice on any task in its detail sheet.',
+      [A(),G('all','Show everything open')]]}[view.t]
     ||['📋','Nothing here','Nothing to show in this view.',[A()]];
   return wrap(m[0],m[1],m[2],m[3]);
 }
@@ -3274,6 +3310,8 @@ function addTask(d){
   const t={id:uid(),title:d.title,type:d.type||'task',projectId:findProjectId(d.project),
     manufacturer:canonMaker(d.manufacturer),destination:d.destination||'',
     tracking:d.tracking||'',carrier:d.carrier||'',po:d.po||'',
+    // only ever true or unset from here: false is reserved for "no, it is not"
+    inv:d.inv?true:null,
     tracks:d.tracking?[{id:uid(),n:d.tracking,carrier:d.carrier||'',got:null}]:[],
     due:d.due||null,stage:0,flagged:!!d.flagged,notes:'',done:false,rep:null,arch:null,
     links:d.link?[{id:uid(),url:d.link,title:'',at:now()}]:[],
@@ -4146,6 +4184,9 @@ function openDetail(id){
   showKind(t);
   $('#dtitle').value=t.title;detailTitle0=t.title;$('#ddue').value=t.due||'';
   $('#dflag').checked=t.flagged;$('#dnotes').value=t.notes||'';
+  // shows what isInvoice() currently concludes, whether that came from the word
+  // in the title or from this box; ticking or clearing it makes the answer explicit
+  $('#dinv').checked=isInvoice(t);
   $('#dmfr').value=t.manufacturer||'';$('#ddest').value=t.destination||'';
   $('#dpo').value=t.po||'';$('#dqty').value=t.qty||'';$('#deta').value=t.eta||'';
   $('#dcost').value=t.cost==null?'':t.cost;
@@ -4196,7 +4237,10 @@ function openBoard(hash){
 function syncBoard(){
   const on=view.t==='board';
   document.body.toggleAttribute('data-board',on);
-  document.body.toggleAttribute('data-own',view.t==='time'||view.t==='pos');
+  // views that draw their own thing rather than a sorted, grouped task list —
+  // all three time views, not just Now, or Log and Calendar offer a sort control
+  // over rows no sort applies to
+  document.body.toggleAttribute('data-own',TIMEV.has(view.t)||view.t==='pos');
   if(!on){document.body.removeAttribute('data-boardmodal');return;}
   const f=$('#boardframe');
   // ?embed=1 is what tells the board to drop its own chrome. A deep link
@@ -4565,6 +4609,7 @@ function saveDetail(){
   t.title=$('#dtitle').value.trim()||t.title;
   t.due=$('#ddue').value||null;
   t.flagged=$('#dflag').checked;t.notes=$('#dnotes').value;
+  t.inv=$('#dinv').checked;                 // explicit either way once the sheet has been open
   {const w=$('#dwait').value||null;
    if(w!==t.wait)t.waitAt=w?now():null;      // the clock restarts when the answer changes
    t.wait=w;}
@@ -4617,7 +4662,7 @@ function readTitleNotation(t){
      keys off the maker this may have set. */
   const snap={title:t.title,projectId:t.projectId,due:t.due,po:t.po,
     manufacturer:t.manufacturer,destination:t.destination,flagged:t.flagged,
-    type:t.type,eta:t.eta,links:linksOf(t).slice()};
+    inv:t.inv,type:t.type,eta:t.eta,links:linksOf(t).slice()};
   const got=[];let took=false;
   if(fresh('project')){
     t.projectId=findProjectId(np.project);
@@ -4636,6 +4681,8 @@ function readTitleNotation(t){
   }
   // a flag is a fact about the task; the absence of "!" is not "unflag it"
   if(np.flagged&&!op.flagged){t.flagged=true;$('#dflag').checked=true;got.push('flagged');took=true;}
+  // the word arriving in the title is a statement; the word leaving is not
+  if(np.inv&&!op.inv){t.inv=true;$('#dinv').checked=true;got.push('an invoice');took=true;}
   if(fresh('link')&&addLink(t,np.link,'')){renderLinks(t);got.push(linkKind(np.link).label);took=true;}
   if(!took)return;
   /* A maker, a destination or a PO all mean something has been ordered, so the
@@ -5696,7 +5743,8 @@ function paletteRows(q){
     ['flagged','Flagged',I.flag,'var(--orange)'],['waiting','Whose move',I.clock,'var(--pink)'],['shipments','Shipments',I.truck,'var(--purple)'],
     ['all','All open',I.list,'var(--gray)'],['time','Time',I.clock,'var(--green)'],
     ['timelog','Time log',I.clock,'var(--green)'],['timecal','Time calendar',I.today,'var(--green)'],
-    ['pos','Purchase orders',I.box,'var(--pink)'],['done','Completed',I.check,'var(--green)'],
+    ['pos','Purchase orders',I.box,'var(--pink)'],['invoices','Invoices',I.check,'var(--teal)'],
+    ['done','Completed',I.check,'var(--green)'],
     ['projects','Projects',I.box,'var(--indigo)'],['archive','Archived',I.box,'var(--label3)']])
     push(l,'View',ico,col,()=>setView(v));
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
