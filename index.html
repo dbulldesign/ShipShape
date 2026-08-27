@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.48.0">
+<meta name="app-version" content="1.49.0">
 <meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -740,7 +740,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <header id="head">
       <div class="hrow">
         <h1><span class="sub" id="eyebrow">Today</span><span class="nm" id="title">Today</span></h1>
-        <div class="hctl"><select id="hsort" aria-label="Sort by"></select><select id="hgroup" aria-label="Group by"></select></div>
+        <div class="hctl"><select id="hsort" aria-label="Sort by"></select><select id="hgroup" aria-label="Group by"></select><select id="hpsort" aria-label="Sort projects by"></select></div>
         <button id="runchip" class="off" data-v="time">
           <span class="pulse"></span><span id="runchiplabel"></span><span id="runchiptime"></span></button>
         <button class="iconbtn" id="calBtn" aria-label="Open the calendar"><svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.5A2.5 2.5 0 0 1 21 6.5v12A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-12A2.5 2.5 0 0 1 5.5 4H6V3a1 1 0 0 1 1-1ZM5 9v9.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V9H5Zm2.5 2h3v3h-3v-3Z"/></svg></button>
@@ -870,6 +870,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="fgroup">
     <div class="field"><label for="setsort">Sort</label><select id="setsort"></select></div>
     <div class="field"><label for="setgroup">Group</label><select id="setgroup"></select></div>
+    <div class="field"><label for="setpsort">Projects</label><select id="setpsort"></select></div>
   </div>
   <div class="fxg"><div class="lab2">Row height</div><div class="seg" id="set-rows"></div></div>
   <div class="fxg"><div class="lab2">“Last seven days” on Today</div><div class="seg" id="set-digest"></div></div>
@@ -1204,6 +1205,12 @@ const local={
 const STAGES=['Quote','Ordered','Making','Shipped','Delivered'];
 const SORTS=['smart','due','added','title','stage'];
 const SORT_LABEL={smart:'Smart',due:'Due date',added:'Recently added',title:'Title',stage:'Stage'};
+/* Projects get their own sort, because none of the task sorts mean anything for
+   one: a project has no stage and no "smart". `order` is the order they were made
+   in, which is what the list always did, so it stays the default and nobody's
+   list moves under them. */
+const PSORTS=['order','name','due','open','progress'];
+const PSORT_LABEL={order:'As listed',name:'Name',due:'Target date',open:'Most open',progress:'Least done'};
 const GROUPS=['auto','project','maker','stage','wait','none'];
 const GROUP_LABEL={auto:'By date',project:'By project',maker:'By maker',stage:'By stage',
   wait:'By whose move',none:'No grouping'};
@@ -1313,7 +1320,7 @@ function trackInfo(t){
 let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
-let sortBy='smart',groupBy='auto',compact=false,sfx=false,digestOff=false,streakOn=false,chaseAfter=7;
+let sortBy='smart',groupBy='auto',projSort='order',compact=false,sfx=false,digestOff=false,streakOn=false,chaseAfter=7;
 // how finishing something is marked; per device, like every other look-and-feel pref
 let fx={style:'confetti',when:'all',amount:'medium'};
 // draft holds what has been typed into the sync sheet but not turned on yet
@@ -1331,7 +1338,7 @@ function fmtAgo(ts){
   return `${Math.round(s/86400)} d ago`;
 }
 let view={t:'today'},query='',selDay=null,editing=null,editProj=null,attachTo=null,
-    cflag=false,ctype='task',ctypeManual=false,undoFn=null,undoStack=[],saveT=null,pcolor=PAL[0],ctx=null,editMaker=null,
+    cflag=false,ctype='task',ctypeManual=false,cpoManual=false,undoFn=null,undoStack=[],saveT=null,pcolor=PAL[0],ctx=null,editMaker=null,
     syncStatus='off',pulling=false,pushT=null,pollT=null,
     sw=null;   // the row a finger is currently dragging, if any
 
@@ -1365,6 +1372,7 @@ async function loadAll(){
   if(vr){try{const v=JSON.parse(vr);
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
     if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;
+    if(PSORTS.includes(v.projSort))projSort=v.projSort;
     compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;streakOn=!!v.streakOn;
     if(CHASE_DAYS.some(c=>c[0]===v.chaseAfter))chaseAfter=v.chaseAfter;
     if(v.fx){
@@ -1517,7 +1525,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();}
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,compact,sfx,digestOff,streakOn,chaseAfter,fx}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,projSort,compact,sfx,digestOff,streakOn,chaseAfter,fx}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -2153,6 +2161,28 @@ const P=id=>S.projects.find(p=>p.id===id);
 function colorFor(n){if(!n)return 'var(--gray)';let h=0;for(let i=0;i<n.length;i++)h=(h*31+n.charCodeAt(i))>>>0;return PAL[h%PAL.length];}
 const uniq=k=>[...new Set(S.tasks.map(t=>t[k]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 const projectOf=t=>t.projectId?P(t.projectId):null;
+/* The projects list, in whatever order has been asked for. Used by the Projects
+   view and by the sidebar, so the two never disagree about where a job sits. The
+   `<select>` pickers keep the plain order on purpose: a dropdown that reshuffles
+   because a list preference changed is a worse dropdown.
+
+   Sorted on a copy — sorting S.projects itself would make a display preference
+   rewrite the record and push the whole list to every other device. */
+function sortedProjects(){
+  const a=S.projects.slice();
+  if(projSort==='name')return a.sort((x,y)=>(x.name||'').localeCompare(y.name||''));
+  // undated last, rather than first, which is what an empty string would sort as
+  if(projSort==='due')return a.sort((x,y)=>(x.due?0:1)-(y.due?0:1)||(x.due<y.due?-1:x.due>y.due?1:0)
+    ||(x.name||'').localeCompare(y.name||''));
+  if(projSort==='open')return a.sort((x,y)=>stats(y.id).open-stats(x.id).open
+    ||(x.name||'').localeCompare(y.name||''));
+  // least done first: the ones with work left in them are the ones you came for.
+  // An empty project has no progress to report, so it goes to the bottom.
+  if(projSort==='progress')return a.sort((x,y)=>{
+    const sx=stats(x.id),sy=stats(y.id);
+    return (sx.all?0:1)-(sy.all?0:1)||sx.pct-sy.pct||(x.name||'').localeCompare(y.name||'');});
+  return a;
+}
 function stats(pid){
   const all=S.tasks.filter(t=>t.projectId===pid),done=all.filter(t=>t.done).length;
   return{all:all.length,done,open:all.length-done,pct:all.length?done/all.length:0,
@@ -2320,6 +2350,12 @@ function renderData(){
   $('#l-dest').innerHTML=uniq('destination').map(v=>`<option value="${esc(v)}">`).join('');
   $('#hsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
   $('#hgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
+  $('#hpsort').innerHTML=PSORTS.map(v=>`<option value="${v}" ${v===projSort?'selected':''}>${PSORT_LABEL[v]}</option>`).join('');
+  /* The Projects view is a list of projects, so it gets the project sort and not
+     the task one — a Stage or a Group control there sorts nothing. */
+  {const proj=view.t==='projects';
+   $('#hsort').style.display=$('#hgroup').style.display=proj?'none':'';
+   $('#hpsort').style.display=proj?'':'none';}
   if($('#setsheet').classList.contains('on'))renderSettings();
   $('#storeNote').textContent=sync.on?'Synced through your own Supabase project.'
     :CLOUD?'Saving to your Claude account.':'Saving on this device. Turn on sync to share across devices.';
@@ -2359,7 +2395,7 @@ function renderNav(){
   h+=navItem(I.list,'var(--yellow)','Everything Board','',view.t==='board','data-v="board"');
   h+='<div class="navsec">Projects<button data-m="newproj">+ New</button></div>';
   if(!S.projects.length)h+='<div style="padding:2px 12px 4px;font-size:13.5px;color:var(--label3)">No projects yet</div>';
-  for(const p of S.projects){
+  for(const p of sortedProjects()){
     const s=stats(p.id);
     h+=`<button class="nav ${view.t==='project'&&view.v===p.id?'on':''}" data-v="project" data-val="${p.id}">
       <svg class="ring" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" stroke="var(--fill)"/>
@@ -2902,7 +2938,7 @@ function projectsHTML(){
     <div><button class="btn" data-m="newproj">New project</button></div>
     <div><button class="btn ghost" data-m="sample">Load a sample setup</button></div></div>`;
   let h=`<div class="grp">Projects<span class="c">${S.projects.length}</span><button data-m="newproj">New project</button></div><div class="card">`;
-  for(const p of S.projects){
+  for(const p of sortedProjects()){
     const s=stats(p.id);
     h+=`<div class="rowwrap"><div class="row" data-open="${p.id}">
       <svg class="ring" viewBox="0 0 20 20" style="width:24px;height:24px;margin-top:2px"><circle cx="10" cy="10" r="8" stroke="var(--fill)"/>
@@ -4054,7 +4090,7 @@ function setType(t){
 }
 function openComposer(force){
   rememberFocus();$('#scrim').classList.add('on');$('#composer').classList.add('on');
-  cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;
+  cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;cpoManual=false;
   ctx=composerCtx();
   // an explicit choice from the + menu outranks what the view implies
   if(force){ctx.type=force;ctypeManual=true;}
@@ -4084,7 +4120,8 @@ function composed(){
     manufacturer:p.manufacturer||c.manufacturer,
     destination:p.destination||c.destination,
     tracking:$('#ctrack').value.trim()||c.tracking||'',
-    po:$('#cpo').value.trim()||p.po||'',
+    // once the field has been touched it is the answer, empty included
+    po:cpoManual?$('#cpo').value.trim():(p.po||''),
     link:p.link||'',
     carrier:$('#ccarrier').value,
     due:p.due||c.due};
@@ -4124,6 +4161,15 @@ document.addEventListener('keydown',e=>{
 },true);
 function updatePreview(){
   const p=composed();
+  /* A number picked out of the line goes into the PO field as well as the chip.
+     The chip alone said the number had been understood while the field it belongs
+     in sat there empty, which reads as though it had not been.
+
+     Touching the field hands it over for good — `cpoManual`, the same bargain
+     `ctypeManual` makes for the Task/Shipment toggle. Without that, correcting
+     the number by hand would be undone by the next keystroke in the title, and
+     clearing it would do nothing at all because the title still holds the number. */
+  if(!cpoManual)$('#cpo').value=p.po||'';
   // a PO is an order placed, which in this app is a shipment — overridable, like
   // every other thing the composer infers, by picking Task
   if(!ctypeManual){const want=(p.manufacturer||p.destination||p.tracking||p.po||(ctx&&ctx.type==='shipment'))?'shipment':'task';if(want!==ctype)setType(want);}
@@ -4157,7 +4203,7 @@ function submitComposer(keep){
   const p=composed();if(!p.title)return;
   const t=addTask({...p,type:ctype,flagged:p.flagged||cflag});buzz();
   const moved=revealTask(t);
-  if(keep){$('#ci').value='';$('#ctrack').value='';$('#cpo').value='';cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;updatePreview();$('#ci').focus();toast(moved?'Added to All':'Added');}
+  if(keep){$('#ci').value='';$('#ctrack').value='';$('#cpo').value='';cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;cpoManual=false;updatePreview();$('#ci').focus();toast(moved?'Added to All':'Added');}
   else{closeSheets();if(moved)toast('Added to All');}
 }
 
@@ -5124,7 +5170,9 @@ $('#dtracks').addEventListener('click',e=>{
   }
 });
 $('#cscan').addEventListener('click',()=>openScanner('compose'));
-['#ctrack','#cpo'].forEach(s=>$(s).addEventListener('input',updatePreview));
+$('#ctrack').addEventListener('input',updatePreview);
+// typing in the PO field is a decision, so the title stops overwriting it
+$('#cpo').addEventListener('input',()=>{cpoManual=true;updatePreview();});
 $('#ccarrier').addEventListener('change',updatePreview);
 $('#scanx').addEventListener('click',closeScanner);
 $('#pclose').addEventListener('click',()=>{editProj=null;attachTo=null;closeSheets();});
@@ -5405,6 +5453,7 @@ $('#navlists').addEventListener('drop',e=>{
 });
 $('#hsort').addEventListener('change',e=>{sortBy=e.target.value;saveView();render();});
 $('#hgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();render();});
+$('#hpsort').addEventListener('change',e=>{projSort=e.target.value;saveView();render();});
 $('#tabbar').addEventListener('click',e=>{
   const a=e.target.closest('[data-href]');if(a)return location.href=a.dataset.href;
   const b=e.target.closest('[data-v]');
@@ -5762,6 +5811,8 @@ function paletteRows(q){
     push(l,'Command',I.list,'var(--gray)',()=>k==='new'?openComposer():doMenu(k));
   // sort and group by name, so "by maker" finds the grouping
   for(const v of SORTS)push('Sort: '+SORT_LABEL[v],'Command',I.list,'var(--gray)',()=>{sortBy=v;saveView();render();});
+  for(const v of PSORTS)push('Sort projects: '+PSORT_LABEL[v],'Command',I.box,'var(--indigo)',
+    ()=>{projSort=v;saveView();setView('projects');});
   for(const v of GROUPS)push('Group: '+GROUP_LABEL[v],'Command',I.list,'var(--gray)',()=>{groupBy=v;saveView();render();});
   if(q)for(const t of S.tasks.filter(t=>!t.done).slice(0,400)){
     if(out.filter(r=>r.h==='Task').length>=8)break;
@@ -5904,6 +5955,8 @@ function renderSettings(){
     `<button data-fx="${id}:${v}" class="${cur===v?'on':''}">${esc(l)}</button>`).join('');};
   $('#setsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
   $('#setgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
+  // the only way to reach it on a phone, where .hctl is display:none
+  $('#setpsort').innerHTML=PSORTS.map(v=>`<option value="${v}" ${v===projSort?'selected':''}>${PSORT_LABEL[v]}</option>`).join('');
   seg('set-rows',[['comfortable','Comfortable'],['compact','Compact']],compact?'compact':'comfortable');
   seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');
   seg('set-streak',[['off','Off'],['on','On']],streakOn?'on':'off');
@@ -5945,6 +5998,7 @@ $('#setclose').addEventListener('click',closeSheets);
 $('#setsync').addEventListener('click',()=>{closeSheets();openSync();});
 $('#setsort').addEventListener('change',e=>{sortBy=e.target.value;saveView();render();});
 $('#setgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();render();});
+$('#setpsort').addEventListener('change',e=>{projSort=e.target.value;saveView();render();});
 $('#setsheet').addEventListener('click',e=>{
   const b=e.target.closest('[data-fx]');if(!b)return;
   const [id,v]=b.dataset.fx.split(':');

@@ -84,6 +84,13 @@ business's own rather than general: **a PO is always five digits after `PO`**.
 - Typing nothing but `PO 41785` makes that the title. The composer will not submit
   without one, and the number arriving before anyone has named the line is a real
   way to work.
+- The number goes **into the `#cpo` field**, not only into the chip. A chip
+  saying the number had been understood over a field sitting empty read as though
+  it had not been. `cpoManual` — the same bargain `ctypeManual` makes for the
+  Task/Shipment toggle — hands the field over the moment it is typed in, so
+  correcting the number is not undone by the next keystroke in the title, and
+  clearing it means no PO rather than nothing at all (the title still holds the
+  number, so without the flag `composed()` would put it straight back).
 - A marker only counts **at the start of a word**. Without that, "Email
   dana@luminastudio.com about it" made a maker called "luminastudio.com about it"
   and a task called "Email dana" — which matters far more now that the same
@@ -417,6 +424,28 @@ Settings (3 / 5 / 7 / 14 days, or Never), because how long is too long is a
 matter of temperament rather than a fact about the data. Never means the card
 never appears, and it is the only setting that removes it — an empty card is not
 a state worth painting.
+
+## Sorting the projects
+
+`projSort` is its own preference with its own options (`PSORTS`), not a reuse of
+the task sort: a project has no stage and no "smart", and the Projects view was
+showing the task Sort and Group controls, neither of which sorted anything there.
+The header now offers the project sort on that view and the task pair everywhere
+else.
+
+- `order` — the order they were made in — stays the default, so nobody's list
+  moves under them until they ask.
+- `sortedProjects()` sorts a **copy**. Sorting `S.projects` itself would let a
+  per-device display preference rewrite the record and push the whole list to
+  every other device.
+- Used by the Projects view *and* the sidebar, or the two disagree about where a
+  job sits. The `<select>` pickers keep the plain order on purpose — a dropdown
+  that reshuffles because a list preference changed is a worse dropdown.
+- Undated projects sort last under `due`, not first, which is what an empty
+  string would otherwise do; an empty project sorts last under `progress`, having
+  no progress to report. Both tie-break on name.
+- It is in Settings as well as the header, because `.hctl` is `display:none`
+  below 861px and the header control is unreachable on a phone.
 
 ## Settings
 
