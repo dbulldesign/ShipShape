@@ -58,6 +58,10 @@ html{-webkit-text-size-adjust:100%;background:var(--bg)}
 body{background:var(--bg);color:var(--label);min-height:100vh;font-family:var(--sans);
   font-size:16px;line-height:1.4;-webkit-font-smoothing:antialiased}
 button,input,textarea,select{font:inherit;color:inherit}
+/* See index.html: the browser draws a dropdown's open list itself and takes the
+   option colour from CSS, so a muted select colour comes out grey on grey. */
+option,optgroup{background-color:var(--card);color:var(--label)}
+optgroup{font-weight:700}
 button{background:none;border:none;cursor:pointer;padding:0}
 img{max-width:100%;display:block}
 a{color:var(--blue)}

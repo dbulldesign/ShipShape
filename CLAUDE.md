@@ -458,6 +458,39 @@ else.
 - It is in Settings as well as the header, because `.hctl` is `display:none`
   below 861px and the header control is unreachable on a phone.
 
+## Dropdowns
+
+A `<select>`'s open list is drawn by the browser, not by the page, and it takes
+the **option text colour from CSS** while choosing its own background. Every
+select here is deliberately muted — `var(--label2)`, which is white at 60% alpha
+in dark mode — and that came out grey on a light list, legible only for the row
+under the cursor.
+
+One rule fixes every dropdown in both files: `option,optgroup{background-color:
+var(--card);color:var(--label)}`. Both halves matter and both must be **opaque** —
+a translucent `--label2` or `--elev` is exactly the bug. `html{color-scheme:dark}`
+is already set in dark mode and is not enough on its own.
+
+Style options centrally, never per control, or the next select added is broken
+again.
+
+## Collapsing completed work
+
+`doneFold` is one per-device preference, toggled from the Completed heading
+itself rather than from Settings — the control belongs on the thing it affects.
+`groupNode(x,fold)` takes `undefined` for a heading that does not fold and a
+boolean for one that does, so the signature tells all three apart and a heading
+that has just become foldable repaints. A folded group builds **no rows at all**
+rather than hiding them.
+
+Two places it must not fold, both of which would otherwise answer a question with
+an empty page:
+
+- The **Completed view**, where finished work is the entire point.
+- **While a query is running.** Search is global and reaches completed work on
+  purpose, so a fold left on from yesterday answered a search with a heading and
+  no results.
+
 ## Settings
 
 One sheet, `#setsheet`, holds every preference: list sort/group/row height, the

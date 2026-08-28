@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.50.0">
+<meta name="app-version" content="1.51.0">
 <meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -48,6 +48,14 @@
 html,body{height:100%;margin:0}
 body{font-family:var(--sans);font-size:17px;line-height:1.35;color:var(--label);background:var(--bg);overflow:hidden;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
+/* A dropdown's open list is drawn by the browser, not by the page, and it takes
+   the option text colour from CSS while choosing its own background. Every select
+   here is deliberately muted — colour var(--label2), which is white at 60% alpha
+   in dark mode — and that came out as grey on a light list: legible only for the
+   row under the cursor. Options get an opaque pair of their own, set once for
+   every dropdown in the app rather than per control. */
+option,optgroup{background-color:var(--card);color:var(--label)}
+optgroup{font-weight:700}
 button{background:none;border:0;padding:0;cursor:pointer}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--fill);border-radius:8px}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
@@ -191,6 +199,15 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   position:sticky;top:0;z-index:6;background:var(--bg)}
 .grp.late{color:var(--red)}.grp .c{font-weight:600;color:var(--label3);text-transform:none;letter-spacing:0}
 .grp button{margin-left:auto;color:var(--blue);text-transform:none;letter-spacing:0;font-size:14px;font-weight:600}
+/* The folding heading is a real button so it answers to a keyboard, but it has to
+   look like the heading it replaces rather than like the blue action buttons the
+   rule above styles. */
+.grp .foldbtn{margin-left:0;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;
+  display:flex;align-items:center;gap:7px;flex:1;min-width:0;text-align:left}
+.grp .foldbtn .chev{font-size:11px;color:var(--label3);flex:none;
+  transition:transform .18s var(--ease);display:inline-block}
+.grp .foldbtn .chev.open{transform:rotate(90deg)}
+@media(hover:hover){.grp .foldbtn:hover .chev{color:var(--label2)}}
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
 .rowwrap{position:relative;overflow:hidden;background:var(--card)}
 .rowwrap+.rowwrap::before{content:"";position:absolute;left:52px;right:0;top:0;height:.5px;background:var(--sep);z-index:3}
@@ -1326,7 +1343,7 @@ function trackInfo(t){
 let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
-let sortBy='smart',groupBy='auto',projSort='order',compact=false,sfx=false,digestOff=false,streakOn=false,chaseAfter=7;
+let sortBy='smart',groupBy='auto',projSort='order',doneFold=false,compact=false,sfx=false,digestOff=false,streakOn=false,chaseAfter=7;
 // how finishing something is marked; per device, like every other look-and-feel pref
 let fx={style:'confetti',when:'all',amount:'medium'};
 // draft holds what has been typed into the sync sheet but not turned on yet
@@ -1379,6 +1396,7 @@ async function loadAll(){
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
     if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;
     if(PSORTS.includes(v.projSort))projSort=v.projSort;
+    doneFold=!!v.doneFold;
     compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;streakOn=!!v.streakOn;
     if(CHASE_DAYS.some(c=>c[0]===v.chaseAfter))chaseAfter=v.chaseAfter;
     if(v.fx){
@@ -1531,7 +1549,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();}
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,projSort,compact,sfx,digestOff,streakOn,chaseAfter,fx}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,projSort,doneFold,compact,sfx,digestOff,streakOn,chaseAfter,fx}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -3183,20 +3201,28 @@ function slot(name,html){
   slotNodes.set(name,{sig:html,nodes});
   return nodes;
 }
-function groupNode(x){
+/* `fold` is undefined for a heading that does not fold, true or false for one
+   that does — so the signature distinguishes all three and a heading that has
+   just become foldable repaints. A folded group builds no rows at all rather
+   than hiding them: the whole point is to stop paying for work nobody is
+   looking at. */
+function groupNode(x,fold){
   let g=grpNodes.get(x.k);
   if(!g){
     g={head:document.createElement('div'),card:document.createElement('div'),sig:null};
     g.card.className='card';
     grpNodes.set(x.k,g);
   }
-  const sig=x.l+'|'+x.items.length;
+  const sig=x.l+'|'+x.items.length+'|'+(fold===undefined?'-':fold?'f':'o');
   if(g.sig!==sig){
     g.head.className='grp'+(x.k==='late'?' late':'');
-    g.head.innerHTML=`${esc(x.l)}<span class="c">${x.items.length}</span>`;
+    g.head.innerHTML=fold===undefined
+      ? `${esc(x.l)}<span class="c">${x.items.length}</span>`
+      : `<button class="foldbtn" data-fold="${x.k}" aria-expanded="${!fold}">
+           <span class="chev${fold?'':' open'}">▸</span>${esc(x.l)}<span class="c">${x.items.length}</span></button>`;
     g.sig=sig;
   }
-  patch(g.card,x.items.map(rowNode));
+  patch(g.card,fold?[]:x.items.map(rowNode));
   return g;
 }
 function renderList(){
@@ -3243,9 +3269,18 @@ function renderList(){
   if(!items.length){chunk('empty',emptyHTML());patch(el,out);return;}
   const g=new Map();
   for(const t of items){const b=groupOf(t);if(!g.has(b.k))g.set(b.k,{...b,items:[]});g.get(b.k).items.push(t);}
+  /* Completed work piles up under everything that shows it — a project, a PO, the
+     Invoices tab — so its heading folds.
+
+     Two places it must not. The Completed view, where finished work is the entire
+     point and folding it would empty the page. And while a query is running:
+     search is global and reaches completed work on purpose, so a fold left on
+     from yesterday would answer a search with a heading and no results. */
   for(const x of [...g.values()].sort((a,b)=>a.o-b.o)){
-    const n=groupNode(x);
-    out.push(n.head,n.card);
+    const canFold=x.k==='d'&&view.t!=='done'&&!query;
+    const n=groupNode(x,canFold?doneFold:undefined);
+    out.push(n.head);
+    if(!(canFold&&doneFold))out.push(n.card);
   }
   patch(el,out);
   // Nodes for rows the current view leaves out stay cached, so switching back is
@@ -5494,6 +5529,8 @@ $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-noopen]'))return;   // tracking link: follow it, don't open the row
   const ot=e.target.closest('[data-opentask]');
   if(ot)return openDetail(ot.dataset.opentask);
+  // folding a group is a preference, so it outlives the render it provokes
+  if(e.target.closest('[data-fold]')){doneFold=!doneFold;saveView();renderList();buzz(4);return;}
   const tm=e.target.closest('[data-tm]');
   if(tm){
     const [k,arg]=tm.dataset.tm.split(':');
