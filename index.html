@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.49.0">
+<meta name="app-version" content="1.50.0">
 <meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -112,6 +112,12 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .brand img{width:24px;height:24px;flex:none;display:block}
 .navsec{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--label3);padding:16px 12px 6px;display:flex;align-items:center}
 .navsec button{margin-left:auto;color:var(--blue);font-size:12px;font-weight:700;letter-spacing:0;text-transform:none}
+/* The projects list is sorted from the list itself, not only from the view that
+   also shows it — on a desktop the sidebar is where the jobs actually live. */
+.navsec select{margin-left:auto;max-width:112px;background:var(--fill2);border:0;border-radius:7px;
+  padding:2px 3px;font-size:11px;font-weight:700;color:var(--label2);
+  text-transform:none;letter-spacing:0}
+.navsec select~button{margin-left:8px}
 .nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;width:100%;text-align:left;transition:background .12s}
 .nav:hover{background:var(--fill2)}.nav.on{background:var(--fill)}
 .nav .dot{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none}
@@ -2393,7 +2399,14 @@ function renderNav(){
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
   if(S.tasks.some(t=>t.arch))h+=navItem(I.box,'var(--label3)','Archived','',view.t==='archive','data-v="archive"');
   h+=navItem(I.list,'var(--yellow)','Everything Board','',view.t==='board','data-v="board"');
-  h+='<div class="navsec">Projects<button data-m="newproj">+ New</button></div>';
+  /* Sorted from here as well as from the Projects view, because this is the list
+     you are looking at while working. Only worth offering once there is more than
+     one — sorting a single project says nothing. */
+  h+='<div class="navsec">Projects'
+    +(S.projects.length>1?`<select id="npsort" aria-label="Sort projects by">${
+        PSORTS.map(v=>`<option value="${v}" ${v===projSort?'selected':''}>${PSORT_LABEL[v]}</option>`).join('')
+      }</select>`:'')
+    +'<button data-m="newproj">+ New</button></div>';
   if(!S.projects.length)h+='<div style="padding:2px 12px 4px;font-size:13.5px;color:var(--label3)">No projects yet</div>';
   for(const p of sortedProjects()){
     const s=stats(p.id);
@@ -2408,7 +2421,13 @@ function renderNav(){
   const de=uniq('destination');
   if(de.length){h+='<div class="navsec">Destinations</div>';
     for(const d of de)h+=navItem(I.truck,colorFor(d),d,openT().filter(t=>t.destination===d).length,view.t==='dest'&&view.v===d,`data-v="dest" data-val="${esc(d)}"`);}
+  /* The whole sidebar is rebuilt here, which throws away the sort control along
+     with everything else. Choosing from it calls render(), so without this the
+     select loses focus at the exact moment it is being used — and a background
+     pull, which also re-renders, would do the same to a keyboard user. */
+  const keepFocus=document.activeElement&&document.activeElement.id==='npsort';
   $('#navlists').innerHTML=h;
+  if(keepFocus){const s=$('#npsort');if(s)s.focus();}
   rollCounts();
 }
 const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',timelog:'Time',timecal:'Time',pos:'POs',invoices:'Invoices',all:'All open',done:'Completed',
@@ -5394,6 +5413,11 @@ function setView(t,v){
 }
 $('#navlists').addEventListener('click',e=>{const a=e.target.closest('[data-href]');if(a)return location.href=a.dataset.href;
   const b=e.target.closest('[data-v]');if(b)b.dataset.v==='board'?openBoard():setView(b.dataset.v,b.dataset.val);});
+// delegated, because the sidebar is rebuilt on every render
+$('#navlists').addEventListener('change',e=>{
+  if(!e.target.closest('#npsort'))return;
+  projSort=e.target.value;saveView();render();
+});
 /* ============ drag a row onto a project ============
    The sidebar was for navigating and nothing else. Dragging is the obvious way
    to file something, and it is only offered where it means something: projects,

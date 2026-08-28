@@ -441,6 +441,17 @@ else.
 - Used by the Projects view *and* the sidebar, or the two disagree about where a
   job sits. The `<select>` pickers keep the plain order on purpose — a dropdown
   that reshuffles because a list preference changed is a worse dropdown.
+- Chosen from **three places, one preference**: the header on the Projects view,
+  the sidebar's own Projects heading, and Settings. The sidebar is where the jobs
+  actually live on a desktop, so sorting them from the view that merely also
+  lists them was the wrong and only door.
+- `renderNav` replaces the whole sidebar's `innerHTML`, which throws the sidebar's
+  own control away mid-use — and choosing from it calls `render()`, so it would
+  lose focus at exactly the moment it was being used. `renderNav` refocuses
+  `#npsort` when it was the active element, which also protects a keyboard user
+  from the 15-second background pull. Its `change` handler is delegated on
+  `#navlists` for the same reason.
+- Offered only once there are **two or more** projects. Sorting one says nothing.
 - Undated projects sort last under `due`, not first, which is what an empty
   string would otherwise do; an empty project sorts last under `progress`, having
   no progress to report. Both tie-break on name.
