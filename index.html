@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.53.0">
+<meta name="app-version" content="1.54.0">
 <meta name="app-build" content="2026-09-03">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -626,7 +626,12 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 .spark{position:fixed;width:7px;height:7px;border-radius:2px;z-index:70;pointer-events:none}
 /* Confetti is paper: a long thin rectangle. Embers are round. Both are drawn
    with divs so an effect costs nothing to download. */
-.conf{position:fixed;width:7px;height:11px;border-radius:1.5px;z-index:70;pointer-events:none}
+/* Two elements: .confw travels, .conf tumbles inside it. See fxPaper for why.
+   will-change keeps both on the compositor, so a list re-rendering underneath
+   cannot stutter them. */
+.confw{position:fixed;z-index:70;pointer-events:none;will-change:transform}
+.conf{width:7px;height:11px;border-radius:1.5px;pointer-events:none;
+  will-change:transform;backface-visibility:hidden}
 .ember{position:fixed;border-radius:50%;z-index:70;pointer-events:none}
 /* Delivery is the only effect that comes downwards, so its pieces are drawn as
    small parcels rather than paper — squarer, with a lid line across the top. */
@@ -4115,12 +4120,70 @@ function fxParticle(cls,x,y,bg,extra){
   return d;
 }
 const fxGo=(el,frames,opts)=>{el.animate(frames,opts).onfinish=()=>el.remove();};
+/* EVERY KEYFRAME OF ONE TRANSFORM MUST LIST THE SAME FUNCTIONS IN THE SAME ORDER.
+   Where the list changes shape between frames — translate+rotate, then
+   translate+rotate+scaleX, then translate+rotate again — the browser cannot
+   interpolate function by function, so it decomposes each frame into a matrix and
+   interpolates that instead. A matrix records only where a thing ended up, not
+   that it got there by two and a half turns, so a multi-turn spin collapses and
+   lurches at every keyframe. That was the confetti's jitter: measured against the
+   ovation, whose lists did match, its spin was jerking four times as hard.
+
+   So travel and tumble are two elements now: the wrapper carries translate, the
+   paper inside it carries rotate and scale. Each animation keeps one shape, and
+   the tumble can turn as many times as it likes. */
+function fxPaper(x,y,bg){
+  const w=document.createElement('div');
+  w.className='confw';w.style.left=x+'px';w.style.top=y+'px';
+  const c=document.createElement('div');
+  c.className='conf';c.style.background=bg;
+  w.appendChild(c);document.body.appendChild(w);
+  return w;
+}
+/* A thrown thing under gravity, sampled often enough to read as a curve. Three
+   keyframes made two straight lines meeting at a corner, which is a kink you can
+   see however smoothly each half is eased. v0 and g are solved from where the
+   apex and the landing want to be, so the shape is one parabola throughout. */
+function fxArc(dx,up,drop,steps){
+  const v0=2*up+2*Math.sqrt(up*up+up*drop),g=2*(drop+v0);
+  const out=[];
+  for(let s=0;s<=steps;s++){
+    const t=s/steps;
+    const x=dx*(1-Math.pow(1-t,2.2));
+    const y=-v0*t+.5*g*t*t;
+    out.push({transform:`translate(${x.toFixed(2)}px,${y.toFixed(2)}px)`,
+      opacity:t>.84?+(1-(t-.84)/.16).toFixed(3):1,offset:+t.toFixed(4)});
+  }
+  return out;
+}
+/* The paper turning over as it goes. One list, so the turns survive, and the
+   narrowing is scale rather than scaleX/scaleY so it is the same list whichever
+   way up the piece happens to be. */
+function fxTumble(el,spin,dur){
+  /* Twelve samples a cycle. Six was too few: the narrowing has a real turning
+     point at each edge-on moment, and sampled coarsely a smooth turn still shows
+     as a facet. */
+  const f=[],STEPS=24;
+  for(let s=0;s<=STEPS;s++){
+    const t=s/STEPS;
+    /* Edge-on twice over the flight, which is what makes paper look like paper.
+       cos squared rather than the absolute value of cos: |cos| has a corner at
+       each zero, and with the corner landing on a keyframe the narrowing
+       reversed direction in a single frame. Squaring gives the same two minima
+       with a smooth turn through each. */
+    const c=Math.cos(t*Math.PI*2),w=.34+.66*c*c;
+    f.push({transform:`rotate(${(spin*t).toFixed(2)}deg) scale(${w.toFixed(3)},1)`,offset:+t.toFixed(4)});
+  }
+  el.animate(f,{duration:dur,easing:'linear'});
+}
 /* sparks — the original: a quick scatter that settles down and out */
 function fxSparks(cx,cy,n){
   for(let i=0;i<n;i++){
     const s=fxParticle('spark',cx,cy,PAL[i%PAL.length]);
     const a=Math.random()*Math.PI*2,d=50+Math.random()*70;
-    fxGo(s,[{transform:'translate(0,0) scale(1)',opacity:1},
+    // rotate(0deg) in the first frame is not decoration: without it the two
+    // frames list different functions and this falls to matrix interpolation too
+    fxGo(s,[{transform:'translate(0,0) rotate(0deg) scale(1)',opacity:1},
       {transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d+30}px) rotate(${Math.random()*360}deg) scale(.4)`,opacity:0}],
       {duration:750+Math.random()*350,easing:'cubic-bezier(.2,.6,.3,1)'});
   }
@@ -4128,16 +4191,14 @@ function fxSparks(cx,cy,n){
 /* confetti — paper thrown upward in a fan, fluttering as it falls back past the row */
 function fxConfetti(cx,cy,n){
   for(let i=0;i<n;i++){
-    const c=fxParticle('conf',cx,cy,PAL[i%PAL.length]);
+    const w=fxPaper(cx,cy,PAL[i%PAL.length]);
     const spread=(i/n-.5)*2,up=44+Math.random()*54;
     const dx=spread*(58+Math.random()*74),drop=150+Math.random()*150;
-    const spin=(Math.random()<.5?-1:1)*(360+Math.random()*540);
-    const flip=Math.random()<.5?'scaleX(.35)':'scaleY(.35)';
-    fxGo(c,[
-      {transform:'translate(0,0) rotate(0deg)',opacity:1,offset:0},
-      {transform:`translate(${dx*.55}px,${-up}px) rotate(${spin*.35}deg) ${flip}`,opacity:1,offset:.34},
-      {transform:`translate(${dx}px,${drop}px) rotate(${spin}deg)`,opacity:0,offset:1}],
-      {duration:1150+Math.random()*550,easing:'cubic-bezier(.25,.5,.4,1)'});
+    const dur=1150+Math.random()*550;
+    // linear, because the shape is in the path now rather than in the easing —
+    // an eased curve on top of a curve is what made the speed lurch mid-flight
+    fxGo(w,fxArc(dx,up,drop,16),{duration:dur,easing:'linear'});
+    fxTumble(w.firstChild,(Math.random()<.5?-1:1)*(360+Math.random()*540),dur);
   }
 }
 /* fireworks — a flash, a ring of trailing embers, then a smaller second pop */
@@ -4203,16 +4264,23 @@ function fxDeliver(cx,cy,n,w){
    reduced-motion check and the concurrency cap. */
 function fxOvation(n){
   for(let i=0;i<n;i++){
-    const c=fxParticle('conf',Math.random()*innerWidth,-18,PAL[i%PAL.length]);
-    const spin=(Math.random()<.5?-1:1)*(540+Math.random()*760);
-    const drift=(Math.random()-.5)*190;
-    const fall=innerHeight+60;
-    fxGo(c,[
-      {transform:'translate(0,0) rotate(0deg)',opacity:1,offset:0},
-      {transform:`translate(${drift*.5}px,${fall*.55}px) rotate(${spin*.6}deg)`,opacity:1,offset:.6},
-      {transform:`translate(${drift}px,${fall}px) rotate(${spin}deg)`,opacity:0,offset:1}],
-      {duration:1800+Math.random()*1000,delay:Math.random()*1000,
-       easing:'cubic-bezier(.3,.45,.5,1)',fill:'backwards'});
+    const w=fxPaper(Math.random()*innerWidth,-18,PAL[i%PAL.length]);
+    const drift=(Math.random()-.5)*190,sway=14+Math.random()*26;
+    const fall=innerHeight+60,dur=1800+Math.random()*1000;
+    /* Falling paper does not drop in a straight line, and three keyframes gave it
+       one with a bend in the middle. Sampled instead: a fall that picks up a
+       little speed, and a slow sway across it — 24 steps over one cycle, which is
+       fine enough that the sway reads as a curve rather than a zig-zag. */
+    const f=[],STEPS=24;
+    for(let s=0;s<=STEPS;s++){
+      const t=s/STEPS;
+      const y=fall*(.42*t+.58*t*t);
+      const x=drift*t+sway*Math.sin(t*Math.PI*2);
+      f.push({transform:`translate(${x.toFixed(2)}px,${y.toFixed(2)}px)`,
+        opacity:t>.9?+(1-(t-.9)/.1).toFixed(3):1,offset:+t.toFixed(4)});
+    }
+    fxGo(w,f,{duration:dur,delay:Math.random()*1000,easing:'linear',fill:'backwards'});
+    fxTumble(w.firstChild,(Math.random()<.5?-1:1)*(540+Math.random()*760),dur);
   }
   // three shells across the width, staggered, so it reads as an ovation not a pop
   const shells=Math.max(9,Math.round(n*.28));

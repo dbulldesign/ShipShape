@@ -579,6 +579,36 @@ of them accumulated to push the menu off the bottom of a phone. Add preferences
 here, not there. `renderSettings()` is re-run by `renderData()` while the sheet is
 open, so it never shows stale state.
 
+## One transform, one function list
+
+**Every keyframe of one transform must list the same functions in the same
+order.** Where the list changes shape between frames — `translate rotate`, then
+`translate rotate scaleX`, then `translate rotate` — the browser cannot
+interpolate function by function, so it decomposes each frame to a matrix and
+interpolates that. A matrix records only where a thing ended up, not that it got
+there by two and a half turns, so a multi-turn spin collapses and lurches at
+every keyframe. That was the confetti's jitter, and the same slip was in
+`fxSparks`, whose first frame omitted the `rotate(0deg)` its second frame had.
+
+So confetti is **two nested elements**: `.confw` carries the travel (translate
+only) and `.conf` inside it carries the tumble (rotate and scale). Each animation
+keeps one shape, and the tumble can turn as often as it likes.
+
+- The path is **sampled**, not three keyframes. Three gave two straight lines
+  meeting at a corner, which is visible however smoothly each half is eased.
+  `fxArc` solves v0 and g from where the apex and the landing want to be, so the
+  throw is one parabola; the ovation's fall is sampled the same way with a sway
+  across it. Easing is `linear` because the shape is in the path now — an eased
+  curve on top of a curve made the speed lurch mid-flight.
+- The tumble narrows with **cos squared, not |cos|**. `|cos|` has a corner at
+  each zero, and with a corner landing on a keyframe the narrowing reversed
+  direction in one frame: worst second difference 0.342 against 0.088 at the same
+  sampling. Twelve samples a cycle — six left a visible facet at each turn.
+- `tkf.js` fires every effect and reads back every running animation's own
+  keyframes, so the whole class of bug is checked rather than eyeballed. Frame
+  sampling is no use here: on a composited animation `getComputedStyle` reads
+  quantised, and the numbers swing two- to threefold between runs.
+
 ## Effects
 
 Delivery is the exception to the shape: everything else throws outward from the
