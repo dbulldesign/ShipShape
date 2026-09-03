@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.51.0">
+<meta name="app-version" content="1.52.0">
 <meta name="app-build" content="2026-08-26">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -807,7 +807,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="stages" id="dstages"></div>
   <div class="fgroup">
     <div class="field"><label for="dtitle">Title</label><input id="dtitle" placeholder="What needs doing"></div>
-    <div class="field"><label for="dproj">Project</label><select id="dproj"></select></div>
+    <div class="field"><label for="dproj">Project</label><input id="dproj" list="l-proj" placeholder="None" autocorrect="off"></div>
     <div class="field"><label for="ddue">Due</label><input id="ddue" type="date"></div>
     <div class="field"><label for="dremind">Remind me</label><select id="dremind"></select></div>
     <div class="field"><label for="drep">Repeats</label><select id="drep"></select></div>
@@ -823,7 +823,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="dqty">Quantity</label><input id="dqty" type="number" min="0" step="1" inputmode="numeric" placeholder="None"></div>
     <div class="field"><label for="dcost">Cost</label><input id="dcost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="None"></div>
     <div class="field"><label for="deta">Expected</label><input id="deta" type="date"></div>
-    <div class="field"><label for="dpo">PO number</label><input id="dpo" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label for="dpo">PO number</label><input id="dpo" list="l-po" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
     <div class="trackhead"><span>Tracking</span><span id="dgot" class="got"></span></div>
     <div id="dtracks"></div>
     <div class="trackadd">
@@ -947,7 +947,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="sugg" id="sugg"></div>
   <div class="hint"><span><code>#</code> project</span><span><code>@</code> maker</span><span><code>&gt;</code> ship to</span><span><code>!</code> flag</span><span><code>PO 41785</code> order no.</span><span><code>fri</code> · <code>oct 15</code> · <code>in 2 weeks</code></span></div>
   <div class="fgroup" id="cshipfields" style="margin:10px 0 0">
-    <div class="field"><label for="cpo">PO number</label><input id="cpo" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label for="cpo">PO number</label><input id="cpo" list="l-po" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
     <div class="field"><label for="ctrack">Tracking</label><input id="ctrack" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false">
       <button class="iconbtn scanbtn" id="cscan" aria-label="Scan a shipping label"><svg viewBox="0 0 20 20"><path d="M2.6 2.6h4.2v1.8H4.4v2.4H2.6V2.6Zm10.6 0h4.2v4.2h-1.8V4.4h-2.4V2.6ZM2.6 13.2h1.8v2.4h2.4v1.8H2.6v-4.2Zm14.8 0v4.2h-4.2v-1.8h2.4v-2.4h1.8ZM5.6 6.4h1.5v7.2H5.6V6.4Zm2.6 0h1v7.2h-1V6.4Zm2 0h1.5v7.2h-1.5V6.4Zm2.6 0h1.6v7.2h-1.6V6.4Z"/></svg></button></div>
     <div class="field" id="ccarrierrow"><label for="ccarrier">Carrier</label><select id="ccarrier"></select></div>
@@ -1186,7 +1186,11 @@ grant execute on function shipshape_push_unsub(text, text) to anon;</pre>
   <div style="height:8px"></div>
 </div>
 
+<!-- What has been typed into these fields before. A datalist offers them and
+     still takes anything new, which is the whole point: most entries repeat, and
+     the ones that do not are the reason this is not a <select>. -->
 <datalist id="l-mfr"></datalist><datalist id="l-dest"></datalist>
+<datalist id="l-proj"></datalist><datalist id="l-po"></datalist>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
 <div id="toast" role="status" aria-live="polite"><span id="tmsg"></span><button id="tundo" hidden>Undo</button></div>
 
@@ -1360,7 +1364,7 @@ function fmtAgo(ts){
   if(s<86400)return `${Math.round(s/3600)} h ago`;
   return `${Math.round(s/86400)} d ago`;
 }
-let view={t:'today'},query='',selDay=null,editing=null,editProj=null,attachTo=null,
+let view={t:'today'},query='',selDay=null,editing=null,editProj=null,
     cflag=false,ctype='task',ctypeManual=false,cpoManual=false,undoFn=null,undoStack=[],saveT=null,pcolor=PAL[0],ctx=null,editMaker=null,
     syncStatus='off',pulling=false,pushT=null,pollT=null,
     sw=null;   // the row a finger is currently dragging, if any
@@ -2184,6 +2188,18 @@ const openT=()=>S.tasks.filter(t=>!t.done);
 const P=id=>S.projects.find(p=>p.id===id);
 function colorFor(n){if(!n)return 'var(--gray)';let h=0;for(let i=0;i<n.length;i++)h=(h*31+n.charCodeAt(i))>>>0;return PAL[h%PAL.length];}
 const uniq=k=>[...new Set(S.tasks.map(t=>t[k]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+/* Every purchase order that has been typed, most recently raised first. Ordered
+   by the newest task carrying it, because the number you want next is nearly
+   always the one you were just working on. */
+function recentPOs(){
+  const seen=new Map();
+  for(const t of S.tasks){
+    const k=poKey(t);if(!k)continue;
+    const at=Math.max(t.created||0,t.u||0);
+    if(!seen.has(k)||seen.get(k)<at)seen.set(k,at);
+  }
+  return [...seen.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+}
 const projectOf=t=>t.projectId?P(t.projectId):null;
 /* The projects list, in whatever order has been asked for. Used by the Projects
    view and by the sidebar, so the two never disagree about where a job sits. The
@@ -2372,6 +2388,15 @@ function render(){renderNav();renderHead();renderList();renderData();syncTick();
 function renderData(){
   $('#l-mfr').innerHTML=uniq('manufacturer').map(v=>`<option value="${esc(v)}">`).join('');
   $('#l-dest').innerHTML=uniq('destination').map(v=>`<option value="${esc(v)}">`).join('');
+  /* Projects come from the record rather than from what tasks happen to name, so
+     one with nothing on it yet is still offered. In the list's own order, which
+     is the order they were made unless that has been changed. */
+  $('#l-proj').innerHTML=sortedProjects().map(p=>`<option value="${esc(p.name)}">`).join('');
+  /* Purchase orders, **newest first**: the number wanted next is nearly always
+     the one just used, and a datalist keeps document order until you start
+     typing. Deduplicated on the normalised key so "PO 41785" and "41785" are one
+     entry rather than two. */
+  $('#l-po').innerHTML=recentPOs().map(v=>`<option value="${esc(v)}">`).join('');
   $('#hsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
   $('#hgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
   $('#hpsort').innerHTML=PSORTS.map(v=>`<option value="${v}" ${v===projSort?'selected':''}>${PSORT_LABEL[v]}</option>`).join('');
@@ -4255,10 +4280,16 @@ function updatePreview(){
 }
 function submitComposer(keep){
   const p=composed();if(!p.title)return;
+  /* Whether #Name named a project that did not exist yet, decided before the
+     task is added, since adding is what creates it. It lands in the sidebar
+     immediately either way — but "Added" said nothing about it, which is how a
+     new job could seem not to have arrived. */
+  const madeProj=p.project&&!namedProject(p.project)?p.project.trim():'';
   const t=addTask({...p,type:ctype,flagged:p.flagged||cflag});buzz();
   const moved=revealTask(t);
-  if(keep){$('#ci').value='';$('#ctrack').value='';$('#cpo').value='';cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;cpoManual=false;updatePreview();$('#ci').focus();toast(moved?'Added to All':'Added');}
-  else{closeSheets();if(moved)toast('Added to All');}
+  const said=madeProj?`Added · new project ${madeProj}`:moved?'Added to All':'Added';
+  if(keep){$('#ci').value='';$('#ctrack').value='';$('#cpo').value='';cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;cpoManual=false;updatePreview();$('#ci').focus();toast(said);}
+  else{closeSheets();if(madeProj||moved)toast(said);}
 }
 
 /* ============ detail ============
@@ -4266,9 +4297,17 @@ function submitComposer(keep){
    list, which a notation-created project has to appear in immediately, and the
    fields that only a shipment has. One definition each, or the sheet and the
    record disagree until it is reopened. */
-const projSelectHTML=sel=>'<option value="">No project</option>'
-  +S.projects.map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${esc(p.name)}</option>`).join('')
-  +'<option value="__new">New project…</option>';
+/* The project field holds a name, not an id: it is typed as well as picked, so
+   what is in it has to be the thing a person reads. `namedProject` is the
+   read-back — an existing project matching what was typed, and nothing else. It
+   deliberately does not create: `saveDetail` runs on every field, so creating
+   here would make a project out of half a name the moment another field was
+   touched. Creating is the job of the field's own change handler, which fires
+   when somebody is actually finished with it. */
+const namedProject=v=>{
+  const n=(v||'').trim().toLowerCase();
+  return n?S.projects.find(p=>(p.name||'').trim().toLowerCase()===n)||null:null;
+};
 function showKind(t){
   $('#dkind').textContent=t.type==='shipment'?'Shipment':'Task';
   $$('#dtype button').forEach(b=>b.classList.toggle('on',b.dataset.t===t.type));
@@ -4300,7 +4339,7 @@ function openDetail(id){
   $('#dlinknew').value='';renderLinks(t);
   $('#dstepnew').value='';renderSteps(t);
   renderTracks(t);
-  $('#dproj').innerHTML=projSelectHTML(t.projectId);
+  $('#dproj').value=t.projectId&&P(t.projectId)?P(t.projectId).name:'';
   $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
   $('#drep').innerHTML=REPS.map(([v,l])=>`<option value="${v||''}" ${(t.rep||'')===(v||'')?'selected':''}>${l}</option>`).join('');
   $('#dremind').innerHTML=REMINDS.map(([v,l])=>`<option value="${v}" ${(t.remind||0)===v?'selected':''}>${l}</option>`).join('');
@@ -4721,8 +4760,12 @@ function saveDetail(){
   const q=parseInt($('#dqty').value,10);t.qty=Number.isFinite(q)&&q>0?q:null;
   const cst=parseFloat($('#dcost').value);t.cost=Number.isFinite(cst)&&cst>=0?cst:null;
   t.eta=$('#deta').value||null;
-  const pv=$('#dproj').value;
-  if(pv!=='__new')t.projectId=pv||null;
+  /* Empty means no project. A name that matches one assigns it. A name that
+     matches nothing is left alone here and settled by the field's own change
+     handler — see namedProject. */
+  {const pv=$('#dproj').value.trim();
+   if(!pv)t.projectId=null;
+   else{const p=namedProject(pv);if(p)t.projectId=p.id;}}
   readTitleNotation(t);
   // naming the maker fills in what they quoted, if nothing is expected yet —
   // including a maker the title just named, which is why this comes after
@@ -4766,7 +4809,7 @@ function readTitleNotation(t){
   const got=[];let took=false;
   if(fresh('project')){
     t.projectId=findProjectId(np.project);
-    $('#dproj').innerHTML=projSelectHTML(t.projectId);
+    $('#dproj').value=P(t.projectId).name;
     got.push(P(t.projectId).name);took=true;
   }
   if(fresh('due')){t.due=np.due;$('#ddue').value=np.due;got.push(fmtDue(np.due));took=true;}
@@ -4861,7 +4904,6 @@ function saveProject(){
   let target;
   if(editProj){target=P(editProj);Object.assign(target,data);}
   else{target={id:uid(),...data};S.projects.push(target);S.started=true;view={t:'project',v:target.id};}
-  if(attachTo){const t=S.tasks.find(x=>x.id===attachTo);if(t){t.projectId=target.id;t.u=now();}attachTo=null;}
   editProj=null;save();closeSheets();render();buzz();toast('Project saved');
 }
 
@@ -5229,7 +5271,7 @@ $('#ctrack').addEventListener('input',updatePreview);
 $('#cpo').addEventListener('input',()=>{cpoManual=true;updatePreview();});
 $('#ccarrier').addEventListener('change',updatePreview);
 $('#scanx').addEventListener('click',closeScanner);
-$('#pclose').addEventListener('click',()=>{editProj=null;attachTo=null;closeSheets();});
+$('#pclose').addEventListener('click',()=>{editProj=null;closeSheets();});
 $('#sclose').addEventListener('click',closeSheets);
 $('#psave').addEventListener('click',saveProject);
 $('#sgen').addEventListener('click',()=>{
@@ -5317,10 +5359,17 @@ $('#sugg').addEventListener('click',e=>{
   const ci=$('#ci');ci.value=ci.value.replace(/\s+$/,'')+' '+b.dataset.ins+' ';updatePreview();ci.focus();
 });
 ['#dtitle','#ddue','#dflag','#dwait','#dnotes','#dmfr','#ddest','#dpo','#dqty','#dcost','#deta','#drep','#dremind'].forEach(s=>$(s).addEventListener('change',saveDetail));
+/* `change` on a text input means "finished with this field" — it fires on blur
+   and the moment a suggestion is picked — which is the only safe place to make a
+   project out of a name that matches none. Said out loud, because creating one
+   by accident is the cost of letting the field take anything. */
 $('#dproj').addEventListener('change',e=>{
-  if(e.target.value==='__new'){
-    const id=editing;saveDetail();attachTo=id;editing=null;
-    $('#detail').classList.remove('on');openProject(null);return;
+  const t=editing?S.tasks.find(x=>x.id===editing):null;
+  const v=e.target.value.trim();
+  if(t&&v&&!namedProject(v)){
+    t.projectId=findProjectId(v);t.u=now();
+    e.target.value=P(t.projectId).name;
+    toast('New project — '+P(t.projectId).name);
   }
   saveDetail();
 });

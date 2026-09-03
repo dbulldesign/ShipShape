@@ -458,6 +458,36 @@ else.
 - It is in Settings as well as the header, because `.hctl` is `display:none`
   below 861px and the header control is unreachable on a phone.
 
+## Previous entries, offered but not imposed
+
+Project, Maker, Ship to and PO are all `<input list=…>` with a `<datalist>` —
+offered as a dropdown, still taking anything new, which is the whole point: most
+entries repeat and the ones that do not are the reason none of these is a
+`<select>`. `renderData()` fills all four.
+
+- Makers and destinations come from `uniq()` over the tasks — they have no record
+  of their own, so what has been typed *is* the list.
+- Projects come from `sortedProjects()`, so one with nothing on it yet is still
+  offered.
+- POs come from `recentPOs()`, **newest first**: the number wanted next is nearly
+  always the one just used, and a datalist keeps document order until you type.
+  Deduplicated on `poKey`, or `PO 41785` and `41785` are two entries.
+
+The project field holds a **name**, not an id, because it is typed as well as
+picked. Two functions, and the split is the whole point:
+
+- `namedProject(v)` — an existing project matching what was typed, or null. It
+  never creates. `saveDetail` runs on every field, so creating here would make a
+  project out of half a name the moment another field was touched.
+- `findProjectId(v)` — creates on demand, and is called only from the field's own
+  `change` handler, which fires on blur or when a suggestion is picked, i.e. when
+  somebody is actually finished with the field. It says so in a toast, because an
+  accidental project is the price of a field that takes anything.
+
+`__new` ("New project…") is gone from that select along with the select itself,
+and `attachTo` with it — nothing else set it. A project made inline gets an
+automatic colour; the sidebar's **+ New** is still the way to set one by hand.
+
 ## Dropdowns
 
 A `<select>`'s open list is drawn by the browser, not by the page, and it takes
