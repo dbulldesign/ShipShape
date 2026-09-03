@@ -116,9 +116,9 @@ Two guards, both of which are the whole difficulty.
   task under a project nobody asked for. A marker already in the title stays put;
   only a newly typed one is acted on.
 
-It writes back into the sheet's own inputs as well as the record — `projSelectHTML`
-and `showKind` exist so a notation-created project appears in the select and a
-task that has just become a shipment shows the fields it now has. And it is the
+It writes back into the sheet's own inputs as well as the record — it sets the
+project field to the new name, and `showKind` exists so a task that has just
+become a shipment shows the fields it now has. And it is the
 one place in the app that rewrites words somebody has just typed, so it is
 undoable, and the title the undo restores is the raw one they typed rather than
 the one they started from.
@@ -460,10 +460,28 @@ else.
 
 ## Previous entries, offered but not imposed
 
-Project, Maker, Ship to and PO are all `<input list=…>` with a `<datalist>` —
-offered as a dropdown, still taking anything new, which is the whole point: most
-entries repeat and the ones that do not are the reason none of these is a
-`<select>`. `renderData()` fills all four.
+Project, Maker, Ship to and PO all offer what has been typed into them before,
+and all four still take anything new — which is the whole point: most entries
+repeat, and the ones that do not are the reason none of these is a `<select>`.
+
+**Drawn by the page, not by `<datalist>`.** That was the first cut and it is not
+enough: a datalist cannot rank a near miss, cannot be styled to match anything,
+and on a phone is a cramped strip rather than a list. `#ac` is one fixed-position
+box outside the sheets, because a sheet scrolls and clips and these fields sit
+near the bottom of one; `acPlace()` flips it above the field when there is no
+room below.
+
+- `AC_SRC` is the one map of field id → what to offer, so adding a field that
+  remembers is one entry.
+- `acRank` is ordered by how close the match is: exact, starts-with,
+  start-of-a-word, anywhere, then letters-in-order (`chwh` finds "Chicago
+  warehouse"). Nothing matching means no list at all, and what was typed stands.
+- Picking fires **both** `input` and `change` — the composer's preview and its
+  `cpoManual` flag listen for the first, the detail sheet saves on the second —
+  and `acPicking` holds the list shut across both, or the `input` it just fired
+  would reopen it on the value that was chosen.
+- `pointerdown` on the list is prevented, so focus never leaves the field and
+  blur cannot race the click that is about to pick something.
 
 - Makers and destinations come from `uniq()` over the tasks — they have no record
   of their own, so what has been typed *is* the list.
@@ -487,6 +505,36 @@ picked. Two functions, and the split is the whole point:
 `__new` ("New project…") is gone from that select along with the select itself,
 and `attachTo` with it — nothing else set it. A project made inline gets an
 automatic colour; the sidebar's **+ New** is still the way to set one by hand.
+
+`findProjectId` is the **one** place a project is made from a typed name, so it
+is where `flashProj` is set: the new project has always appeared in the sidebar
+on the next render, but at the end of a list long enough to have scrolled it out
+of sight, which is indistinguishable from not appearing at all. `renderNav`
+scrolls to it and flashes it. The flag is held for the length of the flash rather
+than cleared by the first render — adding a task renders twice, `addTask` then
+`revealTask`'s change of view, and the second rebuild of the sidebar threw the
+class away before anyone could see it.
+
+## A good day, which is not a big version of one task
+
+`fxOvation` is the celebration for finishing several things in a day, and it
+looks nothing like the one for finishing one. Every other effect throws outward
+from a row because it is about that row; this one belongs to the whole day, so it
+rains down the whole window and lasts about three times as long (measured: 1.7s
+against 3.6s). Like `fxDeliver` it ignores `fx.style` — the fifth thing finished
+is the same event whichever style you picked — and like it, obeys the amount, the
+reduced-motion check and the cap.
+
+- `dayGoalDue()` is asked **before** anything is drawn, so the ovation replaces
+  the row's small burst instead of landing on top of it.
+- Once a day: `bigDay` holds the date it last fired, or undoing and re-ticking
+  would set it off again and again.
+- It takes the whole of `fxLive` for its duration. And that counter is now
+  clamped at zero — one that can go negative is a concurrency cap that has
+  quietly stopped working.
+- `dayGoal` is a per-device preference with the other look-and-feel ones
+  (`DAY_GOAL`: Never / 3 / 5 / 8 / 12, default 5), and "Try the big one" in
+  Settings shows it without spending the day's one go.
 
 ## Dropdowns
 

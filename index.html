@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.52.0">
-<meta name="app-build" content="2026-08-26">
+<meta name="app-version" content="1.53.0">
+<meta name="app-build" content="2026-09-03">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -338,6 +338,32 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .field:last-child{border-bottom:0}
 .field label{font-size:15px;color:var(--label2);width:98px;flex:none}
 .field input,.field select,.field textarea{flex:1;background:transparent;border:0;outline:none;font-size:16px;text-align:right;min-width:0}
+/* The suggestion list for the four fields that remember what has been typed.
+   Fixed rather than absolute, and a child of <body> rather than of the sheet:
+   a sheet scrolls and clips, and these fields sit near the bottom of one. */
+.ac{position:fixed;z-index:120;background:var(--sheet);border-radius:12px;
+  box-shadow:0 2px 6px rgba(0,0,0,.18),0 16px 40px rgba(0,0,0,.28);
+  border:.5px solid var(--sep);overflow:auto;max-height:246px;padding:5px}
+.ac button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;
+  padding:8px 10px;border-radius:8px;font-size:15px;color:var(--label);line-height:1.2}
+.ac button b{font-weight:800}
+.ac button i.sw{width:8px;height:8px;border-radius:2px;flex:none;display:block}
+.ac button .n{margin-left:auto;font-size:12px;color:var(--label3);flex:none}
+.ac button.on{background:var(--fill)}
+@media(hover:hover){.ac button:hover{background:var(--fill2)}}
+.ac .none{padding:8px 10px;font-size:13.5px;color:var(--label3)}
+/* What the day's ovation says. Above everything, and untouchable — it is there
+   to be read, not interacted with. */
+.ovmsg{position:fixed;left:50%;top:15vh;z-index:130;pointer-events:none;
+  padding:11px 22px;border-radius:999px;background:var(--sheet);color:var(--label);
+  font-family:var(--round);font-size:19px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;
+  box-shadow:0 2px 8px rgba(0,0,0,.2),0 18px 50px rgba(0,0,0,.3);border:.5px solid var(--sep)}
+/* A project that has just been made out of a typed name, so it can be seen
+   arriving in a list that may be long enough to have scrolled it out of sight. */
+.nav.justmade{animation:justmade 1.5s var(--ease)}
+@keyframes justmade{
+  0%{background:color-mix(in srgb,var(--green) 34%,transparent)}
+  100%{background:transparent}}
 .scanbtn{width:30px;height:30px;margin-left:8px;background:var(--fill2)}
 .scanbtn svg{width:16px;height:16px;fill:var(--blue)}
 .tracklink{padding:10px 14px;background:var(--card2);font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -807,7 +833,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="stages" id="dstages"></div>
   <div class="fgroup">
     <div class="field"><label for="dtitle">Title</label><input id="dtitle" placeholder="What needs doing"></div>
-    <div class="field"><label for="dproj">Project</label><input id="dproj" list="l-proj" placeholder="None" autocorrect="off"></div>
+    <div class="field"><label for="dproj">Project</label><input id="dproj" placeholder="None" autocorrect="off"></div>
     <div class="field"><label for="ddue">Due</label><input id="ddue" type="date"></div>
     <div class="field"><label for="dremind">Remind me</label><select id="dremind"></select></div>
     <div class="field"><label for="drep">Repeats</label><select id="drep"></select></div>
@@ -818,12 +844,12 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
       <button class="btn sec" id="dtimebtn" style="margin:0;font-size:13.5px;padding:6px 12px">Start</button></div>
   </div>
   <div class="fgroup" id="shipfields">
-    <div class="field"><label for="dmfr">Maker</label><input id="dmfr" list="l-mfr" placeholder="None"></div>
-    <div class="field"><label for="ddest">Ship to</label><input id="ddest" list="l-dest" placeholder="None"></div>
+    <div class="field"><label for="dmfr">Maker</label><input id="dmfr" placeholder="None"></div>
+    <div class="field"><label for="ddest">Ship to</label><input id="ddest" placeholder="None"></div>
     <div class="field"><label for="dqty">Quantity</label><input id="dqty" type="number" min="0" step="1" inputmode="numeric" placeholder="None"></div>
     <div class="field"><label for="dcost">Cost</label><input id="dcost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="None"></div>
     <div class="field"><label for="deta">Expected</label><input id="deta" type="date"></div>
-    <div class="field"><label for="dpo">PO number</label><input id="dpo" list="l-po" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label for="dpo">PO number</label><input id="dpo" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
     <div class="trackhead"><span>Tracking</span><span id="dgot" class="got"></span></div>
     <div id="dtracks"></div>
     <div class="trackadd">
@@ -907,8 +933,12 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="fxg"><div class="lab2">When</div><div class="seg" id="fx-when"></div></div>
   <div class="fxg"><div class="lab2">How much</div><div class="seg" id="fx-amount"></div></div>
   <div class="fxg"><div class="lab2">Sound</div><div class="seg" id="fx-sound"></div></div>
+  <div class="fxg"><div class="lab2">A bigger one after</div><div class="seg" id="set-daygoal"></div></div>
+  <div class="blurb" id="setgoalnote" style="padding-top:0"></div>
   <div class="blurb" id="fxnote" style="padding-top:10px"></div>
-  <div style="padding:10px 14px 0"><button class="btn sec" id="fxtry" style="width:100%;margin:0;text-align:center">Try it</button></div>
+  <div style="padding:10px 14px 0;display:flex;gap:8px">
+    <button class="btn sec" id="fxtry" style="flex:1;margin:0;text-align:center">Try it</button>
+    <button class="btn sec" id="fxtrybig" style="flex:1;margin:0;text-align:center">Try the big one</button></div>
 
   <div class="sethead">Syncing and reminders</div>
   <div class="blurb" id="setsyncnote" style="padding-bottom:0"></div>
@@ -947,7 +977,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="sugg" id="sugg"></div>
   <div class="hint"><span><code>#</code> project</span><span><code>@</code> maker</span><span><code>&gt;</code> ship to</span><span><code>!</code> flag</span><span><code>PO 41785</code> order no.</span><span><code>fri</code> · <code>oct 15</code> · <code>in 2 weeks</code></span></div>
   <div class="fgroup" id="cshipfields" style="margin:10px 0 0">
-    <div class="field"><label for="cpo">PO number</label><input id="cpo" list="l-po" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label for="cpo">PO number</label><input id="cpo" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
     <div class="field"><label for="ctrack">Tracking</label><input id="ctrack" placeholder="Optional" autocapitalize="characters" autocorrect="off" spellcheck="false">
       <button class="iconbtn scanbtn" id="cscan" aria-label="Scan a shipping label"><svg viewBox="0 0 20 20"><path d="M2.6 2.6h4.2v1.8H4.4v2.4H2.6V2.6Zm10.6 0h4.2v4.2h-1.8V4.4h-2.4V2.6ZM2.6 13.2h1.8v2.4h2.4v1.8H2.6v-4.2Zm14.8 0v4.2h-4.2v-1.8h2.4v-2.4h1.8ZM5.6 6.4h1.5v7.2H5.6V6.4Zm2.6 0h1v7.2h-1V6.4Zm2 0h1.5v7.2h-1.5V6.4Zm2.6 0h1.6v7.2h-1.6V6.4Z"/></svg></button></div>
     <div class="field" id="ccarrierrow"><label for="ccarrier">Carrier</label><select id="ccarrier"></select></div>
@@ -1186,11 +1216,12 @@ grant execute on function shipshape_push_unsub(text, text) to anon;</pre>
   <div style="height:8px"></div>
 </div>
 
-<!-- What has been typed into these fields before. A datalist offers them and
-     still takes anything new, which is the whole point: most entries repeat, and
-     the ones that do not are the reason this is not a <select>. -->
-<datalist id="l-mfr"></datalist><datalist id="l-dest"></datalist>
-<datalist id="l-proj"></datalist><datalist id="l-po"></datalist>
+<!-- What has been typed into these fields before, offered as you type and still
+     taking anything new. Drawn by the page rather than left to <datalist>: that
+     one cannot rank a near-match, cannot be styled to match anything, and on a
+     phone is a cramped strip rather than a list. Fixed position and outside the
+     sheets, so nothing can clip it. -->
+<div id="ac" class="ac" role="listbox" hidden></div>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
 <div id="toast" role="status" aria-live="polite"><span id="tmsg"></span><button id="tundo" hidden>Undo</button></div>
 
@@ -1348,6 +1379,11 @@ let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
 let sortBy='smart',groupBy='auto',projSort='order',doneFold=false,compact=false,sfx=false,digestOff=false,streakOn=false,chaseAfter=7;
+/* How many finished in one day earns the bigger celebration, and the day it
+   last fired so it only happens once. Per device, with the other look-and-feel
+   preferences — how much fuss you want is a matter of temperament. */
+const DAY_GOAL=[[0,'Never'],[3,'3'],[5,'5'],[8,'8'],[12,'12']];
+let dayGoal=5,bigDay='';
 // how finishing something is marked; per device, like every other look-and-feel pref
 let fx={style:'confetti',when:'all',amount:'medium'};
 // draft holds what has been typed into the sync sheet but not turned on yet
@@ -1400,6 +1436,8 @@ async function loadAll(){
     if(SORTS.includes(v.sortBy))sortBy=v.sortBy;
     if(GROUPS.includes(v.groupBy))groupBy=v.groupBy;
     if(PSORTS.includes(v.projSort))projSort=v.projSort;
+    if(DAY_GOAL.some(g=>g[0]===v.dayGoal))dayGoal=v.dayGoal;
+    if(typeof v.bigDay==='string')bigDay=v.bigDay;
     doneFold=!!v.doneFold;
     compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;streakOn=!!v.streakOn;
     if(CHASE_DAYS.some(c=>c[0]===v.chaseAfter))chaseAfter=v.chaseAfter;
@@ -1553,7 +1591,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();}
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,projSort,doneFold,compact,sfx,digestOff,streakOn,chaseAfter,fx}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,projSort,doneFold,dayGoal,bigDay,compact,sfx,digestOff,streakOn,chaseAfter,fx}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -2386,17 +2424,6 @@ function render(){renderNav();renderHead();renderList();renderData();syncTick();
   // the calendar only means anything where the list is organised by date
   $('#calBtn').style.display=(view.t==='today'||view.t==='scheduled'||view.t==='week')?'':'none';}
 function renderData(){
-  $('#l-mfr').innerHTML=uniq('manufacturer').map(v=>`<option value="${esc(v)}">`).join('');
-  $('#l-dest').innerHTML=uniq('destination').map(v=>`<option value="${esc(v)}">`).join('');
-  /* Projects come from the record rather than from what tasks happen to name, so
-     one with nothing on it yet is still offered. In the list's own order, which
-     is the order they were made unless that has been changed. */
-  $('#l-proj').innerHTML=sortedProjects().map(p=>`<option value="${esc(p.name)}">`).join('');
-  /* Purchase orders, **newest first**: the number wanted next is nearly always
-     the one just used, and a datalist keeps document order until you start
-     typing. Deduplicated on the normalised key so "PO 41785" and "41785" are one
-     entry rather than two. */
-  $('#l-po').innerHTML=recentPOs().map(v=>`<option value="${esc(v)}">`).join('');
   $('#hsort').innerHTML=SORTS.map(v=>`<option value="${v}" ${v===sortBy?'selected':''}>${SORT_LABEL[v]}</option>`).join('');
   $('#hgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
   $('#hpsort').innerHTML=PSORTS.map(v=>`<option value="${v}" ${v===projSort?'selected':''}>${PSORT_LABEL[v]}</option>`).join('');
@@ -2471,6 +2498,13 @@ function renderNav(){
   const keepFocus=document.activeElement&&document.activeElement.id==='npsort';
   $('#navlists').innerHTML=h;
   if(keepFocus){const s=$('#npsort');if(s)s.focus();}
+  /* A project just made out of a typed name, brought into view and flashed so it
+     is seen arriving. Re-applied on every render inside the flash's own window —
+     see findProjectId for why there is more than one. */
+  if(flashProj){
+    const n=$(`#navlists .nav[data-v="project"][data-val="${flashProj}"]`);
+    if(n){n.scrollIntoView({block:'nearest'});if(!reduced())n.classList.add('justmade');}
+  }
   rollCounts();
 }
 const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',timelog:'Time',timecal:'Time',pos:'POs',invoices:'Invoices',all:'All open',done:'Completed',
@@ -3413,13 +3447,30 @@ async function checkUpdate(quiet){
   }catch(e){renderVersion(quiet?'':'check failed');if(!quiet)toast('Could not check. Are you offline?');}
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate(true);});
+/* The one place a project is made out of a name somebody typed — from the
+   composer's #Name, from a title being edited, or from the project field. */
 function findProjectId(name){
   name=(name||'').trim();          // untrimmed names used to make "Acme " a second project
   if(!name)return null;
   let p=S.projects.find(p=>(p.name||'').trim().toLowerCase()===name.toLowerCase());
-  if(!p){p={id:uid(),name,color:PAL[S.projects.length%PAL.length],client:'',due:null,notes:'',u:now()};S.projects.push(p);}
+  if(!p){
+    p={id:uid(),name,color:PAL[S.projects.length%PAL.length],client:'',due:null,notes:'',u:now()};
+    S.projects.push(p);
+    /* It has always appeared in the sidebar on the next render — but at the end
+       of a list that can be long enough to have scrolled it out of sight, which
+       is indistinguishable from not appearing at all. `renderNav` scrolls to it
+       and flashes it.
+
+       Held for the length of the flash rather than cleared by the first render,
+       because adding a task renders more than once — addTask, then revealTask's
+       change of view — and the second rebuild of the sidebar threw the class
+       away again before anyone could see it. */
+    flashProj=p.id;
+    clearTimeout(flashT);flashT=setTimeout(()=>{flashProj=null;},1600);
+  }
   return p.id;
 }
+let flashProj=null,flashT=null;
 function addTask(d){
   if(!d.title)return;
   const t={id:uid(),title:d.title,type:d.type||'task',projectId:findProjectId(d.project),
@@ -3466,6 +3517,9 @@ function toggleDone(id,el){
   if(t.done&&t.rep&&t.due)spawned=repeatAfter(t);
   buzz(t.done?[6,30,10]:6);
   if(t.done)ping(880);
+  // asked before anything is drawn, so the day's ovation replaces the row's
+  // small burst rather than landing on top of it
+  const ovation=t.done&&dayGoalDue();
   if(t.done&&el){
     el.closest('.row').classList.add('done');
     const s=t.projectId?stats(t.projectId):null,whole=!!(s&&s.all&&s.open===0);
@@ -3473,9 +3527,12 @@ function toggleDone(id,el){
        is how most of them get there — so it gets the same arriving effect rather
        than the outward burst a task gets. A finished project outranks both. */
     const ship=t.type==='shipment'&&!whole;
-    celebrate(el,{milestone:whole||ship,kind:ship?'deliver':''});
+    if(!ovation)celebrate(el,{milestone:whole||ship,kind:ship?'deliver':''});
     if(whole)toast('Project complete 🎉');
   }
+  // no row needed: this one belongs to the window, so it fires from the detail
+  // sheet and the row alike
+  if(ovation)dayGoalCelebrate();
   save();
   setTimeout(()=>{
     const w=el&&el.closest('.rowwrap');
@@ -4045,7 +4102,9 @@ const FX_AMOUNT=[['light','Light'],['medium','Medium'],['full','Full']];
 const FX_N={sparks:{light:10,medium:18,full:30},confetti:{light:14,medium:26,full:44},
   fireworks:{light:12,medium:20,full:32},
   // fewer, because each one falls the whole height of the row and lands
-  deliver:{light:5,medium:9,full:14}};
+  deliver:{light:5,medium:9,full:14},
+  // a good day is the whole screen, not one row, so this one can afford more
+  ovation:{light:28,medium:48,full:80}};
 let fxLive=0;                         // concurrent effects, so a flurry cannot pile up
 function fxParticle(cls,x,y,bg,extra){
   const d=document.createElement('div');
@@ -4134,6 +4193,66 @@ function fxDeliver(cx,cy,n,w){
       {duration:700+Math.random()*260,delay:i*26,easing:'cubic-bezier(.35,.05,.3,1)',fill:'backwards'});
   }
 }
+/* A good day's work, which is a different event from finishing one thing and so
+   looks nothing like it. Every other effect throws outward from a row, because it
+   is about that row; this one belongs to the whole day, so it rains down the
+   whole window and takes about three times as long.
+
+   Like fxDeliver it ignores fx.style — the fifth thing finished is the same
+   event whichever style you picked — and like it, obeys the amount, the
+   reduced-motion check and the concurrency cap. */
+function fxOvation(n){
+  for(let i=0;i<n;i++){
+    const c=fxParticle('conf',Math.random()*innerWidth,-18,PAL[i%PAL.length]);
+    const spin=(Math.random()<.5?-1:1)*(540+Math.random()*760);
+    const drift=(Math.random()-.5)*190;
+    const fall=innerHeight+60;
+    fxGo(c,[
+      {transform:'translate(0,0) rotate(0deg)',opacity:1,offset:0},
+      {transform:`translate(${drift*.5}px,${fall*.55}px) rotate(${spin*.6}deg)`,opacity:1,offset:.6},
+      {transform:`translate(${drift}px,${fall}px) rotate(${spin}deg)`,opacity:0,offset:1}],
+      {duration:1800+Math.random()*1000,delay:Math.random()*1000,
+       easing:'cubic-bezier(.3,.45,.5,1)',fill:'backwards'});
+  }
+  // three shells across the width, staggered, so it reads as an ovation not a pop
+  const shells=Math.max(9,Math.round(n*.28));
+  [[.27,0],[.68,340],[.45,700]].forEach(([at,delay],k)=>{
+    setTimeout(()=>fxFireworks(innerWidth*at,innerHeight*.32+(k-1)*44,shells),delay);
+  });
+}
+/* Said out loud as well as drawn: the point of the thing is to notice, and an
+   effect with no words is easy to read as decoration. */
+function fxBanner(text){
+  const d=document.createElement('div');
+  d.className='ovmsg';d.textContent=text;
+  document.body.appendChild(d);
+  d.animate([
+    {transform:'translate(-50%,-14px) scale(.88)',opacity:0,offset:0},
+    {transform:'translate(-50%,0) scale(1)',opacity:1,offset:.12},
+    {transform:'translate(-50%,0) scale(1)',opacity:1,offset:.8},
+    {transform:'translate(-50%,-10px) scale(.97)',opacity:0,offset:1}],
+    {duration:2600,easing:'cubic-bezier(.2,.7,.3,1)'}).onfinish=()=>d.remove();
+}
+const doneToday=()=>{const m=midnight().getTime();
+  return S.tasks.filter(t=>t.done&&t.completed&&t.completed>=m).length;};
+/* Whether this completion is the one that reaches the day's mark. Asked before
+   the small effect runs, so the two never fire over each other. Once a day: the
+   date it last fired is remembered, or undoing and re-ticking would set it off
+   again and again. */
+const dayGoalDue=()=>!!dayGoal&&!reduced()&&fx.when!=='never'
+  &&bigDay!==iso(midnight())&&doneToday()>=dayGoal;
+function dayGoalCelebrate(){
+  bigDay=iso(midnight());saveView();
+  /* Takes the whole cap for its own duration — a burst thrown over the top of an
+     ovation just muddies both. */
+  // clamped: a counter that can go negative is a concurrency cap that has
+  // quietly stopped working
+  fxLive+=2;setTimeout(()=>{fxLive=Math.max(0,fxLive-2);},2600);
+  fxOvation(FX_N.ovation[fx.amount]||48);
+  fxBanner(`${doneToday()} done today`);
+  if(sfx){ping(784);setTimeout(()=>ping(1046),150);setTimeout(()=>ping(1318),300);}
+  buzz([10,40,10,40,18]);
+}
 /* The one entry point. `milestone` marks the completions that count even when
    effects are set to milestones only: a project finished, a shipment delivered. */
 function celebrate(el,{milestone=false,force=false,kind=''}={}){
@@ -4146,7 +4265,7 @@ function celebrate(el,{milestone=false,force=false,kind=''}={}){
     if(fx.when==='milestone'&&!milestone)return;
   }
   if(fxLive>1)return;                 // two overlapping is plenty; more just costs frames
-  fxLive++;setTimeout(()=>fxLive--,900);
+  fxLive++;setTimeout(()=>{fxLive=Math.max(0,fxLive-1);},900);
   const r=el.getBoundingClientRect();
   const cx=r.left+r.width/2,cy=r.top+r.height/2;
   if(kind==='deliver'){
@@ -4308,6 +4427,152 @@ const namedProject=v=>{
   const n=(v||'').trim().toLowerCase();
   return n?S.projects.find(p=>(p.name||'').trim().toLowerCase()===n)||null:null;
 };
+
+/* ============ what has been typed here before ============
+   Four fields remember: the project, the maker, where it ships to, and the PO.
+   All four still take anything new — that is the point of them being text at all
+   — but nearly every entry is one that already exists, so the list is offered on
+   focus and narrows as you type.
+
+   Drawn here rather than left to <datalist>, which cannot rank a near miss,
+   cannot be styled, and on a phone is a cramped strip rather than a list. */
+const AC_SRC={
+  // projects come from the record, so one with nothing on it yet is still offered
+  dproj:()=>sortedProjects().map(p=>({v:p.name,color:p.color,n:stats(p.id).open||''})),
+  // makers and destinations have no record of their own: what has been typed IS the list
+  dmfr:()=>uniq('manufacturer').map(v=>({v,n:S.tasks.filter(t=>t.manufacturer===v&&!t.done).length||''})),
+  ddest:()=>uniq('destination').map(v=>({v,n:S.tasks.filter(t=>t.destination===v&&!t.done).length||''})),
+  dpo:()=>recentPOs().map(v=>({v,n:S.tasks.filter(t=>poKey(t)===v).length||''})),
+};
+AC_SRC.cpo=AC_SRC.dpo;
+const acEsc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+/* Letters in order but not adjacent — "chwh" finds "Chicago warehouse". Last
+   resort, below every kind of real substring match. */
+function acLoose(s,q){let i=0;for(const ch of s){if(ch===q[i])i++;if(i===q.length)return true;}return false;}
+/* Ranked, closest first: what you typed exactly, then what starts with it, then
+   what has it at the start of a word, then anywhere, then loosely. */
+function acRank(list,q){
+  q=(q||'').trim().toLowerCase();
+  if(!q)return list.slice(0,10);
+  const wordStart=new RegExp('\\b'+acEsc(q));
+  const out=[];
+  list.forEach((it,i)=>{
+    const s=String(it.v).toLowerCase();
+    const score=s===q?0:s.startsWith(q)?1:wordStart.test(s)?2:s.includes(q)?3:acLoose(s,q)?4:-1;
+    if(score>=0)out.push({...it,score,i});
+  });
+  out.sort((a,b)=>a.score-b.score||a.i-b.i);
+  return out.slice(0,10);
+}
+let acFor=null,acItems=[],acSel=-1;
+function acClose(){
+  if(!acFor)return;
+  acFor.setAttribute('aria-expanded','false');
+  acFor=null;acItems=[];acSel=-1;
+  const el=$('#ac');el.hidden=true;el.innerHTML='';
+}
+function acOpen(input){
+  const src=AC_SRC[input.id];if(!src)return;
+  const all=src().filter(x=>x.v);
+  acItems=acRank(all,input.value);
+  acFor=input;acSel=-1;
+  const el=$('#ac');
+  if(!acItems.length){acClose();return;}
+  const q=input.value.trim().toLowerCase();
+  el.innerHTML=acItems.map((it,i)=>{
+    const s=String(it.v);
+    // show why it matched, where that is a plain substring
+    const at=q?s.toLowerCase().indexOf(q):-1;
+    const label=at<0?esc(s)
+      :esc(s.slice(0,at))+'<b>'+esc(s.slice(at,at+q.length))+'</b>'+esc(s.slice(at+q.length));
+    return `<button type="button" role="option" data-ac="${i}" aria-selected="false"
+      >${it.color?`<i class="sw" style="background:${it.color}"></i>`:''}<span>${label}</span>${
+        it.n?`<span class="n">${it.n}</span>`:''}</button>`;
+  }).join('');
+  el.hidden=false;
+  input.setAttribute('aria-expanded','true');
+  acPlace();
+}
+/* Measured against the viewport and flipped above the field when there is not
+   room below it — these fields sit near the bottom of a sheet on a phone. */
+function acPlace(){
+  if(!acFor)return;
+  const el=$('#ac'),r=acFor.getBoundingClientRect();
+  const w=Math.max(180,Math.min(320,r.width+40));
+  el.style.width=w+'px';
+  el.style.left=Math.round(Math.max(8,Math.min(innerWidth-w-8,r.right-w)))+'px';
+  el.style.maxHeight='';
+  const below=innerHeight-r.bottom-12, above=r.top-12;
+  const want=el.scrollHeight;
+  if(below>=Math.min(want,140)||below>=above){
+    el.style.top=Math.round(r.bottom+5)+'px';el.style.maxHeight=Math.min(246,below)+'px';
+  }else{
+    el.style.maxHeight=Math.min(246,above)+'px';
+    el.style.top=Math.round(r.top-5-Math.min(el.scrollHeight,Math.min(246,above)))+'px';
+  }
+}
+function acMark(){
+  const bs=$$('#ac button');
+  bs.forEach((b,i)=>{b.classList.toggle('on',i===acSel);b.setAttribute('aria-selected',i===acSel);});
+  if(acSel>=0&&bs[acSel])bs[acSel].scrollIntoView({block:'nearest'});
+}
+/* Picking is a decision, so it fires both events: `input`, which the composer's
+   preview and its cpoManual flag listen for, and `change`, which is what the
+   detail sheet saves on. */
+let acPicking=false;
+function acPick(i){
+  const it=acItems[i];if(!it||!acFor)return;
+  const input=acFor;
+  input.value=String(it.v);
+  acClose();
+  /* The `input` event is what reopens the list as somebody types, so it would
+     reopen it on the value that was just chosen — the list flashing back up over
+     a field you have finished with. Held shut for the two dispatches. */
+  acPicking=true;
+  try{
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  }finally{acPicking=false;}
+  buzz(4);
+}
+for(const id of Object.keys(AC_SRC)){
+  const input=$('#'+id);if(!input)continue;
+  input.setAttribute('autocomplete','off');
+  input.setAttribute('role','combobox');
+  input.setAttribute('aria-expanded','false');
+  input.addEventListener('focus',()=>{if(!acPicking)acOpen(input);});
+  input.addEventListener('input',()=>{if(!acPicking)acOpen(input);});
+  input.addEventListener('keydown',e=>{
+    if(acFor!==input)return;
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      if(!acItems.length)return;
+      const n=acItems.length;
+      // -1 is "nothing picked", and the ends wrap back through it, so arrowing
+      // past the last row gives you back what you actually typed
+      if(e.key==='ArrowDown')acSel=acSel>=n-1?-1:acSel+1;
+      else acSel=acSel<=-1?n-1:acSel-1;
+      acMark();return;
+    }
+    // Enter only claims the key when something is actually highlighted, or it
+    // would swallow the composer's own "add this" on every keystroke
+    if(e.key==='Enter'&&acSel>=0){e.preventDefault();acPick(acSel);return;}
+    if(e.key==='Escape'&&acFor){e.preventDefault();e.stopPropagation();acClose();}
+  });
+  // blur closes, but a tap on the list must land first — see the pointerdown below
+  input.addEventListener('blur',()=>setTimeout(()=>{if(acFor===input)acClose();},120));
+}
+/* preventDefault on pointerdown keeps focus in the field, so blur never races
+   the click that is about to pick something. */
+$('#ac').addEventListener('pointerdown',e=>{e.preventDefault();});
+$('#ac').addEventListener('click',e=>{
+  const b=e.target.closest('[data-ac]');if(!b)return;
+  acPick(+b.dataset.ac);
+});
+addEventListener('resize',acClose);
+// a sheet scrolling under a fixed list would leave it behind
+document.addEventListener('scroll',()=>{if(acFor)acPlace();},true);
+
 function showKind(t){
   $('#dkind').textContent=t.type==='shipment'?'Shipment':'Task';
   $$('#dtype button').forEach(b=>b.classList.toggle('on',b.dataset.t===t.type));
@@ -6071,6 +6336,12 @@ function renderSettings(){
   seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');
   seg('set-streak',[['off','Off'],['on','On']],streakOn?'on':'off');
   seg('set-chase',CHASE_DAYS.map(([v,l])=>[String(v),l]),String(chaseAfter));
+  seg('set-daygoal',DAY_GOAL.map(([v,l])=>[String(v),l]),String(dayGoal));
+  {const n=doneToday();
+   $('#setgoalnote').textContent=!dayGoal
+     ? 'Off. Every completion gets the same effect, however many there are.'
+     : `${n} finished today. At ${dayGoal} the whole window celebrates, once a day.`
+     +(bigDay===iso(midnight())?' Already happened today.':'');}
   {const n=chaseAfter?openT().filter(t=>t.wait==='them'&&waitDays(t)>=chaseAfter).length:0;
    $('#setchasenote').textContent=!chaseAfter
      ? 'Off. Things set to "waiting on them" are only in the Whose move view.'
@@ -6120,11 +6391,21 @@ $('#setsheet').addEventListener('click',e=>{
   else if(id==='set-digest'){digestOff=v==='hidden';render();}
   else if(id==='set-streak'){streakOn=v==='on';render();}
   else if(id==='set-chase'){chaseAfter=+v;render();}
+  else if(id==='set-daygoal')dayGoal=+v;
   saveView();renderSettings();
   // show what was just chosen, from the button that chose it
   if(id.startsWith('fx-')&&id!=='fx-sound'&&fx.when!=='never')celebrate(b,{force:true});
 });
 $('#fxtry').addEventListener('click',()=>{celebrate($('#fxtry'),{force:true});if(sfx)ping(880);buzz([6,30,10]);});
+/* Shown on demand without touching the once-a-day record — trying it out is
+   not the same as having earned it. */
+$('#fxtrybig').addEventListener('click',()=>{
+  if(reduced())return toast('Reduced motion is on, so effects are off.');
+  fxOvation(FX_N.ovation[fx.amount]||48);
+  fxBanner(dayGoal?`${dayGoal} done today`:'A good day');
+  if(sfx){ping(784);setTimeout(()=>ping(1046),150);setTimeout(()=>ping(1318),300);}
+  buzz([10,40,10,40,18]);
+});
 
 /* ============ keyboard help ============
    The shortcuts have been there all along with nothing to announce them. */
