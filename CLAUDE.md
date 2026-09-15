@@ -636,11 +636,31 @@ completions must not pile up hundreds of animating nodes.
 
 ## Sheets
 
-The detail sheet doubles as a docked column above 1200px, so it lives inside
-`#app` rather than beside it. A docked pane is not modal: no scrim, no focus trap,
-and `sheetOpen()` reports false for it so background pulls are not held off while
-it sits open. `syncDock()` handles the window being resized across that
-threshold.
+**The detail sheet is a sheet at every width.** It used to dock as a column
+beside the list above 1200px — `#detail.dock`, no scrim, no focus trap, and
+`sheetOpen()` reporting false for it so a background pull was not held off while
+it sat open. That bought room at the price of being a different thing on a
+desktop from the thing on a phone, and the room is better bought by making the
+sheet itself wider: `min(880px,94vw)` from 900px up, with the field-only groups
+laid out two abreast so most of a task is on screen at once.
+
+So there is one shape, one `aria-modal="true"`, one `growFrom` and no
+`syncDock()` to keep a resize honest. `#detail` still lives inside `#app` — it is
+`position:fixed`, so where it sits in the tree no longer matters, and moving it
+would only churn the diff.
+
+- `.cols` marks the groups that are **nothing but fields**. Links, the checklist
+  and Notes keep their full width, because each is a list or a paragraph rather
+  than a pair of values, and `#shipfields` closes its `.cols` before the tracking
+  block for the same reason.
+- The dividing lines are the grid's own **gaps showing the container through**
+  (`gap:.5px;background:var(--sep)`), not a border on every other cell. A field
+  that spans both columns — the title does — inverts the odd/even run behind it,
+  so parity is the wrong thing to hang them on. `.fgroup` already clips to its
+  rounded corners, so the gaps stop where the group does.
+- `openDetail` can still be called with another task open, from the palette or
+  from a row behind a closing sheet, so it writes that one back first. That was
+  true of the dock and is no less true now.
 
 Sheet titles are sticky. The sync sheet is long enough to scroll, and its ✕ used
 to leave with the content — on a phone that means no visible way out. The same

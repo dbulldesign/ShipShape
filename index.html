@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.54.0">
-<meta name="app-build" content="2026-09-03">
+<meta name="app-version" content="1.55.0">
+<meta name="app-build" content="2026-09-15">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -308,7 +308,7 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .grab{display:none}
 /* Sticky, because a sheet long enough to scroll — sync setup most of all — used
    to carry its ✕ away with the content, leaving a phone with no visible way to
-   close it. The docked pane already pinned its title; now every sheet does. */
+   close it. Every sheet pins its title. */
 .sheettitle{font-family:var(--round);font-weight:700;font-size:17px;text-align:center;padding:14px 46px 10px;
   position:sticky;top:0;z-index:5;background:var(--sheet)}
 .sheettitle .x{position:absolute;right:12px;top:11px;width:28px;height:28px;border-radius:50%;background:var(--fill2);display:grid;place-items:center}
@@ -682,22 +682,26 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 .hctl select{background:var(--fill2);border:0;border-radius:9px;padding:6px 7px;font-size:13px;
   font-weight:600;color:var(--label2);max-width:132px}
 @media (min-width:861px){.hctl{display:flex}}
-/* Split view: a desktop window is wide enough to show a task beside the list
-   rather than on top of it. Above this width the detail sheet docks as a real
-   column — no scrim, the list stays live, and clicking another row swaps the
-   pane instead of closing and reopening a modal. Below it, the same element is
-   the modal sheet it has always been. */
-:root{--dock:420px}
-@media (min-width:1200px){
-  #detail.dock{position:static;flex:0 0 var(--dock);width:var(--dock);max-height:none;
-    transform:none;opacity:1;pointer-events:auto;border-radius:0;box-shadow:none;
-    border-left:.5px solid var(--sep);background:var(--bg);overflow-y:auto;
-    padding-bottom:calc(24px + env(safe-area-inset-bottom));animation:dockin .3s var(--ease)}
-  #detail.dock .sheettitle{position:sticky;top:0;z-index:3;background:var(--bg);padding-bottom:8px}
-  #detail.dock .field label{width:78px}          /* the pane is narrower than the sheet was */
+/* The detail sheet is a sheet at every width. It used to dock as a column beside
+   the list above 1200px, which bought room at the cost of being a different
+   thing on a desktop from the one on a phone — and the room is better bought by
+   making the sheet itself wider.
+
+   A desktop window is wide enough for the fields to sit two abreast, so most of
+   a task is on screen at once instead of three scrolls deep. `.cols` marks the
+   groups that are nothing but fields; Links, the checklist and Notes keep their
+   full width because each is a list or a paragraph, not a pair of values. */
+@media (min-width:900px){
+  #detail{width:min(880px,94vw);max-height:90vh}
+  /* The dividing lines are the grid's own gaps showing the container through,
+     rather than a border on every other cell: a field that spans both columns
+     inverts the odd/even run behind it, so parity is the wrong thing to hang
+     them on. `.fgroup` already clips to its rounded corners. */
+  #detail .cols{display:grid;grid-template-columns:1fr 1fr;gap:.5px;background:var(--sep)}
+  #detail .cols .field{border-bottom:0}
+  #detail .cols .field.wide{grid-column:1/-1}   /* the title earns the full width */
+  #detail .cols .field label{width:86px}
 }
-@media (min-width:1440px){:root{--dock:480px}}
-@keyframes dockin{from{opacity:0;transform:translateX(16px)}}
 /* A right-click menu on a row, and the command palette, both hang off .menu. */
 /* right:auto matters: .menu pins right:0, and with left also set the used width
    depends on left, so measuring to compute left feeds back on itself. */
@@ -836,8 +840,8 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="sheettitle"><span id="dkind">Task</span><button class="x" id="dclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div style="padding:12px 14px 0"><div class="seg" id="dtype"><button data-t="task">Task</button><button data-t="shipment">Shipment</button></div></div>
   <div class="stages" id="dstages"></div>
-  <div class="fgroup">
-    <div class="field"><label for="dtitle">Title</label><input id="dtitle" placeholder="What needs doing"></div>
+  <div class="fgroup"><div class="cols">
+    <div class="field wide"><label for="dtitle">Title</label><input id="dtitle" placeholder="What needs doing"></div>
     <div class="field"><label for="dproj">Project</label><input id="dproj" placeholder="None" autocorrect="off"></div>
     <div class="field"><label for="ddue">Due</label><input id="ddue" type="date"></div>
     <div class="field"><label for="dremind">Remind me</label><select id="dremind"></select></div>
@@ -847,14 +851,15 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="dwait">Waiting on</label><select id="dwait"></select></div>
     <div class="field" id="dtimerow"><label>Time</label><span id="dtime" style="flex:1"></span>
       <button class="btn sec" id="dtimebtn" style="margin:0;font-size:13.5px;padding:6px 12px">Start</button></div>
-  </div>
-  <div class="fgroup" id="shipfields">
+  </div></div>
+  <div class="fgroup" id="shipfields"><div class="cols">
     <div class="field"><label for="dmfr">Maker</label><input id="dmfr" placeholder="None"></div>
     <div class="field"><label for="ddest">Ship to</label><input id="ddest" placeholder="None"></div>
     <div class="field"><label for="dqty">Quantity</label><input id="dqty" type="number" min="0" step="1" inputmode="numeric" placeholder="None"></div>
     <div class="field"><label for="dcost">Cost</label><input id="dcost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="None"></div>
     <div class="field"><label for="deta">Expected</label><input id="deta" type="date"></div>
     <div class="field"><label for="dpo">PO number</label><input id="dpo" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+  </div>
     <div class="trackhead"><span>Tracking</span><span id="dgot" class="got"></span></div>
     <div id="dtracks"></div>
     <div class="trackadd">
@@ -1414,10 +1419,10 @@ const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const uid=()=>Math.random().toString(36).slice(2,10);
 const now=()=>Date.now();
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-/* A docked detail pane can sit open for an hour, so unlike a modal sheet it must
-   not hold off background pulls — nothing re-renders the open sheet under you,
-   and whatever is in its fields is written back when it closes. */
-const sheetOpen=()=>$$('.sheet.on').some(s=>!s.classList.contains('dock'));
+/* Anything open over the list holds off a quiet background pull, so a re-render
+   cannot pull the sheet's own fields out from under whoever is typing in them.
+   Every sheet is modal again, so there is no longer an exception to make. */
+const sheetOpen=()=>$$('.sheet.on').length>0;
 
 async function loadAll(){
   let raw=await local.get(KEY);
@@ -3405,7 +3410,7 @@ function rollCounts(){
   }
 }
 /* A sheet opened from a row grows out of that row, so it is obvious which one it
-   belongs to. Only for the modal: the docked pane has its own slide, and the
+   belongs to. Skipped below 861px and under reduced motion, and the
    phone's bottom sheet comes up from the edge it is attached to. */
 let openedFrom=null;
 function growFrom(sheet){
@@ -4401,16 +4406,14 @@ function closeSheets(){
   const a=document.activeElement;
   if(a&&a.closest&&a.closest('.sheet'))a.blur();
   $('#scrim').classList.remove('on');
-  $$('.sheet').forEach(s=>s.classList.remove('on','dock'));
+  $$('.sheet').forEach(s=>s.classList.remove('on'));
   editing=null;editProj=null;entryDraft=null;
   if(lastFocus&&document.contains(lastFocus)){lastFocus.focus();lastFocus=null;}
 }
 /* Keyboard users could tab out of an open sheet into the list behind it. Keep
    focus inside the sheet while it is up, and give it back on close. */
 let lastFocus=null;
-// A docked pane sits beside the list rather than over it, so Tab must be free to
-// leave it — trapping focus is only right for something modal.
-const openSheet=()=>$$('.sheet.on').find(s=>!s.classList.contains('dock'))||null;
+const openSheet=()=>$$('.sheet.on')[0]||null;
 function rememberFocus(){
   const a=document.activeElement;
   if(a&&a!==document.body&&!a.closest('.sheet'))lastFocus=a;
@@ -4649,8 +4652,8 @@ function showKind(t){
 }
 function openDetail(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
-  // docked, clicking another row swaps the pane without closing it, so the task
-  // being left has to be written back here rather than on close
+  // openDetail can be called with another task already open — from the palette,
+  // or from a row behind a sheet that is closing — so write that one back first
   if(editing&&editing!==id)saveDetail();
   editing=id;
   showKind(t);
@@ -4677,21 +4680,11 @@ function openDetail(id){
   $('#drep').innerHTML=REPS.map(([v,l])=>`<option value="${v||''}" ${(t.rep||'')===(v||'')?'selected':''}>${l}</option>`).join('');
   $('#dremind').innerHTML=REMINDS.map(([v,l])=>`<option value="${v}" ${(t.remind||0)===v?'selected':''}>${l}</option>`).join('');
   rememberFocus();
-  if(wide()){
-    // docked: a column beside the list rather than a modal over it
-    $('#detail').classList.add('on','dock');
-    $('#detail').setAttribute('aria-modal','false');
-  }else{
-    $('#detail').classList.add('on');
-    $('#detail').setAttribute('aria-modal','true');
-    $('#scrim').classList.add('on');
-    growFrom($('#detail'));
-  }
+  $('#detail').classList.add('on');
+  $('#detail').setAttribute('aria-modal','true');
+  $('#scrim').classList.add('on');
+  growFrom($('#detail'));
 }
-const wide=()=>matchMedia('(min-width:1200px)').matches;
-const docked=()=>$('#detail').classList.contains('dock');
-/* The window can be resized across the split-view threshold with a task open, so
-   the pane has to be able to become the modal it would have been, and back. */
 /* ============ the board, embedded ============
    The board is a view in this shell rather than a page of its own, at every
    width. It stays a separate document — its state, its merge rules and its own
@@ -4731,20 +4724,8 @@ function pokeBoard(){
   try{f.contentWindow&&f.contentWindow.__ssBoardPull&&f.contentWindow.__ssBoardPull();}catch(e){}
 }
 addEventListener('resize',()=>{if(view.t==='board')syncBoard();});
-function syncDock(){
-  const d=$('#detail');
-  if(!d.classList.contains('on'))return;
-  if(wide()&&!docked()){
-    d.classList.add('dock');d.setAttribute('aria-modal','false');
-    if(!$$('.sheet.on').some(s=>s!==d))$('#scrim').classList.remove('on');
-  }else if(!wide()&&docked()){
-    d.classList.remove('dock');d.setAttribute('aria-modal','true');
-    $('#scrim').classList.add('on');
-  }
-}
 let stripN=stripDays();
 addEventListener('resize',()=>{
-  syncDock();
   const n=stripDays();
   if(n!==stripN){stripN=n;if(!query&&(view.t==='today'||view.t==='scheduled'))renderList();}
 });
@@ -5823,7 +5804,7 @@ $('#fileIn').addEventListener('change',async e=>{
   }catch(err){toast('That file is not a Shipshape backup.');}
 });
 function setView(t,v){
-  // a docked detail column beside the board leaves neither enough room
+  // a task open over the board belongs to the list behind it, not to the board
   if(t==='board'&&$('#detail').classList.contains('on'))closeSheets();
   view={t,v};selDay=null;$('#q').value='';query='';render();$('#scroll').scrollTop=0;
   if(t!=='board')riseList();
