@@ -411,6 +411,104 @@ them to be found.
   `.chip.go` — exactly what a timesheet needs. `body[data-view]` scopes the
   exception, so the log puts both back without touching the order's own rules.
 
+## Duplicating an order
+
+The same crates go out again on a new number more often than anyone would guess
+— a re-order, a second phase, a replacement for a damaged consignment — and
+retyping fifteen lines is how numbers end up wrong. `dupPO()` clones every item
+of `view.v`'s order onto a number typed into `#dupsheet`.
+
+The split is between **what the order is** and **what happened to it**. Titles,
+project, maker, destination, quantity, cost, notes and the checklist's lines come
+across; `done`, `completed`, `stage`, `stamps`, `due`, `eta`, `arch`, `flagged`,
+`wait`, the tracking numbers, the links and every tick on the checklist do not.
+Fresh `id`s throughout, including on the checklist lines, or two orders would
+share records.
+
+- **The number is typed, never guessed.** A PO comes out of somebody else's
+  system, so "the next one" is not a fact this app has. Held to the same
+  five-digit rule `PO_RE` enforces, and written however a PO is written —
+  `PO 41786` and `41786` both land.
+- **A number that already has items is refused, not merged.** Two orders sharing
+  a number are one page here, and quietly pouring these items onto somebody
+  else's order is not something a duplicate button should be able to do.
+- Print hides `[data-po]`, not `[data-po="print"]`, or the duplicate button
+  prints too.
+
+Duplicating a *task* was already there, in the row menu (`data-rm="dup"`).
+
+## Renaming a destination
+
+A maker has a record, `canonMaker`, and an editor. A destination has none of
+those — `uniq('destination')` over the tasks **is** the list — so a typo was
+permanent, and "Chigago warehouse" sat beside "Chicago warehouse" in the sidebar
+for ever. `destHead()` puts a pencil on the destination's own view and
+`saveDest()` rewrites every matching task, stamping `u` on each.
+
+- `destKey` (trim + lowercase) is the whole of what makes two of them the same.
+- **Typing a name already in the list is a merge**, and adopting that entry's
+  exact spelling is what makes the two entries become one. The old name is
+  excluded from that search, or correcting nothing but the capitals would find
+  itself and undo the correction.
+- `exists` is what decides whether the toast says "merged into", not whether the
+  name changed — a plain rename is just a rename.
+- Done and archived tasks move too. A destination is a place, not a filter.
+- The field is in `AC_SRC`, so the merge is something somebody picks off the list
+  rather than a coincidence of spelling.
+
+## What is landing this week
+
+A shipment carries two dates and they mean different things: `due` is the day
+somebody has to have it, `eta` the day the maker says it will land. The week read
+only the first, so "what is arriving" — the question a week of shipping is
+actually asked — had no answer anywhere in the app.
+
+`weekDay(t,lo,hi)` is the one rule, used by `filtered()` and by `groupOf()` so the
+list and its headings cannot disagree. **`due` wins when both fall in the week**:
+a promise beats an estimate, and one row under two headings is a lie about how
+much work there is.
+
+- The grid counts the two **apart** — the due count where it always was, an
+  arriving count under it — because they are different claims on a day. One is
+  work owed, the other a van turning up.
+- A day picked on the grid takes arrivals too, since that is what the grid
+  counted. The strip on Today and Scheduled is a strip of due dates and stays one.
+- The "past the date the maker gave" line counts **exactly** what `is:latemaker`
+  returns. A line that names a number and then leads somewhere else is worse than
+  no line, and `adrift` was first written as its own predicate and quoted a
+  number the search would not have produced.
+- It leads to the search rather than to Today, which is a list of due dates and
+  would not show a crate that has never been given one.
+
+## Saved searches
+
+`is:flagged late:`, `maker:lumina`, `po:41785` — the questions somebody asks every
+week, each a query nobody wants to retype and none of them worth a view.
+
+**A synced record kind, not a device preference.** The sort order of a list is a
+matter of where you are sitting; "the things I am chasing" is not, and a search
+pinned on the laptop is wanted on the phone. `search:'searches'` in `KINDS` is
+most of it — `itemsSince`, `mergeItems` and `restampAll` all iterate `KINDS` — plus
+`S.searches` in `migrate`, in `payload()` and in `mergeIn`'s list merge and
+tombstone sweep.
+
+- `countQuery(q)` stands `query` up around the **real** filter rather than
+  counting by a second, simpler rule. Two rules would sooner or later disagree,
+  and a badge that disagrees with what it opens is worse than no badge. It
+  restores `query` and `qParsed` in a `finally`.
+- **The ⋯ menu is the only editor**, and it names the search: "Save this
+  search…" while a query is running, "Edit “Chasing”…" when that query is already
+  somebody's. A ⋯ inside the sidebar button was the first cut and is invalid
+  HTML — a button inside a button — and the menu route works on a phone, where
+  the sidebar is `display:none`.
+- `runSaved` steps two views aside: the board draws itself and `renderList`
+  leaves it alone, and the archive filters everything out before a query is ever
+  consulted.
+- Removing one **tombstones** it, or the next pull puts it straight back.
+- The sidebar section only appears once there is one, and a search with nothing
+  in it shows a blank badge rather than a nought — that is the answer, not a
+  count.
+
 ## Waiting on someone
 
 `t.wait` says whose move it is; `waitAt` is when it became theirs. Without the

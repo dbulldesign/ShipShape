@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.55.0">
+<meta name="app-version" content="1.56.0">
 <meta name="app-build" content="2026-09-15">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -169,6 +169,10 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wcell .pips i{width:4px;height:4px;border-radius:50%;display:block}
 .wcell .ct{height:13px;font-size:11px;font-weight:700;color:var(--label3);font-variant-numeric:tabular-nums}
 .wcell .ct.late{color:var(--red)}
+/* An arrival is not a due date, so it does not borrow the due count's colour or
+   its place — a small caret under it, and nothing at all on a day with none. */
+.wcell .land{height:12px;font-size:10px;font-weight:700;color:var(--purple);font-variant-numeric:tabular-nums}
+.weeklate.late{color:var(--purple)}
 .weeklate{display:block;width:100%;margin-top:9px;padding:8px 11px;border-radius:11px;background:var(--fill2);
   font-size:13px;font-weight:600;color:var(--red);text-align:left;transition:transform .18s var(--ease)}
 .weeklate:active{transform:scale(.985)}
@@ -446,7 +450,7 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
      app's would print it twice. The group headings go too — "No date" is a
      bucket in a task list, not a line on a purchase order. */
   #head,#sidebar,#tabbar,#fab,#addTop,#runchip,#toast,#scrim,.sheet,#boardpane,
-  .act,.check,.stagebar,.chip.go,#ptr,.grp,[data-po="print"]{display:none!important}
+  .act,.check,.stagebar,.chip.go,#ptr,.grp,[data-po]{display:none!important}
   html,body,#app,#main,#scroll{height:auto!important;overflow:visible!important;background:#fff!important}
   #scroll{padding:0!important}
   *{color:#000!important;box-shadow:none!important;background:#fff!important}
@@ -809,6 +813,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <div class="note" id="storeNote"></div>
             <button data-m="settings">Settings…</button>
             <hr>
+            <button data-m="saveq" id="msaveq">Save this search…</button>
             <button data-m="newproj">New project</button>
             <button data-m="calendar">Calendar…</button>
             <button data-m="scan">Scan a shipping label</button>
@@ -1057,6 +1062,47 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   </div>
   <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="mnotes">Notes</label><textarea id="mnotes" placeholder="Terms, freight account, quirks…"></textarea></div></div>
   <div style="padding:0 14px 16px"><button class="btn" id="msave" style="width:100%;margin:0;text-align:center">Save</button></div>
+</div>
+
+<!-- A saved search. "is:flagged late:", "maker:lumina", "po:41785" — the
+     questions somebody asks every week, each of which is a query nobody wants to
+     retype and none of which is worth a view of its own. -->
+<div class="sheet" role="dialog" aria-modal="true" id="qsheet"><div class="grab"></div>
+  <div class="sheettitle"><span id="qstitle">Save this search</span><button class="x" id="qsclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="fgroup">
+    <div class="field"><label for="qsname">Name</label><input id="qsname" placeholder="What to call it"></div>
+    <div class="field"><label for="qsq">Search</label><input id="qsq" class="mono" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="is:flagged late:"></div>
+  </div>
+  <div class="blurb">Anything the search box takes: plain words, or <b>is:</b> <b>late:</b> <b>maker:</b> <b>to:</b> <b>project:</b> <b>po:</b> <b>stage:</b></div>
+  <div style="padding:0 14px 6px"><button class="btn" id="qssave" style="width:100%;margin:0;text-align:center">Save</button></div>
+  <button class="danger" id="qsdel">Remove</button>
+</div>
+
+<!-- A destination has no record of its own — uniq('destination') over the tasks
+     IS the list — so a typo is permanent and splits one place into two sidebar
+     entries for ever. This is the only way to put it right, and typing a name
+     that already exists merges the two. -->
+<div class="sheet" role="dialog" aria-modal="true" id="destsheet"><div class="grab"></div>
+  <div class="sheettitle">Ship to<button class="x" id="destclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="blurb" id="destnote"></div>
+  <div class="fgroup">
+    <div class="field"><label for="destname">Name</label><input id="destname" placeholder="Where it goes" autocorrect="off"></div>
+  </div>
+  <div style="padding:0 14px 16px"><button class="btn" id="destsave" style="width:100%;margin:0;text-align:center">Save</button></div>
+</div>
+
+<!-- Duplicating an order. The same crates go out again on a new number more
+     often than anyone would guess — a re-order, a second phase, a replacement
+     for a damaged consignment — and retyping fifteen lines by hand is how
+     numbers end up wrong. -->
+<div class="sheet" role="dialog" aria-modal="true" id="dupsheet"><div class="grab"></div>
+  <div class="sheettitle">Duplicate order<button class="x" id="dupclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="blurb" id="dupnote"></div>
+  <div class="fgroup">
+    <div class="field"><label for="dupno">New PO</label><input id="dupno" inputmode="numeric" maxlength="5"
+      autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Five digits"></div>
+  </div>
+  <div style="padding:0 14px 16px"><button class="btn" id="dupgo" style="width:100%;margin:0;text-align:center">Duplicate</button></div>
 </div>
 
 <div class="sheet" role="dialog" aria-modal="true" id="ssheet"><div class="grab"></div>
@@ -1460,6 +1506,10 @@ async function loadAll(){
 }
 function migrate(){
   S.projects=S.projects||[];S.tasks=S.tasks||[];S.tomb=S.tomb||{};S.times=S.times||[];
+  /* A saved search is a synced record, not a display preference. The sort order
+     of a list is a matter of where you are sitting; "the things I am chasing" is
+     not, and a search pinned on the laptop is wanted on the phone. */
+  S.searches=S.searches||[];
   if(!S.v||S.v<2){
     for(const n of [...new Set(S.tasks.map(t=>t.project).filter(Boolean))])
       if(!S.projects.find(p=>p.name===n))S.projects.push({id:uid(),name:n,color:colorFor(n),client:'',due:null,notes:'',u:now()});
@@ -1626,7 +1676,7 @@ async function rpc(fn,body){
   const txt=await r.text();
   return txt?JSON.parse(txt):null;
 }
-const payload=()=>({v:3,projects:S.projects,tasks:S.tasks,makers:S.makers,times:S.times,tomb:S.tomb});
+const payload=()=>({v:3,projects:S.projects,tasks:S.tasks,makers:S.makers,times:S.times,searches:S.searches,tomb:S.tomb});
 function schedulePush(){
   if(!sync.on)return;
   clearTimeout(pushT);
@@ -1805,7 +1855,7 @@ const ITEM_GRACE=5*60*1000;
    from when task photos existed would have poured them into the task list. A
    missing kind still means task, because the very first rows were written
    without one. */
-const KINDS={task:'tasks',project:'projects',maker:'makers',time:'times'};
+const KINDS={task:'tasks',project:'projects',maker:'makers',time:'times',search:'searches'};
 function itemsSince(ts){
   const out=[];
   for(const [kind,key] of Object.entries(KINDS))
@@ -2019,11 +2069,13 @@ function mergeIn(remote){
   changed=mergeList(S.projects,remote.projects)||changed;
   changed=mergeList(S.makers,remote.makers)||changed;
   changed=mergeList(S.times,remote.times)||changed;
-  const n0=S.tasks.length+S.projects.length+S.times.length;
+  changed=mergeList(S.searches,remote.searches||[])||changed;
+  const n0=S.tasks.length+S.projects.length+S.times.length+S.searches.length;
   S.tasks=S.tasks.filter(t=>!(S.tomb[t.id]&&S.tomb[t.id]>=(t.u||0)));
   S.projects=S.projects.filter(p=>!(S.tomb[p.id]&&S.tomb[p.id]>=(p.u||0)));
   S.times=S.times.filter(x=>!(S.tomb[x.id]&&S.tomb[x.id]>=(x.u||0)));
-  if(n0!==S.tasks.length+S.projects.length+S.times.length)changed=true;
+  S.searches=S.searches.filter(x=>!(S.tomb[x.id]&&S.tomb[x.id]>=(x.u||0)));
+  if(n0!==S.tasks.length+S.projects.length+S.times.length+S.searches.length)changed=true;
   const cut=now()-60*864e5;
   for(const id in S.tomb)if(S.tomb[id]<cut)delete S.tomb[id];
   if(changed){S.started=true;sanitizeColors();}   // remote projects are untrusted input
@@ -2065,6 +2117,22 @@ const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
    idea of where a week starts. */
 const weekStart=k=>{const d=k?fromISO(k):midnight();return addDays(d,-d.getDay());};
 const weekDays=k=>{const s=weekStart(k);return Array.from({length:7},(_,i)=>addDays(s,i));};
+// ISO dates compare correctly as strings, so a week is a plain pair of bounds
+const weekRange=k=>{const d=weekDays(k);return [iso(d[0]),iso(d[6])];};
+/* Which day of the week a row sits under, and whether it is in the week at all.
+   A shipment carries two dates and they mean different things: `due` is the day
+   somebody has to have it, `eta` the day the maker says it will land. The week
+   read only the first, so "what is arriving" — the question a week of shipping
+   is actually asked — had no answer anywhere in the app.
+
+   `due` wins when both fall in the week, because a promise beats an estimate and
+   one row under two headings is a lie about how much work there is. */
+function weekDay(t,lo,hi){
+  if(t.due&&t.due>=lo&&t.due<=hi)return t.due;
+  if(t.type==='shipment'&&t.eta&&t.eta>=lo&&t.eta<=hi)return t.eta;
+  return null;
+}
+const landing=t=>t.type==='shipment'&&!!t.eta&&t.eta!==t.due;
 function weekLabel(k){
   const d=weekDays(k),a=d[0],b=d[6];
   return a.getMonth()===b.getMonth()
@@ -2271,6 +2339,20 @@ function sortedProjects(){
     return (sx.all?0:1)-(sy.all?0:1)||sx.pct-sy.pct||(x.name||'').localeCompare(y.name||'');});
   return a;
 }
+/* Saved searches, in the order they were made. No preference to choose from:
+   there are rarely more than a handful, and a list somebody built by hand is
+   already in the order they think about them. */
+const sortedSearches=()=>S.searches.slice().sort((a,b)=>(a.created||0)-(b.created||0));
+const savedSearch=id=>S.searches.find(s=>s.id===id)||null;
+/* How many a saved search would find, for the badge. It runs the real filter by
+   standing `query` up around it, because a count drawn by a second, simpler rule
+   would sooner or later disagree with the list the entry opens — and a badge
+   that disagrees with what it opens is worse than no badge. */
+function countQuery(q){
+  const q0=query,p0=qParsed;
+  try{query=q;qParsed={q:null,f:null};return S.tasks.filter(t=>matches(t)&&!t.arch).length;}
+  finally{query=q0;qParsed=p0;}
+}
 function stats(pid){
   const all=S.tasks.filter(t=>t.projectId===pid),done=all.filter(t=>t.done).length;
   return{all:all.length,done,open:all.length-done,pct:all.length?done/all.length:0,
@@ -2356,11 +2438,14 @@ function filtered(){
   if(query)return a.sort(bySort);
   // A day picked on the strip wins over the view's own date rule, otherwise
   // picking a future day under Today could never match anything.
-  if(selDay&&(v.t==='today'||v.t==='scheduled'||v.t==='week'))a=a.filter(t=>!t.done&&t.due===selDay);
+  /* A day picked on the week grid means the same thing the grid counted, so it
+     takes arrivals too. The strip on Today and Scheduled is a strip of due
+     dates and stays one. */
+  if(selDay&&(v.t==='today'||v.t==='scheduled'||v.t==='week'))
+    a=a.filter(t=>!t.done&&(t.due===selDay||(v.t==='week'&&landing(t)&&t.eta===selDay)));
   else if(v.t==='week'){
-    // ISO dates compare correctly as strings, so the week is a plain range test
-    const d=weekDays(v.v),lo=iso(d[0]),hi=iso(d[6]);
-    a=a.filter(t=>!t.done&&t.due&&t.due>=lo&&t.due<=hi);
+    const [lo,hi]=weekRange(v.v);
+    a=a.filter(t=>!t.done&&weekDay(t,lo,hi));
   }
   else if(v.t==='today')a=a.filter(t=>!t.done&&t.due&&diff(t.due)<=0);
   else if(v.t==='scheduled')a=a.filter(t=>!t.done&&t.due);
@@ -2411,9 +2496,11 @@ function groupOf(t){
      as a number, which sorts correctly because the format is fixed-width. */
   // Not while searching: a search is global, so it can return completed and
   // undated work that a day heading would quietly mislabel.
-  if(view.t==='week'&&!query&&t.due){const d=fromISO(t.due);
-    return {k:'wd'+t.due,l:`${WD[d.getDay()]} · ${MO[d.getMonth()]} ${d.getDate()}`,
-      o:+t.due.replace(/-/g,'')};}
+  if(view.t==='week'&&!query){
+    const [lo,hi]=weekRange(view.v),k=weekDay(t,lo,hi);
+    if(k){const d=fromISO(k);
+      return {k:'wd'+k,l:`${WD[d.getDay()]} · ${MO[d.getMonth()]} ${d.getDate()}`,
+        o:+k.replace(/-/g,'')};}}
   return bucket(t);
 }
 function bucket(t){
@@ -2495,6 +2582,16 @@ function renderNav(){
       <circle cx="10" cy="10" r="8" stroke="${p.color}" stroke-dasharray="${(s.pct*50.3).toFixed(1)} 99"/></svg>
       <span class="nm">${esc(p.name)}</span><span class="ct" style="${s.late?'color:var(--red)':''}">${s.open}</span></button>`;
   }
+  /* Above the makers and below the jobs, because it is a list of questions
+     rather than a list of things. Each carries a live count for the same reason
+     a project does: a saved search with nothing in it is the answer. */
+  if(S.searches.length){
+    h+='<div class="navsec">Searches</div>';
+    for(const s of sortedSearches()){
+      const n=countQuery(s.q);
+      h+=navItem(I.list,colorFor(s.name),s.name,n||'',query===s.q,`data-savedq="${esc(s.id)}"`);
+    }
+  }
   const mf=uniq('manufacturer');
   if(mf.length){h+='<div class="navsec">Makers</div>';
     for(const m of mf)h+=navItem(I.box,colorFor(m),m,openT().filter(t=>t.manufacturer===m).length,view.t==='mfr'&&view.v===m,`data-v="mfr" data-val="${esc(m)}"`);}
@@ -2569,31 +2666,47 @@ function stripHTML(){
    it has, and a day with nothing on it looks the same as the gap between weeks. */
 function weekGridHTML(){
   const days=weekDays(view.v),open=openT();
+  let due=0,land=0;
   const cells=days.map(d=>{
     const k=iso(d),on=open.filter(x=>x.due===k);
+    // counted apart, because they are different claims on the day: one is work
+    // owed, the other a van turning up
+    const arr=open.filter(x=>landing(x)&&x.eta===k);
+    due+=on.length;land+=arr.length;
     const pips=on.slice(0,4).map(x=>{const p=projectOf(x);
       return `<i style="background:${p?p.color:'var(--gray)'}"></i>`;}).join('');
     const late=on.some(x=>diff(x.due)<0);
+    const lbl=`${WD[d.getDay()]} ${MO[d.getMonth()]} ${d.getDate()}, ${on.length} item${on.length===1?'':'s'}`
+      +(arr.length?`, ${arr.length} arriving`:'');
     return `<button class="wcell ${diff(k)===0?'today':''} ${[0,6].includes(d.getDay())?'weekend':''} ${selDay===k?'sel':''}"
-      data-day="${k}" aria-label="${WD[d.getDay()]} ${MO[d.getMonth()]} ${d.getDate()}, ${on.length} item${on.length===1?'':'s'}">
+      data-day="${k}" aria-label="${lbl}">
       <div class="w">${WD[d.getDay()].slice(0,2)}</div><div class="n">${d.getDate()}</div>
       <div class="pips">${pips}</div>
-      <div class="ct ${late?'late':''}">${on.length||''}</div></button>`;
+      <div class="ct ${late?'late':''}">${on.length||''}</div>
+      <div class="land">${arr.length?`▾${arr.length}`:''}</div></button>`;
   }).join('');
   const here=iso(weekStart(view.v))===iso(weekStart());
   // A week bounded at both ends can hide something overdue from before it, and a
   // view that quietly drops late work is worse than no view. Say so, and lead there.
   const before=iso(weekDays(view.v)[0]);
   const stale=openT().filter(t=>t.due&&t.due<before&&diff(t.due)<0).length;
+  /* The same honesty the overdue line exists for, now that the week claims to
+     show arrivals. It counts exactly what `is:latemaker` returns — the line
+     names a number and then leads somewhere, and a line that leads to a
+     different number from the one it quoted is worse than no line. It goes to
+     the search rather than to Today, which is a list of due dates and would not
+     show a crate that has never been given one. */
+  const adrift=openT().filter(makerLate).length;
   return `<div class="weekwrap">
     <div class="weekbar">
       <button class="wnav" data-wk="prev" aria-label="Previous week">‹</button>
-      <div class="wlab"><b>${weekLabel(view.v)}</b><span>${days.reduce((n,d)=>n+open.filter(x=>x.due===iso(d)).length,0)} in this week</span></div>
+      <div class="wlab"><b>${weekLabel(view.v)}</b><span>${due} due${land?` · ${land} arriving`:''}</span></div>
       <button class="wnav" data-wk="next" aria-label="Next week">›</button>
       ${here?'':'<button class="wnav now" data-wk="now">This week</button>'}
     </div>
     <div class="weekgrid">${cells}</div>
     ${stale?`<button class="weeklate" data-v="today">${stale} overdue from before this week ›</button>`:''}
+    ${adrift?`<button class="weeklate late" data-q="is:latemaker">${adrift} past the date the maker gave ›</button>`:''}
   </div>`;
 }
 /* One line above Today: what is actually in the air. Each part is a filter you
@@ -2947,6 +3060,10 @@ function timeHTML(){
    everything else here — one order becomes several crates from several makers
    going to several places — so this is the only view that groups by it. */
 const poKey=t=>(t.po||'').trim().replace(/^p\.?o\.?[\s#:]*/i,'');
+/* Two spellings of one warehouse are one warehouse. Makers have canonMaker and a
+   record to hang it on; a destination has neither, so the key is the whole of
+   what makes two of them the same. */
+const destKey=s=>(s||'').trim().toLowerCase();
 function posHTML(){
   const by=new Map();
   for(const t of S.tasks){
@@ -3023,6 +3140,7 @@ function poHead(){
     <div class="ph1">
       <div style="flex:1;min-width:0"><h2>PO ${esc(k)}</h2>
         <div class="l">Raised ${fmtAgo(raised)}${projs.length?` · ${projs.map(p=>esc(p.name)).join(', ')}`:''}</div></div>
+      <button class="iconbtn" data-po="dup" aria-label="Duplicate this order"><svg viewBox="0 0 20 20"><path d="M7 2h7a2 2 0 0 1 2 2v9h-2V4H7V2Zm-3 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg></button>
       <button class="iconbtn" data-po="print" aria-label="Print this order"><svg viewBox="0 0 20 20"><path d="M6 2h8v3H6V2Zm-2 4h12a2 2 0 0 1 2 2v5h-3v3H5v-3H2V8a2 2 0 0 1 2-2Zm3 8h6v3H7v-3Z"/></svg></button>
     </div>
     <div class="postats">
@@ -3037,6 +3155,52 @@ function poHead(){
       ${dests.map(d=>`<button class="chip go" data-v="dest" data-val="${esc(d)}">→ ${esc(d)}</button>`).join('')}
     </div>`:''}
   </div>`;
+}
+/* An order duplicated is a new order, not a copy of an old one's progress: the
+   crates, makers, destinations, quantities and prices come across, and
+   everything that records what happened to them last time does not. The number
+   has to be typed, because a PO comes from somebody else's system and guessing
+   the next one is how the wrong number gets onto the paperwork. */
+function openDupPO(){
+  const k=view.v,items=S.tasks.filter(t=>poKey(t)===k);
+  if(!items.length)return;
+  $('#dupnote').textContent=`${items.length} item${items.length===1?'':'s'} from PO ${k}, copied onto a new number. `
+    +`Makers, destinations, quantities and prices come across. Stages, dates, `
+    +`tracking, links and anything ticked off start again.`;
+  $('#dupno').value='';
+  rememberFocus();$('#scrim').classList.add('on');$('#dupsheet').classList.add('on');
+  setTimeout(()=>$('#dupno').focus(),60);
+}
+function dupPO(){
+  const from=view.v;
+  // typed the way a PO is written anywhere else in the app, then held to the
+  // same five-digit rule PO_RE enforces
+  const n=$('#dupno').value.trim().replace(/^p\.?o\.?[\s#:]*/i,'');
+  if(!/^\d{5}$/.test(n)){toast('A PO is five digits');return;}
+  if(n===from){toast('That is the order you are copying');return;}
+  /* Refused rather than merged. Two orders sharing a number are one page here,
+     and silently pouring these items onto somebody else's order is not
+     something a duplicate button should be able to do. */
+  if(S.tasks.some(t=>poKey(t)===n)){toast(`PO ${n} already has items on it`);return;}
+  const items=S.tasks.filter(t=>poKey(t)===from);
+  if(!items.length)return;
+  const made=items.map(t=>{
+    const c=JSON.parse(JSON.stringify(t));
+    c.id=uid();c.created=now();c.u=now();c.po=n;
+    // nothing has happened to this order yet
+    c.done=false;c.completed=null;c.stage=0;c.stamps={};c.stage0=null;
+    c.due=null;c.eta=null;c.arch=null;c.flagged=false;c.wait=null;c.waitAt=null;
+    c.tracks=[];c.tracking='';c.carrier='';
+    // the links explain last time's emails and the ticks are last time's work
+    c.links=[];c.steps=stepsOf(t).map(s=>({...s,id:uid(),d:false}));
+    return c;});
+  S.tasks.push(...made);save();
+  closeSheets();setView('po',n);
+  toast(`PO ${n} · ${made.length} item${made.length===1?'':'s'}`,()=>{
+    const ids=new Set(made.map(x=>x.id));
+    S.tasks=S.tasks.filter(x=>!ids.has(x.id));
+    for(const id of ids)S.tomb[id]=now();
+    save();setView('po',from);});
 }
 function projectsHTML(){
   if(!S.projects.length)return `<div class="empty"><div class="g">🗂</div><h3>No projects yet</h3>
@@ -3128,6 +3292,24 @@ function makerHead(){
       ${rec?`<div class="l" style="color:${rec.avg>0?'var(--orange)':'var(--green)'}">${esc(recordLine(rec))}</div>`:''}
       ${m&&m.notes?`<div class="l" style="color:var(--label3)">${esc(m.notes)}</div>`:''}</div>
     <button class="iconbtn" data-editmaker="1" aria-label="Edit maker"><svg viewBox="0 0 20 20"><path d="M14.1 2.6a1.4 1.4 0 0 1 2 0l1.3 1.3a1.4 1.4 0 0 1 0 2l-1 1-3.3-3.3 1-1ZM12 4.7 3.4 13.3 2.5 17l3.7-.9 8.6-8.6L12 4.7Z"/></svg></button>
+    <button class="iconbtn" data-a="new" aria-label="Add a shipment" style="background:var(--blue)"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
+  </div>`;
+}
+/* Header for a destination: what is going there, and the one way to correct the
+   spelling. A maker's view has had an editor since makers got a record; a
+   destination never did, and a mistyped one could only ever be fixed task by
+   task. */
+function destHead(){
+  const name=view.v,k=destKey(name);
+  const mine=S.tasks.filter(t=>destKey(t.destination)===k);
+  const open=mine.filter(t=>!t.done&&!t.arch).length;
+  const makers=[...new Set(mine.map(t=>t.manufacturer).filter(Boolean))];
+  return `<div class="phead">
+    <div style="flex:1;min-width:0"><h2>${esc(name)}</h2>
+      <div class="l">${open} open${mine.length!==open?` of ${mine.length}`:''}</div>
+      ${makers.length?`<div class="meta">${makers.map(m=>`<button class="chip go" data-v="mfr" data-val="${esc(m)}"
+        aria-label="Show everything from ${esc(m)}">${esc(m)}</button>`).join('')}</div>`:''}</div>
+    <button class="iconbtn" data-editdest="1" aria-label="Rename this destination"><svg viewBox="0 0 20 20"><path d="M14.1 2.6a1.4 1.4 0 0 1 2 0l1.3 1.3a1.4 1.4 0 0 1 0 2l-1 1-3.3-3.3 1-1ZM12 4.7 3.4 13.3 2.5 17l3.7-.9 8.6-8.6L12 4.7Z"/></svg></button>
     <button class="iconbtn" data-a="new" aria-label="Add a shipment" style="background:var(--blue)"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
   </div>`;
 }
@@ -3322,6 +3504,7 @@ function renderList(){
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
   if(view.t==='project')chunk('phead',projectHead());
   if(view.t==='mfr')chunk('mhead',makerHead());
+  if(view.t==='dest')chunk('dhead',destHead());
   if(view.t==='po')chunk('pohead',poHead());
   /* The two ways of looking at dated work, side by side, because a week view
      nobody can find is not a week view. One tap from the phone, where the
@@ -4516,6 +4699,9 @@ const AC_SRC={
   dpo:()=>recentPOs().map(v=>({v,n:S.tasks.filter(t=>poKey(t)===v).length||''})),
 };
 AC_SRC.cpo=AC_SRC.dpo;
+// the rename field offers the same list, which is what makes a merge a choice
+// somebody picks rather than a coincidence of spelling
+AC_SRC.destname=AC_SRC.ddest;
 const acEsc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 /* Letters in order but not adjacent — "chwh" finds "Chicago warehouse". Last
    resort, below every kind of real substring match. */
@@ -5529,7 +5715,92 @@ function openMaker(name){
   $('#mphone').value=m.phone||'';$('#mlead').value=m.leadDays||'';$('#mnotes').value=m.notes||'';
   rememberFocus();$('#scrim').classList.add('on');$('#msheet').classList.add('on');
 }
+let editDest=null;
+function openDest(name){
+  editDest=name;
+  const n=S.tasks.filter(t=>destKey(t.destination)===destKey(name)).length;
+  $('#destnote').textContent=`${n} item${n===1?'':'s'} go here. Renaming moves every one of them, `
+    +`and a name that is already in the list merges the two.`;
+  $('#destname').value=name;
+  rememberFocus();$('#scrim').classList.add('on');$('#destsheet').classList.add('on');
+  setTimeout(()=>$('#destname').focus(),60);
+}
+function saveDest(){
+  const was=editDest,typed=$('#destname').value.trim();
+  if(!was)return;
+  if(!typed){toast('Give it a name');return;}
+  /* A name already in the list is a merge, and adopting that entry's exact
+     spelling is the whole of what makes two entries become one. The old name is
+     excluded from the search, or correcting nothing but the capitals would find
+     itself and undo the correction. */
+  const exists=uniq('destination').find(d=>destKey(d)===destKey(typed)&&destKey(d)!==destKey(was));
+  const to=exists||typed;
+  if(to===was){editDest=null;closeSheets();return;}
+  const hit=S.tasks.filter(t=>destKey(t.destination)===destKey(was));
+  const before=hit.map(t=>[t.id,t.destination]);
+  hit.forEach(t=>{t.destination=to;t.u=now();});
+  editDest=null;save();closeSheets();
+  if(view.t==='dest'&&destKey(view.v)===destKey(was))view={t:'dest',v:to};
+  render();
+  // "merged into" only when the name typed was already somebody else's, which is
+  // the case worth saying out loud — a plain rename is just a rename
+  toast(`${hit.length} item${hit.length===1?'':'s'} now ${exists?'merged into ':''}${to}`,()=>{
+    for(const [id,v] of before){const t=S.tasks.find(x=>x.id===id);if(t){t.destination=v;t.u=now();}}
+    if(view.t==='dest')view={t:'dest',v:was};
+    save();render();});
+}
+/* Saved searches. The search box is where one is born, so that is where it is
+   saved from: the ⋯ menu offers it while a query is running, and offers to edit
+   the saved one instead when the query is already somebody's. */
+let editQ=null;
+function runSaved(id){
+  const s=savedSearch(id);if(!s)return;
+  /* A search is global, but two views would swallow it: the board draws itself
+     and renderList leaves it alone, and the archive filters everything else out
+     before a query is ever consulted. Both step aside for one. */
+  if(view.t==='board'||view.t==='archive')view={t:'all'};
+  $('#q').value=s.q;query=s.q;selDay=null;render();
+}
+function openSavedQ(id){
+  const s=id?savedSearch(id):null;
+  editQ=s?s.id:null;
+  $('#qstitle').textContent=s?'Saved search':'Save this search';
+  $('#qsname').value=s?s.name:'';
+  $('#qsq').value=s?s.q:query;
+  $('#qsdel').hidden=!s;
+  rememberFocus();$('#scrim').classList.add('on');$('#qsheet').classList.add('on');
+  setTimeout(()=>$('#qsname').focus(),60);
+}
+function saveSavedQ(){
+  const name=$('#qsname').value.trim(),q=$('#qsq').value.trim();
+  if(!q){toast('There is no search to save');return;}
+  if(!name){toast('Give it a name');return;}
+  const s=editQ&&savedSearch(editQ);
+  if(s){Object.assign(s,{name,q,u:now()});}
+  else S.searches.push({id:uid(),name,q,created:now(),u:now()});
+  editQ=null;save();closeSheets();render();toast('Saved');
+}
+function delSavedQ(){
+  const s=editQ&&savedSearch(editQ);if(!s)return;
+  const snap={...s};
+  S.searches=S.searches.filter(x=>x.id!==s.id);
+  // tombstoned, or the other devices put it straight back on the next pull
+  S.tomb[s.id]=now();
+  editQ=null;save();closeSheets();render();
+  toast('Removed',()=>{delete S.tomb[snap.id];snap.u=now();S.searches.push(snap);save();render();});
+}
+$('#qsclose').addEventListener('click',()=>{editQ=null;closeSheets();});
+$('#qssave').addEventListener('click',saveSavedQ);
+$('#qsdel').addEventListener('click',delSavedQ);
+for(const id of ['qsname','qsq'])
+  $('#'+id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveSavedQ();}});
+$('#destclose').addEventListener('click',()=>{editDest=null;closeSheets();});
+$('#destsave').addEventListener('click',saveDest);
+$('#destname').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveDest();}});
 $('#mclose').addEventListener('click',()=>{editMaker=null;closeSheets();});
+$('#dupclose').addEventListener('click',()=>closeSheets());
+$('#dupgo').addEventListener('click',dupPO);
+$('#dupno').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();dupPO();}});
 $('#msave').addEventListener('click',()=>{
   const was=editMaker,name=$('#mname').value.trim();
   if(!name){toast('Give the maker a name');return;}
@@ -5702,7 +5973,14 @@ function popUndo(){
   u.fn();
   toast(`Undone: ${u.msg}`);
 }
-$('#moreBtn').addEventListener('click',e=>{e.stopPropagation();closeAddMenu();$('#moreMenu').classList.toggle('on');});
+$('#moreBtn').addEventListener('click',e=>{e.stopPropagation();closeAddMenu();
+  /* Only while there is a search to save, and it names the saved one when the
+     query already is one — the menu is actions, and "save this search" with an
+     empty box is not an action anybody can take. */
+  const mine=query&&S.searches.find(s=>s.q===query);
+  $('#msaveq').hidden=!query;
+  $('#msaveq').textContent=mine?`Edit “${mine.name}”…`:'Save this search…';
+  $('#moreMenu').classList.toggle('on');});
 document.addEventListener('click',()=>$('#moreMenu').classList.remove('on'));
 document.addEventListener('click',e=>{
   const m=e.target.closest('[data-m]');if(!m)return;
@@ -5719,6 +5997,7 @@ function doMenu(k){
   if(k==='group'){groupBy=GROUPS[(GROUPS.indexOf(groupBy)+1)%GROUPS.length];saveView();render();toast('Group: '+GROUP_LABEL[groupBy]);}
   if(k==='density'){compact=!compact;$('#app').classList.toggle('compact',compact);saveView();render();}
   if(k==='idea')openIdea();
+  if(k==='saveq'){const mine=query&&S.searches.find(s=>s.q===query);openSavedQ(mine?mine.id:null);}
   if(k==='sfx'){sfx=!sfx;saveView();renderData();if(sfx)ping(880);toast('Sound '+(sfx?'on':'off'));}
   if(k==='update')checkUpdate();
   if(k==='newproj')openProject(null);
@@ -5810,6 +6089,8 @@ function setView(t,v){
   if(t!=='board')riseList();
 }
 $('#navlists').addEventListener('click',e=>{const a=e.target.closest('[data-href]');if(a)return location.href=a.dataset.href;
+  // before [data-v], which a saved search does not carry but a future one might
+  const s=e.target.closest('[data-savedq]');if(s)return runSaved(s.dataset.savedq);
   const b=e.target.closest('[data-v]');if(b)b.dataset.v==='board'?openBoard():setView(b.dataset.v,b.dataset.val);});
 // delegated, because the sidebar is rebuilt on every render
 $('#navlists').addEventListener('change',e=>{
@@ -5935,8 +6216,10 @@ $('#list').addEventListener('click',e=>{
   const po=e.target.closest('[data-poopen]');
   if(po)return setView('po',po.dataset.poopen);
   if(e.target.closest('[data-po="print"]'))return window.print();
+  if(e.target.closest('[data-po="dup"]'))return openDupPO();
   const ep=e.target.closest('[data-editproj]');if(ep)return openProject(ep.dataset.editproj);
   if(e.target.closest('[data-editmaker]'))return openMaker(view.v);
+  if(e.target.closest('[data-editdest]'))return openDest(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
   /* Paging keeps the month in view.v for the same reason the week does: a
      re-render, and the pull that provoked it, must land on the month you were
@@ -6223,6 +6506,7 @@ function paletteRows(q){
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
   for(const m of uniq('manufacturer'))push(m,'Maker',I.box,colorFor(m),()=>setView('mfr',m));
   for(const d of uniq('destination'))push(d,'Ship to',I.truck,colorFor(d),()=>setView('dest',d));
+  for(const s of sortedSearches())push(s.name,'Saved search',I.list,colorFor(s.name),()=>runSaved(s.id));
   push('Everything Board','View',I.list,'var(--yellow)',()=>openBoard());
   for(const [l,k] of [['New task','new'],['New project','newproj'],['Scan a shipping label','scan'],
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
