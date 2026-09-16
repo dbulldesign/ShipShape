@@ -580,8 +580,8 @@ else.
   per-device display preference rewrite the record and push the whole list to
   every other device.
 - Used by the Projects view *and* the sidebar, or the two disagree about where a
-  job sits. The `<select>` pickers keep the plain order on purpose — a dropdown
-  that reshuffles because a list preference changed is a worse dropdown.
+  job sits. **Nothing else uses it.** Every place a project is *picked* goes
+  through `alphaProjects()` instead — see below.
 - Chosen from **three places, one preference**: the header on the Projects view,
   the sidebar's own Projects heading, and Settings. The sidebar is where the jobs
   actually live on a desktop, so sorting them from the view that merely also
@@ -598,6 +598,47 @@ else.
   no progress to report. Both tie-break on name.
 - It is in Settings as well as the header, because `.hctl` is `display:none`
   below 861px and the header control is unreachable on a phone.
+
+## Picking a project, as against listing them
+
+Two different jobs, and they had drifted into one. `sortedProjects()` follows
+`projSort` and belongs to the two places a list of projects is **read** — the
+sidebar and the Projects view. `alphaProjects()` belongs to every place a project
+is **picked**: the tracker's select, the bulk bar's "Move to", the idea sheet's
+job list, the row menu, and the suggestion lists behind the project fields.
+
+A picker wants the order you can find a name in. That is alphabetical, and —
+this is the part the old note about `<select>`s was really protecting —
+alphabetical does not move when a display preference changes. Sorting a picker by
+`projSort` would have been the bad version; leaving it in record order was merely
+the unhelpful one.
+
+Like `sortedProjects()`, it sorts a **copy**.
+
+## The project on a time entry is typed
+
+It was a `<select>`, which meant a job had to exist before an hour could be
+booked against it — and the moment somebody is most likely to name a new job is
+while writing down the time they have just spent on it. It is now the same kind
+of field as the detail sheet's: type or pick, and a name nobody has used yet
+becomes a project.
+
+- `entryProject()` reads the field through `namedProject`, which **never
+  creates** — it runs on every keystroke. A name with no match is reported as
+  `{isNew:true}` rather than as "no project", or a half-typed job's hours would
+  be counted into the unassigned total and captioned with the wrong name.
+- The totals then caption it `Quayside Annexe · new` and count only this entry
+  against it, because a project that does not exist yet cannot hold anybody
+  else's hours. `'__newproject'` stands in as its id so the entry stays out of
+  the unassigned bucket while it is being typed.
+- `findProjectId` — the one place a typed name becomes a project — is called from
+  **`saveEntry`**, not from the field's change handler. Save is the moment
+  somebody is finished with the field, which is the same bargain the detail
+  sheet's change handler makes for its own field. So nothing is created while
+  the sheet is open, and cancelling leaves nothing behind.
+- `openEntry` writes the project's **name** into the field, not its id.
+- Enter in the field saves, unless `acSel>=0` — there the suggestion list is
+  claiming the key to pick something.
 
 ## Previous entries, offered but not imposed
 

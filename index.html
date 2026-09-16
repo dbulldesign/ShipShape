@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.57.0">
+<meta name="app-version" content="1.58.0">
 <meta name="app-build" content="2026-09-16">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -1056,7 +1056,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="sheettitle"><span>Edit this entry</span><button class="x" id="tmclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="fgroup">
     <div class="field"><label for="tmlabel">What</label><input id="tmlabel" placeholder="What you were working on"></div>
-    <div class="field"><label for="tmproject">Project</label><select id="tmproject"></select></div>
+    <div class="field"><label for="tmproject">Project</label><input id="tmproject" placeholder="None" autocorrect="off"></div>
     <div class="field"><label for="tmdate">Day</label><input id="tmdate" type="date"></div>
     <div class="field"><label for="tmstart">Start</label><input id="tmstart" type="time" step="60"></div>
     <div class="field" id="tmendrow"><label for="tmend">End</label><input id="tmend" type="time" step="60"></div>
@@ -2366,6 +2366,11 @@ function sortedProjects(){
     return (sx.all?0:1)-(sy.all?0:1)||sx.pct-sy.pct||(x.name||'').localeCompare(y.name||'');});
   return a;
 }
+/* Every place a project is *picked* from, as against the two places a list of
+   projects is *read* — the sidebar and the Projects view, which follow projSort.
+   A picker wants the order you can find a name in, which is alphabetical and
+   which does not move when a display preference changes. */
+const alphaProjects=()=>S.projects.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
 /* Saved searches, in the order they were made. No preference to choose from:
    there are rarely more than a handful, and a list somebody built by hand is
    already in the order they think about them. */
@@ -3046,7 +3051,7 @@ function timeCalHTML(){
 function timeHTML(){
   const e=running();let h='';
   const projOpts=sel=>'<option value="">No project</option>'
-    +S.projects.map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+    +alphaProjects().map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
   if(e){
     const p=e.projectId?P(e.projectId):null;
     h+=`<div class="runcard">
@@ -4197,8 +4202,8 @@ function openEntry(id){
   $('#tmdelete').style.display=isNew?'none':'';
   $('#tmsave').textContent=isNew?'Add it':'Save';
   $('#tmlabel').value=x.label||'';
-  $('#tmproject').innerHTML='<option value="">No project</option>'
-    +S.projects.map(p=>`<option value="${p.id}" ${x.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  // a name rather than an id, because it is typed as well as picked
+  $('#tmproject').value=x.projectId?((P(x.projectId)||{}).name||''):'';
   const sd=new Date(x.start);
   $('#tmdate').value=iso(sd);
   $('#tmstart').value=`${String(sd.getHours()).padStart(2,'0')}:${String(sd.getMinutes()).padStart(2,'0')}`;
@@ -4290,20 +4295,33 @@ $('#tmdurs').addEventListener('click',e=>{
    The day and the week take each entry's own share (`overlap`), like everywhere
    else in the tracker; the project takes whole entries, because a job's hours
    are not a question about a window. */
+/* What the project field currently names. `namedProject` never creates — this
+   runs on every keystroke — so a name nobody has used yet is reported as new
+   rather than silently read as "no project", which would put this entry's hours
+   into the unassigned total and label them with the wrong name. */
+function entryProject(){
+  const v=$('#tmproject').value.trim();
+  if(!v)return {id:null,name:'No project',isNew:false};
+  const p=namedProject(v);
+  return p?{id:p.id,name:p.name,isNew:false}:{id:null,name:v,isNew:true};
+}
 function entryTotals(){
   const x=editingEntry(),t=entryTimes();
   if(!x||!t||t.err)return null;
-  const pid=$('#tmproject').value||null;
-  const mine={id:x.id,start:t.start,end:t.end,projectId:pid};
+  const pr=entryProject();
+  // a project that does not exist yet cannot hold anybody else's hours, and the
+  // marker keeps this entry out of the unassigned bucket while it is being typed
+  const mine={id:x.id,start:t.start,end:t.end,projectId:pr.isNew?'__newproject':pr.id};
   const list=S.times.filter(y=>y.id!==x.id).concat([mine]);
   const d0=+fromISO(iso(new Date(t.start))),d1=d0+864e5;
   const w0=+weekStart(iso(new Date(t.start))),w1=w0+7*864e5;
   const share=(from,to)=>list.reduce((n,y)=>n+overlap(y,from,to),0);
   return {day:share(d0,d1),dayAdd:overlap(mine,d0,d1),
     week:share(w0,w1),weekAdd:overlap(mine,w0,w1),
-    proj:list.filter(y=>(y.projectId||null)===pid).reduce((n,y)=>n+elapsed(y),0),
+    proj:pr.isNew?elapsed(mine)
+      :list.filter(y=>(y.projectId||null)===pr.id).reduce((n,y)=>n+elapsed(y),0),
     projAdd:elapsed(mine),
-    pname:pid?(P(pid)||{}).name||'Project':'No project',
+    pname:pr.name+(pr.isNew?' · new':''),
     dname:`${WD[new Date(t.start).getDay()]} ${new Date(t.start).getDate()} ${MO[new Date(t.start).getMonth()]}`};
 }
 function drawTotals(t){
@@ -4323,7 +4341,10 @@ function saveEntry(){
   if(entryDraft){
     const label=$('#tmlabel').value.trim().slice(0,120);
     if(!label){$('#tmlabel').focus();return toast('Say what the time was spent on.');}
-    const e={id:uid(),taskId:null,projectId:$('#tmproject').value||null,
+    /* findProjectId is the one place a typed name becomes a project, and Save is
+       the moment somebody is finished with the field — the same bargain the
+       detail sheet's own change handler makes. */
+    const e={id:uid(),taskId:null,projectId:findProjectId($('#tmproject').value),
       label,start:t.start,end:t.end,u:now()};
     S.times.push(e);entryDraft=null;
     closeSheets();save();render();
@@ -4333,7 +4354,7 @@ function saveEntry(){
   }
   const before={label:x.label,projectId:x.projectId,start:x.start,end:x.end};
   x.label=$('#tmlabel').value.trim().slice(0,120)||x.label;
-  x.projectId=$('#tmproject').value||null;
+  x.projectId=findProjectId($('#tmproject').value);
   x.start=t.start;
   if(x.end!==null)x.end=t.end;
   x.u=now();
@@ -4343,8 +4364,13 @@ function saveEntry(){
 $('#tmclose').addEventListener('click',closeSheets);
 $('#tmsave').addEventListener('click',saveEntry);
 ['#tmdate','#tmstart','#tmend'].forEach(sel=>$(sel).addEventListener('input',entryDur));
-// the project is the third total, so choosing one redraws them
+// the project is the third total, so it redraws as it is typed as well as when
+// a suggestion is picked — acPick fires both events
 $('#tmproject').addEventListener('change',entryDur);
+$('#tmproject').addEventListener('input',entryDur);
+$('#tmproject').addEventListener('keydown',e=>{
+  // acSel>=0 means the suggestion list is claiming Enter to pick something
+  if(e.key==='Enter'&&acSel<0){e.preventDefault();saveEntry();}});
 $('#tmlabel').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveEntry();}});
 $('#tmdelete').addEventListener('click',()=>{
   const i=S.times.findIndex(y=>y.id===entryId);if(i<0)return closeSheets();
@@ -4797,7 +4823,9 @@ const namedProject=v=>{
    cannot be styled, and on a phone is a cramped strip rather than a list. */
 const AC_SRC={
   // projects come from the record, so one with nothing on it yet is still offered
-  dproj:()=>sortedProjects().map(p=>({v:p.name,color:p.color,n:stats(p.id).open||''})),
+  // alphabetical, like every other picker — acRank reorders by closeness the
+  // moment anything is typed, so this is the order of the list before you do
+  dproj:()=>alphaProjects().map(p=>({v:p.name,color:p.color,n:stats(p.id).open||''})),
   // makers and destinations have no record of their own: what has been typed IS the list
   dmfr:()=>uniq('manufacturer').map(v=>({v,n:S.tasks.filter(t=>t.manufacturer===v&&!t.done).length||''})),
   ddest:()=>uniq('destination').map(v=>({v,n:S.tasks.filter(t=>t.destination===v&&!t.done).length||''})),
@@ -4807,6 +4835,7 @@ AC_SRC.cpo=AC_SRC.dpo;
 // the rename field offers the same list, which is what makes a merge a choice
 // somebody picks rather than a coincidence of spelling
 AC_SRC.destname=AC_SRC.ddest;
+AC_SRC.tmproject=AC_SRC.dproj;
 const acEsc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 /* Letters in order but not adjacent — "chwh" finds "Chicago warehouse". Last
    resort, below every kind of real substring match. */
@@ -5770,7 +5799,7 @@ function setSelMode(on){
   selMode=on;if(!on)selected.clear();
   $('#bulkbar').classList.toggle('on',on);
   if(on)$('#bulkproj').innerHTML='<option value="">Move to…</option>'
-    +S.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')
+    +alphaProjects().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')
     +'<option value="__none">No project</option>';
   renderBulk();render();
 }
@@ -6388,7 +6417,7 @@ function openRowMenu(id,x,y){
     t.arch?['unarch','Take out of the archive']:t.done?['arch','Archive']:null,
     ['sel','Select'],
   ].filter(Boolean);
-  const projs=S.projects.filter(p=>p.id!==t.projectId);
+  const projs=alphaProjects().filter(p=>p.id!==t.projectId);
   let h=`<div class="head">${esc(t.title)}</div>`;
   h+=items.map(([k,l])=>`<button data-rm="${k}">${esc(l)}</button>`).join('');
   if(projs.length||t.projectId){
@@ -6725,7 +6754,7 @@ function openIdea(){
   const st=boardState();
   const sel=view.t==='project'&&P(view.v)?'ss:'+view.v:'';
   $('#iproj').innerHTML='<option value="">No project</option>'
-    +(S.projects.length?'<optgroup label="Jobs">'+S.projects.map(p=>
+    +(S.projects.length?'<optgroup label="Jobs">'+alphaProjects().map(p=>
       `<option value="ss:${p.id}" ${sel==='ss:'+p.id?'selected':''}>${esc(p.name)}</option>`).join('')+'</optgroup>':'')
     +(st.projects.length?'<optgroup label="Board projects">'+st.projects.map(p=>
       `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')+'</optgroup>':'');
