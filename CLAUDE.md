@@ -373,6 +373,45 @@ answer.
   — a guess close enough to correct rather than a blank to fill in — and takes the
   project you were looking at, if you were looking at one.
 
+## Three ways to write an hour down
+
+An hour reaches the record at three different moments, and the entry sheet now
+says which one this is — `Timer · Amount · Times`, `entryMode`, with the fields
+that belong to each.
+
+- **Timer** — "I am starting now". What and Project, nothing else; Save reads
+  **Start timer** and hands off to `startTimer`, which is the one place a timer
+  begins. One timer at a time is the decision the tracker rests on, so the blurb
+  names what starting this one will stop, rather than leaving that to the toast
+  afterwards.
+- **Amount** — "two hours on this, some time today". A day and a length, and the
+  clock times hidden. It **says the window the amount came out as**
+  (`2h 30m · 19:00 – 21:30`), because the window is real underneath either way
+  and a hidden one is a secret. Changing the day moves the whole thing, for free:
+  `entryTimes` reads both clock times off that one day.
+- **Times** — "nine until eleven", which is what anybody reaches for when
+  correcting something. The whole form.
+
+`openNewEntry(mode)` takes the mode rather than remembering one, because the two
+ways in mean different things: the **+ menu** is somebody about to start work and
+asks for `timer`; the tracker's own **Add an entry** is somebody writing down work
+already done and asks for `amount`. A bare call defaults to `amount` — "new
+entry" means writing something down — and an entry that already exists opens on
+the times it has.
+
+The control offers only what is available: an entry that already exists cannot
+become a timer, so that button goes; an entry that *is* running already is one,
+so the whole control does. `style.display` rather than `hidden` throughout,
+because `.field` and `.seg` are both `display:flex` and would beat the UA's
+`[hidden]` rule — the same trap `.durs[hidden]` had to be written out for.
+
+A timer contributes **nothing** to the three totals until it runs, which a
+zero-length `mine` gives for free: the day, the week and the job read exactly
+what they read now, which is the useful thing to see before starting one.
+
+**New time entry is in the + menu**, because the + is where anybody looks to
+write something down and hours are the other thing this business records.
+
 ## Writing an entry by hand
 
 The commonest failure of a stopwatch is forgetting to press it, so the entry
@@ -414,6 +453,10 @@ does not say which part of it is the thing being typed.
 - The contribution sits inside the `<b>`, so the caption rule is `.tmtot>div>span`.
   Without the child combinator it lands on the contribution too and turns
   `+1h 00m` into an uppercase block of its own.
+- The totals use `clockTotal`, not `clockHM`: a day holding nothing reads `0m`,
+  and "under a minute" over an empty day is a lie — the same reason the log's day
+  headings use it. The contribution is a real amount and keeps `clockHM`, and a
+  contribution of nothing is not drawn at all.
 - Nothing is written until Save. The totals are a preview, not a mutation.
 
 ## Three ways of looking at time
