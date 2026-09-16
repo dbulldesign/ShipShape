@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.56.0">
-<meta name="app-build" content="2026-09-15">
+<meta name="app-version" content="1.57.0">
+<meta name="app-build" content="2026-09-16">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -610,6 +610,31 @@ body[data-dropping] .rowwrap{transition:transform .14s var(--ease)}
 .swatches{display:flex;gap:9px;flex-wrap:wrap;padding:12px 14px 4px}
 .sw{width:30px;height:30px;border-radius:50%;transition:transform .18s var(--ease);border:2.5px solid transparent}
 .sw.on{transform:scale(1.14)}
+/* The duration shortcuts. Twenty-four of them, so they wrap rather than scroll:
+   a sideways scroller hides the far end of a list whose whole value is that you
+   can see 7h30 without counting to it. */
+.durs{display:flex;flex-wrap:wrap;gap:5px;padding:10px 14px 2px}
+/* display:flex beats the UA's [hidden]{display:none}, so a running entry would
+   keep its shortcuts however hidden the attribute says it is. */
+.durs[hidden]{display:none}
+.durs button{font-size:12.5px;font-weight:600;padding:5px 9px;border-radius:8px;
+  background:var(--fill2);color:var(--label2);font-variant-numeric:tabular-nums;
+  transition:transform .12s var(--ease)}
+.durs button:active{transform:scale(.92)}
+.durs button.on{background:var(--blue);color:#fff}
+/* The three totals this entry lands in. Same shape as an order's figures — one
+   idea of what a number with a caption under it looks like. */
+.tmtot{display:flex;flex-wrap:wrap;gap:16px;padding:8px 16px 0}
+.tmtot div{min-width:0}
+.tmtot b{display:block;font-family:var(--round);font-size:18px;font-weight:700;line-height:1.15;
+  font-variant-numeric:tabular-nums}
+/* The contribution sits inside the <b>, so the caption rule below has to be a
+   direct-child selector — otherwise it lands on this too and turns "+1h 00m"
+   into an uppercase block of its own. */
+.tmtot b .add{font-size:12px;font-weight:600;color:var(--green)}
+.tmtot>div>span{display:block;font-size:11px;font-weight:600;color:var(--label3);
+  text-transform:uppercase;letter-spacing:.3px;margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
 .blurb{padding:6px 16px 0;font-size:13.5px;color:var(--label2);line-height:1.45}
 .blurb b{color:var(--label)}
 details{margin:12px 14px;background:var(--card2);border-radius:12px;overflow:hidden}
@@ -1036,7 +1061,9 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="tmstart">Start</label><input id="tmstart" type="time" step="60"></div>
     <div class="field" id="tmendrow"><label for="tmend">End</label><input id="tmend" type="time" step="60"></div>
   </div>
+  <div class="durs" id="tmdurs" role="group" aria-label="How long it took"></div>
   <div class="blurb" id="tmdur"></div>
+  <div class="tmtot" id="tmtot"></div>
   <div style="padding:4px 14px 0"><button class="btn" id="tmsave" style="width:calc(100% - 0px);margin:0">Save</button></div>
   <button class="danger" id="tmdelete">Delete this entry</button>
 </div>
@@ -4206,12 +4233,88 @@ function entryTimes(){
 }
 function entryDur(){
   const t=entryTimes();
+  drawDurs(t);drawTotals(t);
   if(!t){$('#tmdur').textContent='';return;}
   if(t.err){$('#tmdur').textContent=t.err;$('#tmdur').style.color='var(--red)';return;}
   $('#tmdur').style.color='var(--label2)';
   $('#tmdur').textContent=t.end===null
     ? 'Still running — the end is set when you stop it.'
     : clockHM(t.end-t.start)+(t.over?' · finishes the next day':'');
+}
+/* Half an hour to twelve hours. Nobody types 13:45 to 15:15 when what they mean
+   is "an hour and a half on the Cedar drawings", and the commonest failure of a
+   stopwatch is forgetting to press it — so the entry that gets written by hand
+   is nearly always a round number of half-hours. */
+const DURS=Array.from({length:24},(_,i)=>(i+1)*18e5);
+const durLabel=ms=>{const h=Math.floor(ms/36e5),m=(ms%36e5)/6e4;
+  return h?`${h}h${m?String(m).padStart(2,'0'):''}`:`${m}m`;};
+function drawDurs(t){
+  // a running entry has no end to put a duration on
+  const live=t&&t.end===null;
+  $('#tmdurs').hidden=!!live;
+  if(live)return;
+  const cur=t&&!t.err?t.end-t.start:null;
+  $('#tmdurs').innerHTML=DURS.map(ms=>
+    `<button type="button" data-dur="${ms}" ${cur===ms?'class="on" aria-pressed="true"':'aria-pressed="false"'}>${durLabel(ms)}</button>`).join('');
+}
+/* Which end of the entry a duration holds still.
+
+   A **new** entry defaults to the hour ending now, so its end is the fact and
+   the start is the guess: "three hours" means the three hours up to now, which
+   is exactly the shape of remembering to log something after the event. An entry
+   **already written down** has a start somebody chose, so a duration keeps that
+   and moves the end. `entryDraft` tells the two apart, the same way
+   `editingEntry` does. */
+function setEntryDur(ms){
+  const t=entryTimes();
+  if(!t||t.err||t.end===null)return;
+  const at=new Date(entryDraft?t.end-ms:t.start);
+  const end=new Date(entryDraft?t.end:t.start+ms);
+  const hm=d=>`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  /* The day field is the start's day — entryTimes reads the end off it too and
+     rolls forward when the end is the earlier of the two — so a shortcut that
+     moves the start back over midnight has to move the day with it. */
+  $('#tmdate').value=iso(at);
+  $('#tmstart').value=hm(at);$('#tmend').value=hm(end);
+  entryDur();buzz(4);
+}
+$('#tmdurs').addEventListener('click',e=>{
+  const b=e.target.closest('[data-dur]');if(b)setEntryDur(+b.dataset.dur);
+});
+/* What this entry lands in: its day, its week, and the job it is against. Each
+   counts the entry **as the fields currently stand** rather than as it is
+   stored, because the question anybody has here is "what will the day read once
+   I save this", and doing that arithmetic in your head is the reason the totals
+   are worth drawing at all.
+
+   The day and the week take each entry's own share (`overlap`), like everywhere
+   else in the tracker; the project takes whole entries, because a job's hours
+   are not a question about a window. */
+function entryTotals(){
+  const x=editingEntry(),t=entryTimes();
+  if(!x||!t||t.err)return null;
+  const pid=$('#tmproject').value||null;
+  const mine={id:x.id,start:t.start,end:t.end,projectId:pid};
+  const list=S.times.filter(y=>y.id!==x.id).concat([mine]);
+  const d0=+fromISO(iso(new Date(t.start))),d1=d0+864e5;
+  const w0=+weekStart(iso(new Date(t.start))),w1=w0+7*864e5;
+  const share=(from,to)=>list.reduce((n,y)=>n+overlap(y,from,to),0);
+  return {day:share(d0,d1),dayAdd:overlap(mine,d0,d1),
+    week:share(w0,w1),weekAdd:overlap(mine,w0,w1),
+    proj:list.filter(y=>(y.projectId||null)===pid).reduce((n,y)=>n+elapsed(y),0),
+    projAdd:elapsed(mine),
+    pname:pid?(P(pid)||{}).name||'Project':'No project',
+    dname:`${WD[new Date(t.start).getDay()]} ${new Date(t.start).getDate()} ${MO[new Date(t.start).getMonth()]}`};
+}
+function drawTotals(t){
+  const s=entryTotals();
+  if(!s){$('#tmtot').innerHTML='';return;}
+  // what this entry puts in, alongside what the total becomes — a bare total
+  // does not say which part of it is the thing being typed
+  const cell=(v,add,l)=>`<div><b>${clockHM(v)}${add>0?` <span class="add">+${clockHM(add)}</span>`:''}</b><span>${esc(l)}</span></div>`;
+  $('#tmtot').innerHTML=cell(s.day,s.dayAdd,s.dname)
+    +cell(s.week,s.weekAdd,'this week')
+    +cell(s.proj,s.projAdd,s.pname);
 }
 function saveEntry(){
   const x=editingEntry();if(!x)return;
@@ -4240,6 +4343,8 @@ function saveEntry(){
 $('#tmclose').addEventListener('click',closeSheets);
 $('#tmsave').addEventListener('click',saveEntry);
 ['#tmdate','#tmstart','#tmend'].forEach(sel=>$(sel).addEventListener('input',entryDur));
+// the project is the third total, so choosing one redraws them
+$('#tmproject').addEventListener('change',entryDur);
 $('#tmlabel').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveEntry();}});
 $('#tmdelete').addEventListener('click',()=>{
   const i=S.times.findIndex(y=>y.id===entryId);if(i<0)return closeSheets();

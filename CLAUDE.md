@@ -373,6 +373,49 @@ answer.
   — a guess close enough to correct rather than a blank to fill in — and takes the
   project you were looking at, if you were looking at one.
 
+## Writing an entry by hand
+
+The commonest failure of a stopwatch is forgetting to press it, so the entry
+written after the fact is the one worth making easy — and it is nearly always a
+round number of half-hours against a job, not a pair of clock times somebody
+actually read off anything.
+
+**Twenty-four shortcuts, 30m to 12h** (`DURS`), wrapping rather than scrolling: a
+sideways scroller hides the far end of a list whose whole value is that you can
+see 7h30 without counting to it. The one matching the entry as it stands is
+marked, so the chips say what the entry *is* as well as setting it.
+
+**Which end a duration holds still depends on which entry it is**, and the
+distinction is real rather than a convenience:
+
+- A **new** entry defaults to the hour ending now, so its end is the fact and its
+  start is the guess. "Three hours" means the three hours up to now — exactly the
+  shape of remembering to log something after the event.
+- An entry **already written down** has a start somebody chose, so a duration
+  keeps it and moves the end.
+
+`entryDraft` tells the two apart, the same flag `editingEntry()` already uses. A
+shortcut that pushes the start back over midnight moves `#tmdate` with it, because
+`entryTimes` reads both clock times off that one day and rolls the end forward
+when it is the earlier of the two. A running entry has no end to put a duration
+on, so the chips go — and `.durs` is `display:flex`, which beats the UA's
+`[hidden]{display:none}`, so `.durs[hidden]` has to say it again.
+
+**Three totals — the day, the week, the job** — each counting the entry **as the
+fields currently stand** rather than as it is stored. The question anybody has
+while typing is "what will the day read once I save this", and doing that
+arithmetic in your head is the whole reason the figures are worth drawing. The
+contribution is shown beside the total (`4h 30m +1h 00m`), because a bare total
+does not say which part of it is the thing being typed.
+
+- The day and the week take each entry's own **share** (`overlap`), like
+  everywhere else in the tracker. The project takes whole entries: a job's hours
+  are not a question about a window.
+- The contribution sits inside the `<b>`, so the caption rule is `.tmtot>div>span`.
+  Without the child combinator it lands on the contribution too and turns
+  `+1h 00m` into an uppercase block of its own.
+- Nothing is written until Save. The totals are a preview, not a mutation.
+
 ## Three ways of looking at time
 
 Now, Log and Calendar — three real views (`time`, `timelog`, `timecal`), not a
