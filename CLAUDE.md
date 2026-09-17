@@ -373,6 +373,42 @@ answer.
   — a guess close enough to correct rather than a blank to fill in — and takes the
   project you were looking at, if you were looking at one.
 
+## One line for anything
+
+The + menu already knew the five things this app makes. **Quick add** lets you
+say which one in the same breath as what it is — "new task to atria project: ship
+linear fixtures on tuesday" — and then hands the rest to the parsers that already
+read those things, rather than growing a sixth idea of what a date is.
+
+`parseQuickAdd` takes three things off the front, in order, and everything left
+is the body: **the kind**, **the job**, and the punctuation that was joining them.
+`quickPlan` then routes the body — `parseInput` for a task or a shipment,
+`parseEntryLine` for an hour, the raw words for an idea or a job name.
+
+- **The kind is a word at the front** (`QA_KINDS`): task, shipment/ship/crate/
+  delivery/order, time/hours/log, idea/note, project/job, each with the "a / an /
+  new / add / create" that tends to come in front of it. Without one, the body
+  falls through to the composer's own inference — a maker, a destination or a PO
+  still means a shipment.
+- **A job needs something to make it unambiguous.** Either the line says the word
+  ("to the Atria project", `QA_PROJ`/`QA_PROJ2`) or what follows "for" is the name
+  of a job that **already exists** (`QA_PROJ3` + `namedProject`). Without one of
+  those, "Call Dana for Tuesday" would file itself under a project called
+  Tuesday — the same trap the composer's markers avoid by needing a `#`.
+- So a **new** job is never made by the "for X" form. `#Name` is how you do that,
+  and it still works, because the body goes through the composer's parser
+  afterwards and that is where `#` is read.
+- **The preview is drawn by `quickPlan` and Add runs `quickPlan`**, so the two
+  cannot describe different things.
+- **The kind can be overruled by hand** and then keeps winning while the line is
+  edited — `qaKind`, cleared on every open, because a correction belongs to the
+  line being corrected rather than to the sheet for ever.
+- An idea goes down `openIdea`/`addIdea`, not a copy of them: one way an idea is
+  made, board document and all.
+- It is **last** in the + menu, not first. Somebody who knows they want a shipment
+  should not have to go through a parser to say so; this is for the times you
+  would rather just write the sentence.
+
 ## An hour read out of a line
 
 The composer reads a task out of a line; `parseEntryLine` reads an entry out of
