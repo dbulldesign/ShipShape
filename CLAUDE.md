@@ -373,6 +373,73 @@ answer.
   — a guess close enough to correct rather than a blank to fill in — and takes the
   project you were looking at, if you were looking at one.
 
+## An hour read out of a line
+
+The composer reads a task out of a line; `parseEntryLine` reads an entry out of
+one. "Matrix meeting for 1h on Tuesday", "Matrix meeting 1h", "10:30am for 1 hr",
+"9-11" — nobody wants three fields for something they can say in six words, and
+the fields are still there when the sentence is not enough.
+
+Lifted out in order of **how much each pattern settles**: a range names both
+ends, so nothing else has to be guessed; a duration names the length; a clock
+time names where it starts. The date goes **last, past a `GAP`**, for exactly the
+reason the composer's PO does — "1h on tuesday" would otherwise look to
+`extractDate` as though the date opened the line once the duration had gone.
+
+- **A bare number is never a clock time.** "Call Dana 3" is not three o'clock,
+  and the one thing worse than not reading a time is reading one nobody wrote, so
+  either the minutes or an am/pm has to be there. `T_AT` enforces it.
+- **A bare hour of 1 to 6 is the afternoon.** Nobody logs work at four in the
+  morning and calls it "4".
+- **"9-5" is eight hours, not twenty.** An end written bare that lands before the
+  start is read as the afternoon; one that still does after that is an evening
+  running past midnight, which the sheet already knows how to say.
+- It applies **only what has changed** since the last keystroke — the same guard
+  `readTitleNotation` needs, for the same reason: pick 2h off the chips, then add
+  a word to the line, and a parser that re-applied everything it could still see
+  would put 1h straight back.
+- The raw line **stays in the field** while it is being typed, as the composer
+  leaves its textarea alone; the notation comes out of the label only on Save,
+  and the duration line names the label that will be left so the rewrite is never
+  a surprise.
+- `entryLabel()` leaves a label **nobody has retyped** exactly as it was. An entry
+  already called "Meeting 9-11" keeps that name — otherwise opening an old one
+  and pressing Save would quietly rewrite it. Same shape as
+  `readTitleNotation`'s first guard.
+- A line that is **nothing but a length** keeps it as the name, the same bargain
+  `parseInput` makes for a title that is nothing but a PO.
+- Saying how long it took, or when, is saying it is **not a timer**: the mode
+  moves to Amount or Times on its own.
+- The trade it accepts: "Bay 2-4" in a *time entry's* label reads as two until
+  four. In this field that is the likelier meaning by a distance, the fields
+  visibly move, and the blurb names what the label will become.
+
+## A build that is ready says so
+
+`newVersion` was only ever a line in Settings and a toast that scrolled past.
+Installed to a Home Screen there is no address bar to reload from and no reason
+to think of it, so a deploy could sit unnoticed for days — and a deploy that
+fixes something is no use sitting on a server.
+
+`#updbar` is one banner drawn from that same `newVersion`, so the banner and the
+Settings line can never disagree. It stays up until it is taken.
+
+- **Update reloads past the cache**: a unique search parameter, and
+  `registration.update()` first so the worker fetches the new shell rather than
+  answering from the old one. A 2.5-second fallback fires the reload anyway,
+  because a worker that will not answer must not strand anybody on the old build.
+- Dismissing hides it **for this tab only**. The next check finds the same
+  version and says so again, because a build that is still not installed is still
+  worth saying.
+- Checked on load, on regaining visibility, and every **fifteen minutes** — a tab
+  left open all afternoon would otherwise never learn about a deploy.
+  `checkUpdate` throttles itself to a minute regardless.
+- `z-index:55` puts it over the list and the tab bar and under a sheet and its
+  scrim: an update is worth interrupting a list for and never worth interrupting
+  a form for. It clears the phone's bottom bar and its safe area.
+- `#updbar[hidden]{display:none}` — `display:flex` beats the UA rule, the same
+  trap `.durs` and the entry sheet's rows have.
+
 ## Three ways to write an hour down
 
 An hour reaches the record at three different moments, and the entry sheet now

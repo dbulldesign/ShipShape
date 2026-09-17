@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.59.0">
-<meta name="app-build" content="2026-09-16">
+<meta name="app-version" content="1.60.0">
+<meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -295,6 +295,29 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #fab:active{transform:scale(.9)}#fab svg{width:27px;height:27px;fill:#fff}
 /* The scrim ramps a blur in with its dim, so the sheet reads as being in front of
    the page rather than pasted onto it. */
+/* Above the list and the tab bar, below a sheet and its scrim: an update is
+   worth interrupting a list for and never worth interrupting a form for. It
+   clears the phone's bottom bar and its safe area, because that is where it
+   sits. */
+#updbar{position:fixed;left:50%;transform:translateX(-50%);z-index:55;
+  bottom:calc(12px + env(safe-area-inset-bottom));
+  display:flex;align-items:center;gap:10px;max-width:calc(100vw - 24px);
+  padding:9px 9px 9px 15px;border-radius:14px;background:var(--elev);
+  box-shadow:0 8px 30px rgba(0,0,0,.28);
+  backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
+  border:.5px solid var(--sep);
+  font-size:14px;color:var(--label)}
+@media (max-width:860px){#updbar{bottom:calc(62px + env(safe-area-inset-bottom))}}
+body[data-board] #updbar{bottom:calc(12px + env(safe-area-inset-bottom))}
+#updbar[hidden]{display:none}          /* display:flex beats the UA rule */
+#updbar .ub-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#updbar b{font-family:var(--round);font-weight:700}
+#updbar #ub-go{flex:none;background:var(--blue);color:#fff;font-weight:600;
+  padding:7px 14px;border-radius:10px;transition:transform .15s var(--ease)}
+#updbar #ub-go:active{transform:scale(.94)}
+#updbar #ub-x{flex:none;width:28px;height:28px;border-radius:50%;
+  background:var(--fill2);color:var(--label2);font-size:13px}
+@media print{#updbar{display:none!important}}
 #scrim{position:fixed;inset:0;background:rgba(0,0,0,.34);z-index:50;opacity:0;pointer-events:none;
   backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);
   transition:opacity .3s var(--ease),backdrop-filter .34s var(--ease),-webkit-backdrop-filter .34s var(--ease)}
@@ -1007,6 +1030,16 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="keys" id="keyslist"></div>
 </div>
 
+<!-- A new build is on the server and this tab is running the old one. Installed
+     to the Home Screen there is no address bar to reload from and no reason to
+     think of it, so the app says so itself and reloads past the cache when
+     asked. It stays up until it is taken — a deploy that fixes something is no
+     use sitting on a server. -->
+<div id="updbar" hidden role="status">
+  <span class="ub-t">Version <b id="ub-v"></b> is ready</span>
+  <button id="ub-go">Update</button>
+  <button id="ub-x" aria-label="Not now">✕</button>
+</div>
 <button id="fab" aria-label="New task"><svg viewBox="0 0 24 24"><path d="M12 4a1.3 1.3 0 0 1 1.3 1.3v5.4h5.4a1.3 1.3 0 0 1 0 2.6h-5.4v5.4a1.3 1.3 0 0 1-2.6 0v-5.4H5.3a1.3 1.3 0 0 1 0-2.6h5.4V5.3A1.3 1.3 0 0 1 12 4Z"/></svg></button>
 <div id="scrim"></div>
 
@@ -1070,6 +1103,12 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field" id="tmstartrow"><label for="tmstart">Start</label><input id="tmstart" type="time" step="60"></div>
     <div class="field" id="tmendrow"><label for="tmend">End</label><input id="tmend" type="time" step="60"></div>
   </div>
+  <div style="padding:0 14px"><div class="hint" id="tmhint" style="margin-top:0">
+    <span><code>1h</code> <code>90m</code> <code>1h30</code></span>
+    <span><code>10:30am for 1h</code></span>
+    <span><code>9–11</code></span>
+    <span><code>on tuesday</code></span>
+  </div></div>
   <div class="durs" id="tmdurs" role="group" aria-label="How long it took"></div>
   <div class="blurb" id="tmdur"></div>
   <div class="tmtot" id="tmtot"></div>
@@ -2333,6 +2372,71 @@ function parseInput(raw){
      anyone has decided what to call the line — and the composer will not submit
      without a title, so the number becomes one. */
   return {title:title||(po?'PO '+po:'')||(link?linkKind(link).label:''),due,flagged,po,link,inv,...out};
+}
+
+/* ============ the same idea, for an hour ============
+   The composer reads a task out of a line; this reads an entry out of one.
+   "Matrix meeting for 1h on Tuesday", "Matrix meeting 1h", "10:30am for 1 hr",
+   "9-11" — nobody wants to fill in three fields for something they can say in
+   six words, and the fields are still right there when the sentence is not
+   enough.
+
+   Lifted out in order of how much each pattern settles: a range names both ends,
+   so nothing else has to be guessed; a duration names the length; a clock time
+   names where it starts. The date goes LAST, past a GAP, for exactly the reason
+   the composer's PO does — "1h on tuesday" would otherwise look to `extractDate`
+   as though the date opened the line once the duration had gone. */
+const T_RANGE=/\b(?:from |between )?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to|until|till|til)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i;
+/* A bare number is never a clock time. "Call 3" is not three o'clock, and the
+   one thing worse than not reading a time is reading one nobody wrote — so
+   either the minutes or an am/pm has to be there. */
+const T_AT=/\b(?:at |from )?(?:(\d{1,2}):(\d{2})\s*(am|pm)?|(\d{1,2})\s*(am|pm))\b/i;
+const T_DURS=[
+  [/\b(?:for )?(\d{1,2})\s*h(?:rs?|ours?)?\s*(\d{1,2})\s*(?:m|mins?|minutes?)?\b/i,
+    m=>(+m[1]*60+ +m[2])*6e4],                                   // 1h30, 2 hrs 15 min
+  [/\b(?:for )?(\d+(?:\.\d+)?)\s*(?:h|hrs?|hours?)\b/i,m=>+m[1]*36e5],   // 1h, 1.5 hours
+  [/\b(?:for )?(\d+)\s*(?:m|mins?|minutes?)\b/i,m=>+m[1]*6e4],            // 90m, 45 min
+  [/\bhalf an hour\b/i,()=>18e5],
+  [/\b(?:an|one) hour\b/i,()=>36e5],
+];
+/* Minutes past midnight. A bare hour of 1 to 6 is the afternoon — nobody logs
+   work at four in the morning and calls it "4" — and anything else is read as
+   written. */
+const clkMin=(hh,mm,ap,afternoon)=>{
+  let h=+hh;const m=mm?+mm:0;
+  if(ap){ap=ap.toLowerCase();
+    if(ap==='pm'&&h<12)h+=12;
+    if(ap==='am'&&h===12)h=0;}
+  else if(afternoon&&h>=1&&h<=6)h+=12;
+  return h*60+m;
+};
+function parseEntryLine(raw){
+  let text=' '+String(raw||'').trim()+' ';
+  const out={ms:null,start:null,end:null,day:null};
+  const lift=m=>{text=text.slice(0,m.index)+GAP+text.slice(m.index+m[0].length);};
+  {const m=text.match(T_RANGE);
+   if(m&&+m[1]<=24&&+m[4]<=24&&(!m[2]||+m[2]<60)&&(!m[5]||+m[5]<60)){
+     const a=clkMin(m[1],m[2],m[3],true);
+     let b=clkMin(m[4],m[5],m[6],false);
+     /* "9-5" is eight hours, not twenty. An end written bare that lands before
+        the start is the afternoon; one that still does after that is an evening
+        running past midnight, which the sheet already knows how to say. */
+     if(!m[6]&&b<=a)b+=720;
+     if(b<=a)b+=1440;
+     out.start=a;out.end=b;lift(m);}}
+  for(const [re,fn] of T_DURS){
+    const m=text.match(re);if(!m)continue;
+    const ms=fn(m);if(!ms||ms<=0)continue;
+    out.ms=ms;lift(m);break;}
+  if(out.start==null){const m=text.match(T_AT);
+    if(m){const h=m[1]!=null?m[1]:m[4],mm=m[2],ap=m[3]||m[5];
+      if(+h<=24&&(!mm||+mm<60)){out.start=clkMin(h,mm,ap,true);lift(m);}}}
+  if(out.start!=null&&out.end==null&&out.ms)out.end=out.start+out.ms/6e4;
+  {const d=extractDate(text);
+   if(d){out.day=iso(d.date);text=text.slice(0,d.index)+GAP+text.slice(d.index+d.text.length);}}
+  out.label=tidyTitle(text);
+  out.took=out.ms!=null||out.start!=null||out.day!=null;
+  return out;
 }
 
 /* ============ helpers ============ */
@@ -3654,11 +3758,37 @@ function growFrom(sheet){
    The running build is whatever was in the HTML the browser cached. To tell
    whether that is the build actually on the server, re-fetch the page past the
    cache and compare the app-version meta. */
-let newVersion=null,lastCheck=0;
+let newVersion=null,lastCheck=0,updHidden=false;
 function renderVersion(status){
   $('#verNote').textContent=`Version ${VERSION} · ${BUILD}${status?' · '+status:''}`;
   $('#updBtn').textContent=newVersion?`Reload for ${newVersion}`:'Check for updates';
+  drawUpdBar();
 }
+/* One banner, drawn from the same `newVersion` the Settings line reads, so the
+   two can never disagree. Dismissing hides it for this tab only — the next check
+   after a reload finds the same version and says so again, because a build that
+   is still not installed is still worth saying. */
+function drawUpdBar(){
+  $('#updbar').hidden=!newVersion||updHidden;
+  if(newVersion)$('#ub-v').textContent=newVersion;
+}
+$('#ub-go').addEventListener('click',()=>{
+  /* Past the cache, and past the service worker's copy with it: the worker
+     answers HTML network-first, but a stale cached page is exactly what a
+     reload is trying to get away from. The search parameter makes the request
+     unique; the SW is told to drop its old cache first so the shell's scripts
+     and icons come again too. */
+  $('#ub-go').textContent='Updating…';
+  const go=()=>{const u=new URL(location.href);u.searchParams.set('v',Date.now());
+    location.replace(u.toString());};
+  if(!navigator.serviceWorker||!navigator.serviceWorker.getRegistrations)return go();
+  navigator.serviceWorker.getRegistrations()
+    .then(rs=>Promise.all(rs.map(r=>r.update().catch(()=>null))))
+    .catch(()=>null).finally(go);
+  // never let a worker that will not answer strand somebody on the old build
+  setTimeout(go,2500);
+});
+$('#ub-x').addEventListener('click',()=>{updHidden=true;drawUpdBar();});
 async function liveVersion(){
   const r=await fetch(location.pathname+'?vcheck='+Date.now(),{cache:'no-store'});
   if(!r.ok)throw new Error(r.status);
@@ -3677,10 +3807,15 @@ async function checkUpdate(quiet){
     const live=await liveVersion();
     if(!live){renderVersion('server version unknown');if(!quiet)toast('Could not read the deployed version.');}
     else if(live===VERSION){renderVersion('up to date');if(!quiet)toast(`Up to date · ${VERSION}`);}
-    else{newVersion=live;renderVersion(`${live} is live`);toast(`Version ${live} is deployed. Reload to get it.`);}
+    else{newVersion=live;updHidden=false;renderVersion(`${live} is live`);}
   }catch(e){renderVersion(quiet?'':'check failed');if(!quiet)toast('Could not check. Are you offline?');}
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate(true);});
+/* A tab left open all afternoon would otherwise never learn about a deploy — and
+   installed to a Home Screen, that is most of them. Fifteen minutes, against a
+   fifteen-second sync poll, so it costs nothing next to what the app already
+   does; checkUpdate throttles itself to a minute regardless. */
+setInterval(()=>checkUpdate(true),15*60000);
 /* The one place a project is made out of a name somebody typed — from the
    composer's #Name, from a title being edited, or from the project field. */
 function findProjectId(name){
@@ -4212,7 +4347,7 @@ function openEntry(id,mode){
   const live=x.end===null;
   $('#tmsheet').querySelector('.sheettitle span').textContent=isNew?'Add an entry':'Edit this entry';
   $('#tmdelete').style.display=isNew?'none':'';
-  $('#tmlabel').value=x.label||'';
+  $('#tmlabel').value=x.label||'';tmLine0=tmOpen0=$('#tmlabel').value;
   // a name rather than an id, because it is typed as well as picked
   $('#tmproject').value=x.projectId?((P(x.projectId)||{}).name||''):'';
   const sd=new Date(x.start);
@@ -4290,9 +4425,14 @@ function entryDur(){
     return `${String(x.getHours()).padStart(2,'0')}:${String(x.getMinutes()).padStart(2,'0')}`;};
   // an amount hides the clock times, so it says what they came out as — the
   // window is real underneath either way, and a hidden one is a secret
+  /* When the line carried notation, say what the label will be left as. This is
+     the one place a time entry rewrites words somebody typed, so it says so
+     before Save rather than after. */
+  const lbl=entryLabel(),raw=$('#tmlabel').value.trim();
   d.textContent=clockHM(t.end-t.start)
     +(entryMode==='amount'?` · ${hm(t.start)} – ${hm(t.end)}`:'')
-    +(t.over?' · finishes the next day':'');
+    +(t.over?' · finishes the next day':'')
+    +(lbl&&lbl!==raw?` · “${lbl}”`:'');
 }
 /* Half an hour to twelve hours. Nobody types 13:45 to 15:15 when what they mean
    is "an hour and a half on the Cedar drawings", and the commonest failure of a
@@ -4319,7 +4459,7 @@ function drawDurs(t){
    **already written down** has a start somebody chose, so a duration keeps that
    and moves the end. `entryDraft` tells the two apart, the same way
    `editingEntry` does. */
-function setEntryDur(ms){
+function setEntryDur(ms,quiet){
   const t=entryTimes();
   if(!t||t.err||t.end===null)return;
   const at=new Date(entryDraft?t.end-ms:t.start);
@@ -4330,7 +4470,7 @@ function setEntryDur(ms){
      moves the start back over midnight has to move the day with it. */
   $('#tmdate').value=iso(at);
   $('#tmstart').value=hm(at);$('#tmend').value=hm(end);
-  entryDur();buzz(4);
+  entryDur();if(!quiet)buzz(4);
 }
 $('#tmdurs').addEventListener('click',e=>{
   const b=e.target.closest('[data-dur]');if(b)setEntryDur(+b.dataset.dur);
@@ -4392,10 +4532,23 @@ function drawTotals(t){
     +cell(s.week,s.weekAdd,'this week')
     +cell(s.proj,s.projAdd,s.pname);
 }
+/* The notation comes out of the label — but not if it was the whole of it. A
+   line reading only "1h" leaves nothing to call the entry, and an empty label is
+   worse than one that still says what you typed. Same bargain `parseInput` makes
+   for a title that is nothing but a PO. */
+function entryLabel(){
+  const raw=$('#tmlabel').value.trim();
+  /* An entry already called "Meeting 9-11" keeps that name. Only a line somebody
+     has actually typed into is read, or opening an old entry and pressing Save
+     would quietly rewrite it. */
+  if(raw===tmOpen0.trim())return raw.slice(0,120);
+  const p=parseEntryLine(raw);
+  return (p.label||raw).slice(0,120);
+}
 function saveEntry(){
   const x=editingEntry();if(!x)return;
   if(entryMode==='timer'){
-    const label=$('#tmlabel').value.trim().slice(0,120);
+    const label=entryLabel();
     if(!label){$('#tmlabel').focus();return toast('Say what you are about to work on.');}
     const projectId=findProjectId($('#tmproject').value);
     entryDraft=null;closeSheets();
@@ -4406,7 +4559,7 @@ function saveEntry(){
   const t=entryTimes();
   if(!t||t.err)return toast(t&&t.err||'That cannot be saved.');
   if(entryDraft){
-    const label=$('#tmlabel').value.trim().slice(0,120);
+    const label=entryLabel();
     if(!label){$('#tmlabel').focus();return toast('Say what the time was spent on.');}
     /* findProjectId is the one place a typed name becomes a project, and Save is
        the moment somebody is finished with the field — the same bargain the
@@ -4420,7 +4573,7 @@ function saveEntry(){
     return;
   }
   const before={label:x.label,projectId:x.projectId,start:x.start,end:x.end};
-  x.label=$('#tmlabel').value.trim().slice(0,120)||x.label;
+  x.label=entryLabel()||x.label;
   x.projectId=findProjectId($('#tmproject').value);
   x.start=t.start;
   if(x.end!==null)x.end=t.end;
@@ -4428,6 +4581,36 @@ function saveEntry(){
   closeSheets();save();render();
   toast('Entry updated',()=>{Object.assign(x,before);x.u=now();save();render();});
 }
+/* Read as it is typed, and applied — but only what has CHANGED since the last
+   keystroke, which is the same guard `readTitleNotation` needs and for the same
+   reason: pick 2h off the chips, then add a word to the line, and a parser that
+   re-applied everything it could still see would put 1h straight back.
+
+   The raw line stays in the field while it is being typed — the composer does
+   not rewrite its textarea either — and the notation comes out of the label only
+   when the entry is saved. What is left is shown in the duration line, so the
+   rewrite is never a surprise. */
+let tmLine0='',tmOpen0='';
+function readEntryLine(){
+  const raw=$('#tmlabel').value;
+  if(raw===tmLine0)return;
+  const np=parseEntryLine(raw),op=parseEntryLine(tmLine0);
+  tmLine0=raw;
+  const fresh=k=>np[k]!=null&&np[k]!==op[k];
+  const hm=min=>`${String(Math.floor(min/60)%24).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
+  let mode=null;
+  if(fresh('day'))$('#tmdate').value=np.day;
+  if(fresh('start')){$('#tmstart').value=hm(np.start);mode='times';}
+  if(fresh('end')){$('#tmend').value=hm(np.end);mode='times';}
+  /* A length on its own does not say when, so it is anchored the way the chips
+     anchor one — which is the whole of what `setEntryDur` knows. */
+  if(fresh('ms')&&np.start==null){setEntryDur(np.ms,true);mode='amount';}
+  else if(fresh('ms'))mode='times';
+  // saying how long it took, or when, is saying it is not a timer
+  if(mode&&mode!==entryMode)showEntryMode(mode);
+  else entryDur();
+}
+$('#tmlabel').addEventListener('input',readEntryLine);
 $('#tmclose').addEventListener('click',closeSheets);
 $('#tmsave').addEventListener('click',saveEntry);
 ['#tmdate','#tmstart','#tmend'].forEach(sel=>$(sel).addEventListener('input',entryDur));
