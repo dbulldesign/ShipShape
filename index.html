@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.63.0">
+<meta name="app-version" content="1.64.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -349,6 +349,15 @@ body[data-board] #updbar{bottom:calc(12px + env(safe-area-inset-bottom))}
 #ci{width:100%;border:0;background:transparent;font-size:19px;line-height:1.35;resize:none;height:64px;outline:none;font-family:var(--sans)}
 #ci::placeholder{color:var(--label3)}
 .preview{display:flex;flex-wrap:wrap;gap:6px}
+/* What the notes were understood to say. Wrapping rather than scrolling, like
+   the duration chips: there are rarely more than three, and a scroller would
+   hide one. */
+.notesugg{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:9px 16px 0}
+.notesugg[hidden]{display:none}                /* display:flex beats the UA rule */
+.notesugg .lbl{font-size:12px;font-weight:600;color:var(--label3)}
+.notesugg button{font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:8px;
+  background:var(--fill2);color:var(--label2);transition:transform .15s var(--ease)}
+.notesugg button:active{transform:scale(.93)}
 .pchip{font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:8px;background:var(--fill2);display:inline-flex;gap:5px;align-items:center;animation:pop .25s var(--ease)}
 .seg{display:flex;background:var(--fill2);border-radius:9px;padding:2px;gap:2px;margin-bottom:10px;width:max-content}
 .seg button{font-size:13.5px;font-weight:600;padding:5px 14px;border-radius:7px;color:var(--label2);transition:background .2s,color .2s}
@@ -945,6 +954,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     </div>
   </div>
   <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="dnotes">Notes</label><textarea id="dnotes" placeholder="Order numbers, contacts, next steps…"></textarea></div></div>
+  <div class="notesugg" id="dnotesugg" hidden></div>
   <button class="danger" id="ddel">Delete</button>
 </div>
 </div>
@@ -4644,8 +4654,11 @@ function entryTotals(){
   /* A timer has put nothing on record yet, so it contributes nothing: a
      zero-length entry leaves the day, the week and the job reading exactly what
      they read now, which is the useful thing to see before starting one. */
+  // one reading of the clock, not two: a millisecond between them is a positive
+  // length, and the totals then offered a timer "+under a minute" it had not run
+  const t0=now();
   const mine=entryMode==='timer'
-    ? {id:x.id,start:now(),end:now(),projectId:pr.isNew?'__newproject':pr.id}
+    ? {id:x.id,start:t0,end:t0,projectId:pr.isNew?'__newproject':pr.id}
     : {id:x.id,start:t.start,end:t.end,projectId:pr.isNew?'__newproject':pr.id};
   const list=S.times.filter(y=>y.id!==x.id).concat([mine]);
   const d0=+fromISO(iso(new Date(t.start))),d1=d0+864e5;
@@ -5390,6 +5403,7 @@ function openDetail(id){
   $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
   $('#drep').innerHTML=REPS.map(([v,l])=>`<option value="${v||''}" ${(t.rep||'')===(v||'')?'selected':''}>${l}</option>`).join('');
   $('#dremind').innerHTML=REMINDS.map(([v,l])=>`<option value="${v}" ${(t.remind||0)===v?'selected':''}>${l}</option>`).join('');
+  drawNoteOffers();
   rememberFocus();
   $('#detail').classList.add('on');
   $('#detail').setAttribute('aria-modal','true');
@@ -5870,6 +5884,83 @@ function readTitleNotation(t){
     save();render();
   });
 }
+
+/* ============ what the notes say ============
+   The notes are the one field in this app that is *prose*. Everywhere else a
+   line is a line — a title, a label, one thing said once — and the parser earns
+   its keep by lifting notation out of it. A paragraph is different: "Arriving
+   Tuesday, Dana says the glass is late" is a sentence, and taking the Tuesday
+   out of it leaves a broken one and a date nobody asked for.
+
+   So the notes are **read and never rewritten**. What the parser finds is
+   offered as a chip; the words stay exactly where they were typed. Same bargain
+   the invoice word already makes in a title, for the same reason.
+
+   Two rules keep the offer from becoming a nag:
+
+   - It only ever **fills something empty**. A task already dated is not argued
+     with, however the note reads — notes fill blanks, they do not overrule a
+     field somebody has set. Which also means an offer disappears the moment it
+     is taken, rather than sitting there for ever on every old task.
+   - **A date, a PO, the invoice word and a link — and nothing else.** Those four
+     have tight grammars that need no markers, which is what makes them safe to
+     read out of a sentence. The composer's `#@>` markers are a *line* grammar:
+     a marker runs to the next marker or the end, because in a title they sit at
+     the end and there is nothing else there. In a paragraph that is badly wrong
+     — "@Lumina and going >Chicago" reads the maker as "Lumina and going", and
+     there is no rule that tells that apart from ">Chicago warehouse" being two
+     words that belong together. And `#4` is how this trade writes a bay, a gauge
+     and a drawing number, which is exactly what notes are full of. So markers
+     are not read here at all; the fields are a tap away. */
+function noteOffers(t){
+  const raw=($('#dnotes').value||'').trim();
+  if(!raw||!t)return [];
+  const p=parseInput(raw);
+  const out=[];
+  const add=(k,label,fn)=>out.push({k,label,fn});
+  if(p.due&&!t.due)add('due','Due '+fmtDue(p.due),x=>{x.due=p.due;$('#ddue').value=p.due;});
+  if(p.po&&!String(t.po||'').trim())add('po','PO '+p.po,x=>{x.po=p.po;$('#dpo').value=p.po;});
+  if(p.inv&&!isInvoice(t))add('inv','An invoice',x=>{x.inv=true;$('#dinv').checked=true;});
+  if(p.link&&!linksOf(t).some(l=>l.url===p.link))
+    add('link',linkKind(p.link).label,x=>{addLink(x,p.link,'');renderLinks(x);});
+  return out;
+}
+function drawNoteOffers(){
+  const t=S.tasks.find(x=>x.id===editing);
+  const o=t?noteOffers(t):[];
+  const el=$('#dnotesugg');
+  el.hidden=!o.length;
+  // cleared, not merely hidden: querying it found the last note's chips, so an
+  // offer that had been taken still answered for itself
+  if(!o.length){el.innerHTML='';return;}
+  el.innerHTML='<span class="lbl">From the notes</span>'
+    +o.map(x=>`<button type="button" data-no="${esc(x.k)}">${esc(x.label)}</button>`).join('');
+}
+$('#dnotes').addEventListener('input',drawNoteOffers);
+$('#dnotesugg').addEventListener('click',e=>{
+  const b=e.target.closest('[data-no]');if(!b)return;
+  const t=S.tasks.find(x=>x.id===editing);if(!t)return;
+  const o=noteOffers(t).find(x=>x.k===b.dataset.no);if(!o)return;
+  /* The notes go in too. Taking an offer writes the record, and a record whose
+     notes disagree with the field is one re-render away from losing whatever has
+     been typed — undo reopens the sheet, and the words that prompted the offer
+     came back empty. */
+  /* The notes are deliberately NOT in the snapshot. Undo reverses what the tap
+     did — it did not write the prose, the person did, and restoring an older
+     `notes` would throw away words they had just typed. */
+  const snap={due:t.due,po:t.po,inv:t.inv,type:t.type,
+    eta:t.eta,links:linksOf(t).slice()};
+  t.notes=$('#dnotes').value;
+  o.fn(t);
+  /* A maker, a destination or a PO all mean something has been ordered, so the
+     same inference the composer and the title parser make applies here — without
+     it the maker just taken would land in fields a task does not show. */
+  if(t.type!=='shipment'&&o.k==='po'){t.type='shipment';showKind(t);}
+  t.u=now();save();render();drawNoteOffers();buzz(4);
+  toast('Picked up '+o.label,()=>{
+    Object.assign(t,snap);t.u=now();save();render();
+    if(editing===t.id)openDetail(t.id);});
+});
 
 /* ============ project sheet ============ */
 function openProject(id){

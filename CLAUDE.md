@@ -424,6 +424,43 @@ is the body: **the kind**, **the job**, and the punctuation that was joining the
   should not have to go through a parser to say so; this is for the times you
   would rather just write the sentence.
 
+## The notes are read, and never rewritten
+
+The notes are the one field in this app that is **prose**. Everywhere else a line
+is a line — a title, a label, one thing said once — and the parser earns its keep
+by lifting notation out of it. A paragraph is different: "Arriving Tuesday, Dana
+says the glass is late" is a sentence, and taking the Tuesday out of it leaves a
+broken one and a date nobody asked for.
+
+So `noteOffers` reads them and **offers** what it found as a chip. The words stay
+exactly where they were typed. Same bargain the invoice word already makes in a
+title, for the same reason.
+
+- **A date, a PO, the invoice word and a link — and nothing else.** Those four
+  have tight grammars that need no markers, which is what makes them safe to read
+  out of a sentence. The composer's `#@>` markers are a *line* grammar: a marker
+  runs to the next marker or the end, because in a title they sit at the end and
+  there is nothing else there. In a paragraph that is badly wrong — "@Lumina and
+  going >Chicago" reads the maker as "Lumina and going", and no rule tells that
+  apart from ">Chicago warehouse" being two words that belong together. And `#4`
+  is how this trade writes a bay, a gauge and a drawing number, which is exactly
+  what notes are full of. Markers are not read here at all.
+- **An offer only ever fills something empty.** A task already dated is not
+  argued with, however the note reads — notes fill blanks, they do not overrule a
+  field somebody has set. Which is also what stops the row sitting there for ever
+  on every old task: taking an offer removes it.
+- The row is **cleared, not merely hidden**, when there is nothing to offer. A
+  hidden row kept the last note's chips, so an offer already taken still answered
+  a query for itself.
+- Taking one writes the **notes** with it. Touching the record and leaving the
+  field's text unsaved is one re-render from losing it — undo reopens the sheet,
+  and the words that prompted the offer came back empty.
+- But the notes are **not in the undo snapshot**: undo reverses what the tap did,
+  and the tap did not write the prose. Restoring an older `notes` would throw
+  away words somebody had just typed.
+- A PO taken from the notes makes it a shipment, the same inference the composer
+  and the title parser make.
+
 ## An hour read out of a line
 
 The composer reads a task out of a line; `parseEntryLine` reads an entry out of
@@ -580,6 +617,10 @@ does not say which part of it is the thing being typed.
 - The contribution sits inside the `<b>`, so the caption rule is `.tmtot>div>span`.
   Without the child combinator it lands on the contribution too and turns
   `+1h 00m` into an uppercase block of its own.
+- The timer's zero-length placeholder reads the clock **once**, not twice. A
+  millisecond between two `now()` calls is a positive length, and the totals then
+  offered a timer "+under a minute" it had not run — intermittently, which is the
+  worst way to be wrong.
 - The totals use `clockTotal`, not `clockHM`: a day holding nothing reads `0m`,
   and "under a minute" over an empty day is a lie — the same reason the log's day
   headings use it. The contribution is a real amount and keeps `clockHM`, and a
