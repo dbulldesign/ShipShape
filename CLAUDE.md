@@ -390,14 +390,29 @@ is the body: **the kind**, **the job**, and the punctuation that was joining the
   new / add / create" that tends to come in front of it. Without one, the body
   falls through to the composer's own inference — a maker, a destination or a PO
   still means a shipment.
-- **A job needs something to make it unambiguous.** Either the line says the word
-  ("to the Atria project", `QA_PROJ`/`QA_PROJ2`) or what follows "for" is the name
-  of a job that **already exists** (`QA_PROJ3` + `namedProject`). Without one of
-  those, "Call Dana for Tuesday" would file itself under a project called
-  Tuesday — the same trap the composer's markers avoid by needing a `#`.
-- So a **new** job is never made by the "for X" form. `#Name` is how you do that,
-  and it still works, because the body goes through the composer's parser
-  afterwards and that is where `#` is read.
+- **A PO needs nothing of its own.** The body goes through `parseInput`, so
+  `PO 41785`, `PO41785`, `PO#41785` and `PO: 41785` all read exactly as they do
+  in the composer, land in `t.po`, and infer a shipment the way a maker does.
+  One parser, one set of rules — the quick add never grew its own idea of a PO.
+- **A colon after a kind word is the separator**, and everything in front of it
+  is qualifying the thing rather than naming it. That makes the preamble
+  unambiguous, so a job named there is taken **as written** — "new task for
+  Atria: …" files under Atria whether or not Atria exists yet, the same licence
+  `#Name` has. It also stops the preamble leaking into the title: "for Atria"
+  that matched nothing used to be left where it was, and the task came out called
+  "for Atria: crate of sconces".
+- Not *any* colon, though. A PO is written "PO: 41785" as often as not, so a
+  colon inside one is punctuation belonging to the number — otherwise "new
+  shipment crate PO: 41785" filed itself under a job called "crate PO". A colon
+  past 40 characters is somebody's prose, and a preamble containing `#@>` is not
+  a preamble at all.
+- **Without a colon** a job still needs something to make it unambiguous: either
+  the line says the word ("to the Atria project", `QA_PROJ`/`QA_PROJ2`) or what
+  follows "for" names a job that **already exists** (`QA_PROJ3` +
+  `namedProject`). Otherwise "Call Dana for Tuesday" would file itself under a
+  project called Tuesday — the trap the composer's markers avoid by needing a
+  `#`. `#Name` still works everywhere, because the body goes through the
+  composer's parser afterwards and that is where `#` is read.
 - **The preview is drawn by `quickPlan` and Add runs `quickPlan`**, so the two
   cannot describe different things.
 - **The kind can be overruled by hand** and then keeps winning while the line is

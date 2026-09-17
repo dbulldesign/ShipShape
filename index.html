@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.61.0">
+<meta name="app-version" content="1.62.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -1149,10 +1149,11 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 <div class="sheet" role="dialog" aria-modal="true" id="qasheet"><div class="grab"></div><div class="pad">
   <div class="seg" id="qakind"></div>
   <div class="preview" id="qaprev"></div>
-  <textarea id="qatext" rows="2" placeholder="New task for Atria: ship linear fixtures on tuesday"></textarea>
+  <textarea id="qatext" rows="2" placeholder="New shipment for Atria: linear fixtures PO 41785 @Lumina on tuesday"></textarea>
   <div class="hint">
     <span><code>task</code> <code>shipment</code> <code>time</code> <code>idea</code> <code>project</code></span>
     <span><code>for Atria</code></span>
+    <span><code>PO 41785</code></span>
     <span><code>on tuesday</code> · <code>2h</code></span>
   </div>
   <div class="row2"><button class="btn" id="qaadd">Add it</button></div>
@@ -2421,6 +2422,42 @@ function parseQuickAdd(raw){
   for(const [k,re] of QA_KINDS){
     const m=text.match(re);
     if(m){out.kind=k;text=text.slice(m[0].length);break;}
+  }
+  /* A colon after a kind word is the tell: everything in front of it is
+     qualifying the thing rather than naming it. That makes the preamble
+     unambiguous, so a job named there is taken as written — "new task for Atria:
+     …" files under Atria whether or not Atria exists yet, the same licence
+     `#Name` has. Without the colon there is no such licence, and the two rules
+     below apply instead.
+
+     It also stops the preamble leaking into the title. "for Atria" that matched
+     nothing used to be left where it was, and the task came out called
+     "for Atria: crate of sconces". */
+  if(out.kind){
+    /* Not just any colon. A PO is written "PO: 41785" as often as not, so a
+       colon inside one is punctuation belonging to the number rather than a
+       separator — and "new shipment crate PO: 41785" would otherwise file
+       itself under a job called "crate PO". */
+    const po=text.match(PO_RE);
+    let c=text.indexOf(':');
+    if(po&&c>=po.index&&c<po.index+po[0].length)c=text.indexOf(':',po.index+po[0].length);
+    /* And a preamble is a handful of words. A colon deep in a sentence is
+       somebody's punctuation, not notation. */
+    if(c>40)c=-1;
+    // nor is a preamble the place for the composer's own markers
+    if(c>=0&&/[#@>]/.test(text.slice(0,c)))c=-1;
+    if(c>=0){
+      let pre=text.slice(0,c).trim();
+      const body=text.slice(c+1);
+      const m=pre.match(QA_PROJ)||pre.match(QA_PROJ2);
+      if(m&&m[1]&&m[1].trim())out.project=m[1].trim();
+      else{
+        pre=pre.replace(/^(?:for|to|in|on|under)\s+(?:the\s+)?/i,'').trim();
+        if(pre)out.project=pre;
+      }
+      out.body=body.replace(/^[\s:;,.\u2014-]+/,'').replace(/\s+/g,' ').trim();
+      return out;
+    }
   }
   /* Two ways a job gets named, and both need something to make them
      unambiguous. Either the line says the word — "to the Atria project" — or
