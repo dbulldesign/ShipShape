@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.64.0">
+<meta name="app-version" content="1.65.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -1095,6 +1095,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     </div>
   </div>
   <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="pnotes">Notes</label><textarea id="pnotes" placeholder="Scope, addresses, PO numbers…"></textarea></div></div>
+  <div class="notesugg" id="pnotesugg" hidden></div>
   <div style="padding:0 14px 16px;display:flex;gap:10px">
     <button class="btn sec" id="pdel" style="flex:1;margin:0;text-align:center">Delete project</button>
     <button class="btn" id="psave" style="flex:1;margin:0;text-align:center">Save</button></div>
@@ -5925,16 +5926,18 @@ function noteOffers(t){
     add('link',linkKind(p.link).label,x=>{addLink(x,p.link,'');renderLinks(x);});
   return out;
 }
+/* One drawer for both sheets, so the two cannot drift — and so the rule below
+   is written once. **Cleared, not merely hidden**: querying a hidden row found
+   the last note's chips, and an offer already taken still answered for itself. */
+function drawOfferRow(el,offers){
+  el.hidden=!offers.length;
+  if(!offers.length){el.innerHTML='';return;}
+  el.innerHTML='<span class="lbl">From the notes</span>'
+    +offers.map(x=>`<button type="button" data-no="${esc(x.k)}">${esc(x.label)}</button>`).join('');
+}
 function drawNoteOffers(){
   const t=S.tasks.find(x=>x.id===editing);
-  const o=t?noteOffers(t):[];
-  const el=$('#dnotesugg');
-  el.hidden=!o.length;
-  // cleared, not merely hidden: querying it found the last note's chips, so an
-  // offer that had been taken still answered for itself
-  if(!o.length){el.innerHTML='';return;}
-  el.innerHTML='<span class="lbl">From the notes</span>'
-    +o.map(x=>`<button type="button" data-no="${esc(x.k)}">${esc(x.label)}</button>`).join('');
+  drawOfferRow($('#dnotesugg'),t?noteOffers(t):[]);
 }
 $('#dnotes').addEventListener('input',drawNoteOffers);
 $('#dnotesugg').addEventListener('click',e=>{
@@ -5972,7 +5975,7 @@ function openProject(id){
   $('#pname').value=p?p.name:'';$('#pclient').value=p?p.client||'':'';
   $('#pdue').value=p?p.due||'':'';$('#pnotes').value=p?p.notes||'':'';
   $('#pdel').style.display=p?'':'none';
-  $('#plinknew').value='';renderProjLinks(p);
+  $('#plinknew').value='';renderProjLinks(p);drawProjOffers();
   rememberFocus();$('#scrim').classList.add('on');$('#psheet').classList.add('on');
   if(!p)setTimeout(()=>$('#pname').focus(),300);
 }
@@ -6022,6 +6025,37 @@ function saveProject(){
   else{target={id:uid(),...data};S.projects.push(target);S.started=true;view={t:'project',v:target.id};}
   editProj=null;save();closeSheets();render();buzz();toast('Project saved');
 }
+
+/* The same reading, on a project's notes. A project has fewer places to put
+   what a note says: a **target date** and a **link**, and no PO or invoice field
+   for either of those to go into — so neither is offered, because an offer with
+   nowhere to land is worse than none.
+
+   The date fills the **field**, not the record: `saveProject` gathers the sheet
+   on save, so writing the record here would be a second way to change a project
+   and the Save button would be a lie. The link is the exception, and it already
+   was one — `addProjLink` writes straight to the record so that pasting one and
+   closing the sheet does not lose it — which also means a project that does not
+   exist yet has nowhere to put a link, and none is offered until it is saved. */
+function projNoteOffers(){
+  const raw=($('#pnotes').value||'').trim();
+  if(!raw)return [];
+  const q=parseInput(raw),pr=editProj?P(editProj):null,out=[];
+  if(q.due&&!$('#pdue').value)
+    out.push({k:'due',label:'Target '+fmtDue(q.due),fn:()=>{$('#pdue').value=q.due;}});
+  if(q.link&&pr&&!linksOf(pr).some(l=>l.url===q.link))
+    out.push({k:'link',label:linkKind(q.link).label,fn:()=>{
+      if(addLink(pr,q.link,'')){save();renderProjLinks(pr);render();}}});
+  return out;
+}
+const drawProjOffers=()=>drawOfferRow($('#pnotesugg'),projNoteOffers());
+$('#pnotes').addEventListener('input',drawProjOffers);
+$('#pnotesugg').addEventListener('click',e=>{
+  const b=e.target.closest('[data-no]');if(!b)return;
+  const o=projNoteOffers().find(x=>x.k===b.dataset.no);if(!o)return;
+  o.fn();drawProjOffers();buzz(4);
+  toast('Picked up '+o.label);
+});
 
 /* ============ sync sheet ============
    What is in these fields is a draft, not the live config: sync keeps running on

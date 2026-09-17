@@ -451,7 +451,8 @@ title, for the same reason.
   on every old task: taking an offer removes it.
 - The row is **cleared, not merely hidden**, when there is nothing to offer. A
   hidden row kept the last note's chips, so an offer already taken still answered
-  a query for itself.
+  a query for itself. `drawOfferRow` is the one drawer both sheets use, so that
+  rule is written once and the two cannot drift.
 - Taking one writes the **notes** with it. Touching the record and leaving the
   field's text unsaved is one re-render from losing it — undo reopens the sheet,
   and the words that prompted the offer came back empty.
@@ -460,6 +461,20 @@ title, for the same reason.
   away words somebody had just typed.
 - A PO taken from the notes makes it a shipment, the same inference the composer
   and the title parser make.
+
+**A project's notes are read the same way**, with fewer places to put what they
+say: a **target date** and a **link**, and nothing else. A project has no PO and
+no invoice field, so neither is offered — an offer with nowhere to land is worse
+than none.
+
+- The date fills the **field**, not the record. `saveProject` gathers the sheet
+  on save, so writing the record here would be a second way to change a project
+  and the Save button would be a lie. Which also means there is nothing to undo:
+  the commit is Save, as it always was.
+- The link is the exception, and it already was one — `addProjLink` writes
+  straight to the record so that pasting one and closing the sheet does not lose
+  it. So a project that does not exist yet has nowhere to put a link, and none is
+  offered until it has been saved once.
 
 ## An hour read out of a line
 
