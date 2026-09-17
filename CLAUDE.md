@@ -482,9 +482,18 @@ Settings line can never disagree. It stays up until it is taken.
 - Dismissing hides it **for this tab only**. The next check finds the same
   version and says so again, because a build that is still not installed is still
   worth saying.
-- Checked on load, on regaining visibility, and every **fifteen minutes** — a tab
-  left open all afternoon would otherwise never learn about a deploy.
-  `checkUpdate` throttles itself to a minute regardless.
+- Checked on load, every **fifteen minutes**, and from **`resume()`** — which is
+  already the one place that answers "the tab, the app or the network came back",
+  listening on visibilitychange, focus and online. A check that failed while
+  offline would otherwise sit unretried until the next tick. `checkUpdate`
+  throttles itself to a minute regardless, so three events cannot storm anything.
+- **A background check never navigates.** `checkUpdate` returned early and
+  reloaded whenever `newVersion` was already set — written when the only caller
+  was a deliberate tap on the Settings button, and left that way when quiet
+  callers were added. So finding an update, dismissing the banner and coming back
+  to the tab reloaded the app under you, mid-edit. The reload belongs to the
+  explicit path alone; a quiet check with one already known has nothing to learn,
+  so it redraws the banner and returns.
 - `z-index:55` puts it over the list and the tab bar and under a sheet and its
   scrim: an update is worth interrupting a list for and never worth interrupting
   a form for. It clears the phone's bottom bar and its safe area.

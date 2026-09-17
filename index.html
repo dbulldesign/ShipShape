@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.62.0">
+<meta name="app-version" content="1.63.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2189,6 +2189,9 @@ function startPolling(){
 /* Coming back — to the network, to the tab, to the app — is exactly when a device
    is behind in both directions, so catch up both ways rather than only pulling. */
 function resume(){
+  // a deploy can land while this tab is away or offline, and coming back is the
+  // moment to find out — with or without sync
+  checkUpdate(true);
   // the board-cards count in a project header is read from another page's data,
   // which can change while this tab is away — refresh it even with sync off
   if(view.t==='project')renderList();
@@ -3923,7 +3926,14 @@ async function liveVersion(){
   return doc.querySelector('meta[name="app-version"]')?.content||'';
 }
 async function checkUpdate(quiet){
-  if(newVersion){                                   // already found one; this tap reloads past the cache
+  /* Already know about one. An explicit tap on the Settings button means
+     "reload for it"; a **background** check means nothing of the sort, and this
+     used to navigate for both — so finding an update, dismissing the banner and
+     switching tabs reloaded the app under you, mid-edit, the moment you came
+     back. A quiet check never navigates. Nothing to learn either way: the
+     version is known, so just make sure the banner says so. */
+  if(newVersion){
+    if(quiet){drawUpdBar();return;}
     const u=new URL(location.href);u.searchParams.set('v',Date.now());
     location.replace(u.toString());return;
   }
@@ -3937,11 +3947,15 @@ async function checkUpdate(quiet){
     else{newVersion=live;updHidden=false;renderVersion(`${live} is live`);}
   }catch(e){renderVersion(quiet?'':'check failed');if(!quiet)toast('Could not check. Are you offline?');}
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate(true);});
 /* A tab left open all afternoon would otherwise never learn about a deploy — and
    installed to a Home Screen, that is most of them. Fifteen minutes, against a
    fifteen-second sync poll, so it costs nothing next to what the app already
-   does; checkUpdate throttles itself to a minute regardless. */
+   does; checkUpdate throttles itself to a minute regardless.
+
+   Coming *back* is handled by `resume()`, which is already the one place that
+   answers "the tab, the app or the network returned" — it listens on
+   visibilitychange, focus and online, and a check that failed while offline
+   would otherwise sit unretried until the next tick. */
 setInterval(()=>checkUpdate(true),15*60000);
 /* The one place a project is made out of a name somebody typed — from the
    composer's #Name, from a title being edited, or from the project field. */
