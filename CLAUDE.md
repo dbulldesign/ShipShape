@@ -386,8 +386,10 @@ is the body: **the kind**, **the job**, and the punctuation that was joining the
 `parseEntryLine` for an hour, the raw words for an idea or a job name.
 
 - **The kind is a word at the front** (`QA_KINDS`): task, shipment/ship/crate/
-  delivery/order, time/hours/log, idea/note, project/job, each with the "a / an /
-  new / add / create" that tends to come in front of it. Without one, the body
+  delivery/order, time entry/hours/timer, idea/note, project/job, each with the
+  "a / an / new / add / create" that tends to come in front of it — and "log"
+  in front of the time one, which is a prefix rather than a kind word of its
+  own: "Log the crate numbers" is not an hour. Without one, the body
   falls through to the composer's own inference — a maker, a destination or a PO
   still means a shipment.
 - **A PO needs nothing of its own.** The body goes through `parseInput`, so
@@ -567,6 +569,44 @@ Settings line can never disagree. It stays up until it is taken.
   a form for. It clears the phone's bottom bar and its safe area.
 - `#updbar[hidden]{display:none}` — `display:flex` beats the UA rule, the same
   trap `.durs` and the entry sheet's rows have.
+
+## One key each, and a palette that makes things
+
+⌘K was already the way to reach anything. What it could not do was **make**
+anything, so a line that matched nothing answered "Nothing matches that" — which
+is the wrong answer to what somebody has just typed, because a sentence nobody
+has written down yet is nearly always a thing to be made rather than a thing to
+be found.
+
+So the line goes through `quickPlan` and is offered as a row. **One router**:
+`runQuickAdd(text)` takes the line rather than reading `#qatext`, so the palette
+and the quick add sheet cannot make different things out of the same sentence,
+and the palette never grew its own idea of a date, a PO or a maker.
+
+- The Add row is **last, and past the slice**. Last, because an exact view or
+  project has to keep ↵ — somebody typing "today" wants Today, and a palette
+  that made a task called "today" instead would be unusable. Past the 40-row cut,
+  or the one row that answers a long sentence is the first thing dropped. With
+  nothing else matching it is the only row, which is the case it exists for.
+- It **names what it will make** — `12 wall brackets` / `Add · Shipment` — read
+  from the same plan that will run, in the same shape every other row has. A
+  kind word at the front is read as the kind, so "crate of sconces" makes a
+  shipment called "of sconces", and the row says so before ↵ rather than after.
+
+**One key per thing the + menu makes**: `n` task, `s` shipment, `t` time entry,
+`i` idea, `p` project, `a` quick add — plus `/` search, `?` the list and ⌘K.
+The menu stays the discoverable half; these are for the hands that already know.
+
+- **A modifier means the browser's shortcut and none of ours.** The bare-letter
+  block returns on `metaKey`, `ctrlKey` or `altKey`. ⌘P was the one that
+  mattered: it opened a new project and printed nothing, on the two pages — the
+  purchase order and the timesheet — that exist to be printed. ⌘Z is lifted
+  above that guard, being the one shortcut that wants a modifier.
+- The palette's command list gained **New shipment** and **New time entry**, two
+  of the five things the + menu makes that it had never offered.
+- ⌘K is the only door to the palette, and that is deliberate: on a phone the
+  + menu and the search box already cover making and finding, and the palette is
+  an accelerator for a keyboard rather than a view that has to be reachable.
 
 ## The run card reads the same sentence
 

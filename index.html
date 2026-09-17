@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.67.0">
+<meta name="app-version" content="1.68.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -974,7 +974,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 <div class="menu" id="addmenu" role="menu"></div>
 <div class="menu" id="rowmenu" role="menu"></div>
 <div id="palette" role="dialog" aria-modal="true" aria-label="Commands">
-  <input id="pq" type="text" placeholder="Jump to a project, maker or task — or run a command" autocomplete="off"
+  <input id="pq" type="text" placeholder="Jump to anything, run a command — or write a new task and press ↵" autocomplete="off"
     autocapitalize="off" autocorrect="off" spellcheck="false">
   <div class="res" id="pres"></div>
   <div class="foot"><span>↑↓ move</span><span>↵ choose</span><span>esc close</span></div>
@@ -7238,10 +7238,21 @@ document.addEventListener('keydown',e=>{
     if(a&&a.closest&&!a.closest('.sheet')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))a.blur();
     return;}
   if(typing)return;
+  if((e.metaKey||e.ctrlKey)&&e.key==='z'){e.preventDefault();popUndo();return;}
+  /* Everything below is a bare letter, so a modifier held means the browser's
+     own shortcut and none of this. ⌘P is the one that mattered: it printed
+     nothing and opened a new project instead, on the two pages — the purchase
+     order and the timesheet — that exist to be printed. */
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  /* One key per thing the + menu makes, so the menu is the discoverable half of
+     them rather than the only half. */
   if(e.key==='n'){e.preventDefault();openComposer();}
+  if(e.key==='s'){e.preventDefault();openComposer('shipment');}
   if(e.key==='p'){e.preventDefault();openProject(null);}
+  if(e.key==='t'){e.preventDefault();openNewEntry('timer');}
+  if(e.key==='i'){e.preventDefault();openIdea();}
+  if(e.key==='a'){e.preventDefault();openQuickAdd();}
   if(e.key==='?'){e.preventDefault();openKeys();}
-  if((e.metaKey||e.ctrlKey)&&e.key==='z'){e.preventDefault();popUndo();}
   if(e.key==='/'){e.preventDefault();$('#q').focus();}
 });
 
@@ -7250,7 +7261,7 @@ document.addEventListener('keydown',e=>{
    three letters, plus the tasks themselves. ⌘K used to be a second shortcut for
    "new task", which n already does. */
 let pitems=[],psel=0;
-function paletteRows(q){
+function paletteRows(q,raw){
   const out=[],hit=s=>!q||(s||'').toLowerCase().includes(q);
   const push=(t,h,ico,col,run)=>{if(hit(t))out.push({t,h,ico,col,run});};
   for(const [v,l,ico,col] of [['today','Today',I.today,'var(--blue)'],['scheduled','Scheduled',I.clock,'var(--red)'],['week','Week',I.today,'var(--teal)'],
@@ -7266,7 +7277,8 @@ function paletteRows(q){
   for(const d of uniq('destination'))push(d,'Ship to',I.truck,colorFor(d),()=>setView('dest',d));
   for(const s of sortedSearches())push(s.name,'Saved search',I.list,colorFor(s.name),()=>runSaved(s.id));
   push('Everything Board','View',I.list,'var(--yellow)',()=>openBoard());
-  for(const [l,k] of [['New task','new'],['Quick add','quick'],['New project','newproj'],['Scan a shipping label','scan'],
+  for(const [l,k] of [['New task','new'],['New shipment','newship'],['New time entry','newtime'],
+    ['Quick add','quick'],['New project','newproj'],['Scan a shipping label','scan'],
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['Save a backup file','export'],['Load from a backup file','import'],
     ['Undo last change','undo'],['Archive completed','clearDone'],
@@ -7274,7 +7286,9 @@ function paletteRows(q){
     ['Rows: '+(compact?'comfortable':'compact'),'density'],['Sound: '+(sfx?'off':'on'),'sfx'],
     ['Check for updates','update'],['Archived','archive'],
     ['Load a sample setup','sample']])
-    push(l,'Command',I.list,'var(--gray)',()=>k==='new'?openComposer():doMenu(k));
+    push(l,'Command',I.list,'var(--gray)',()=>k==='new'?openComposer()
+      :k==='newship'?openComposer('shipment')
+      :k==='newtime'?openNewEntry('timer'):doMenu(k));
   // sort and group by name, so "by maker" finds the grouping
   for(const v of SORTS)push('Sort: '+SORT_LABEL[v],'Command',I.list,'var(--gray)',()=>{sortBy=v;saveView();render();});
   for(const v of PSORTS)push('Sort projects: '+PSORT_LABEL[v],'Command',I.box,'var(--indigo)',
@@ -7287,11 +7301,32 @@ function paletteRows(q){
     out.push({t:t.title,h:p?p.name:(t.type==='shipment'?'Shipment':'Task'),
       ico:t.type==='shipment'?I.truck:I.check,col:p?p.color:'var(--gray)',run:()=>openDetail(t.id)});
   }
-  return out.slice(0,40);
+  const rows=out.slice(0,40);
+  /* A palette that can only *find* things answers half the question. What has
+     been typed and matches nothing is nearly always something to be made, so
+     the line goes through `quickPlan` — the same parser the quick add sheet
+     reads — and is offered as a row. One router, so ⌘K and the sheet cannot
+     make different things out of the same sentence.
+
+     It goes **last**, and past the slice so it is never cut off. An exact view
+     or project has to keep Enter: somebody typing "today" wants Today, and a
+     palette that made a task called "today" instead would be unusable. With
+     nothing else matching it is the only row and Enter makes it, which is the
+     case this exists for. */
+  const line=String(raw||'').trim();
+  if(line){
+    const p=quickPlan(line);
+    const what=p.kind==='time'?(p.entry&&p.entry.label)||p.body
+      :p.kind==='task'||p.kind==='shipment'?(p.task&&p.task.title)||p.body:p.body;
+    if(!p.empty&&p.body&&what)rows.push({t:what,h:'Add · '+QA_LABEL[p.kind],
+      ico:p.kind==='shipment'?I.truck:p.kind==='time'?I.clock:p.kind==='project'?I.box:I.check,
+      col:'var(--blue)',run:()=>runQuickAdd(line)});
+  }
+  return rows;
 }
 function renderPalette(){
-  const q=$('#pq').value.trim().toLowerCase();
-  pitems=paletteRows(q);
+  const raw=$('#pq').value.trim(),q=raw.toLowerCase();
+  pitems=paletteRows(q,raw);
   if(psel>=pitems.length)psel=0;
   $('#pres').innerHTML=pitems.length
     ? pitems.map((r,i)=>`<div class="r ${i===psel?'sel':''}" data-i="${i}">
@@ -7425,8 +7460,11 @@ function drawQuickAdd(){
   if(p.project&&p.kind!=='project')chips.push(chip('#'+p.project));
   $('#qaprev').innerHTML=chips.join('');
 }
-function runQuickAdd(){
-  const p=quickPlan($('#qatext').value);
+/* Takes the line rather than reading the field, because the palette says the
+   same sentence from somewhere else. One router, so ⌘K and the sheet cannot
+   make different things out of the same words. */
+function runQuickAdd(text){
+  const p=quickPlan(typeof text==='string'?text:$('#qatext').value);
   if(p.empty||!p.body)return toast('Say what to add.');
   closeSheets();
   if(p.kind==='project'){
@@ -7461,7 +7499,7 @@ $('#qakind').addEventListener('click',e=>{
   // saying it by hand wins over the line, and keeps winning until the sheet closes
   qaKind=b.dataset.qa;drawQuickAdd();
 });
-$('#qaadd').addEventListener('click',runQuickAdd);
+$('#qaadd').addEventListener('click',()=>runQuickAdd());
 $('#qatext').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();runQuickAdd();}
 });
@@ -7579,8 +7617,10 @@ $('#fxtrybig').addEventListener('click',()=>{
 
 /* ============ keyboard help ============
    The shortcuts have been there all along with nothing to announce them. */
-const KEYS=[['n','New task'],['p','New project'],['/','Search'],['?','This list'],
-  ['⌘K / ctrl K','Command palette'],['⌘Z / ctrl Z','Undo'],['esc','Close, or clear the search'],
+const KEYS=[['⌘K / ctrl K','Find anything, or write a new one'],
+  ['n','New task'],['s','New shipment'],['t','New time entry'],['a','Quick add, one line'],
+  ['i','New idea'],['p','New project'],['/','Search'],['?','This list'],
+  ['⌘Z / ctrl Z','Undo'],['esc','Close, or clear the search'],
   ['right-click','Actions for a row'],['shift-click','Select a run of rows'],
   ['⌘click / ctrl click','Select rows one at a time'],['↵','In a sync field, turn sync on']];
 function openKeys(){
