@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.69.0">
+<meta name="app-version" content="1.70.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -734,6 +734,12 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   max-height:min(64vh,600px);overflow-y:auto;overscroll-behavior:contain}
 .menu.on{display:block;animation:pop .18s var(--ease)}
 .menu button{display:block;width:100%;text-align:left;padding:9px 12px;border-radius:8px;font-size:15px}
+/* `display:block` above beats the UA's `[hidden]{display:none}`, so every
+   `.hidden=true` on a menu button did nothing — "Save this search…" sat there
+   and could be clicked with no search running, which is exactly what its own
+   code comment says must not happen. Written once here rather than per button,
+   or the next hidden menu item is broken again. */
+.menu button[hidden]{display:none}
 .menu button:hover{background:var(--fill2)}
 .menu .note{padding:8px 12px 6px;font-size:12px;color:var(--label3);line-height:1.35}
 .menu hr{border:0;border-top:.5px solid var(--sep);margin:4px 0}
@@ -2339,6 +2345,10 @@ function extractDate(text){
   }
   return null;
 }
+/* Two readings of `extractDate` agreeing about the date, including both finding
+   none. Compared by day rather than by object, since two equal dates are two
+   different `Date`s. */
+const sameDate=(a,b)=>(!a&&!b)||!!(a&&b&&iso(a.date)===iso(b.date));
 /* A purchase order here is always five digits after PO. That is this business's
    own notation rather than anything general, and it is worth teaching the parser
    precisely because it is typed dozens of times a week.
@@ -2498,13 +2508,24 @@ function parseQuickAdd(raw){
 
      Only when a kind word was actually taken off, because a line with no kind
      word has had nothing lifted out of it and "For the record, call Dana" is
-     somebody's sentence. And only "for": `in` and `on` are how a date announces
-     itself to `extractDate` ("in two weeks", "on tuesday"), and taking one off
-     the front would silently stop the line dating. The project rules have
-     already had their say by here, so a "for" that named a job is long gone. */
+     somebody's sentence. The project rules have already had their say by here,
+     so a "for" that named a job is long gone.
+
+     **And never when it costs the line its date.** "for" is in `DATE_LEAD` \u2014
+     it is one of the words that tells `extractDate` a date is coming \u2014 so
+     "add a task for tuesday meeting" reads as "meeting" due Tuesday, and
+     stripping the "for" left "tuesday meeting" opening the line, which the
+     leading-date rule correctly refuses to date. `the` is worse still: the
+     day-of-the-month pattern is written `the 15th` and requires the word, so
+     "new task for the 15th" stopped dating altogether. Excluding `in` and `on`
+     by name was the first cut of this guard and it named the wrong words.
+
+     So the two readings are compared and the strip only happens when it
+     changes nothing about the date \u2014 the same parse-both-and-compare bargain
+     `readTitleNotation` makes for the same reason. */
   if(out.kind){
     const t2=text.replace(/^[\s:;,.\u2014-]*for\s+(?:the\s+)?/i,'');
-    if(t2.trim())text=t2;                     // never strip the line away entirely
+    if(t2.trim()&&t2!==text&&sameDate(extractDate(text),extractDate(t2)))text=t2;
   }
   // whatever was joining the preamble to the line
   out.body=text.replace(/^[\s:;,.\u2014-]+/,'').replace(/\s+/g,' ').trim();
@@ -6392,8 +6413,20 @@ $('#dcheck').addEventListener('click',checkStatus);
    The day strip only reaches 15 days out, so anything further was unreachable
    without knowing the date already. */
 let calMonth=null;
+/* Always the first of the month, and that is the whole of the fix. `calMonth`
+   was seeded from today, so on the 31st `setMonth(+1)` overflowed exactly the
+   way the repeats did before `addMonths` — Oct 31 plus a month is Nov 31, which
+   JavaScript normalises to Dec 1, so paging forward from October skipped
+   November altogether and Jan 31 landed on March 3rd. Backwards was its own
+   trap: Oct 31 minus a month is Sep 31, which normalises back to Oct 1, so the
+   first press appeared to do nothing at all.
+
+   `renderCalendar` only ever reads the year and the month off this, so pinning
+   it to the 1st loses nothing and there is no arithmetic left to get wrong. */
+const setCalMonth=d=>{calMonth=new Date(d.getFullYear(),d.getMonth(),1);};
+const shiftCalMonth=n=>{calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+n,1);};
 function openCalendar(){
-  calMonth=calMonth||midnight();
+  if(!calMonth)setCalMonth(midnight());
   rememberFocus();$('#scrim').classList.add('on');$('#calsheet').classList.add('on');
   renderCalendar();
 }
@@ -6414,9 +6447,9 @@ function renderCalendar(){
 }
 $('#runchip').addEventListener('click',()=>{setView('time');buzz(4);});
 $('#calBtn').addEventListener('click',()=>{openCalendar();buzz(4);});
-$('#calprev').addEventListener('click',()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()-1);calMonth=d;renderCalendar();});
-$('#calnext').addEventListener('click',()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()+1);calMonth=d;renderCalendar();});
-$('#caltoday').addEventListener('click',()=>{calMonth=midnight();renderCalendar();});
+$('#calprev').addEventListener('click',()=>{shiftCalMonth(-1);renderCalendar();});
+$('#calnext').addEventListener('click',()=>{shiftCalMonth(1);renderCalendar();});
+$('#caltoday').addEventListener('click',()=>{setCalMonth(midnight());renderCalendar();});
 $('#calclose').addEventListener('click',closeSheets);
 $('#calgrid').addEventListener('click',e=>{
   const b=e.target.closest('[data-cal]');if(!b)return;
@@ -7309,12 +7342,27 @@ function paletteRows(q,raw){
   for(const v of PSORTS)push('Sort projects: '+PSORT_LABEL[v],'Command',I.box,'var(--indigo)',
     ()=>{projSort=v;saveView();setView('projects');});
   for(const v of GROUPS)push('Group: '+GROUP_LABEL[v],'Command',I.list,'var(--gray)',()=>{groupBy=v;saveView();render();});
-  if(q)for(const t of S.tasks.filter(t=>!t.done).slice(0,400)){
-    if(out.filter(r=>r.h==='Task').length>=8)break;
-    if(!haystack(t).includes(q))continue;
-    const p=projectOf(t);
-    out.push({t:t.title,h:p?p.name:(t.type==='shipment'?'Shipment':'Task'),
-      ico:t.type==='shipment'?I.truck:I.check,col:p?p.color:'var(--gray)',run:()=>openDetail(t.id)});
+  /* The tasks themselves, capped at eight so they cannot crowd out the views and
+     jobs above them — counted with a flag rather than by reading `h` back,
+     because `h` is the *project's name* for any task that has one, so
+     `h==='Task'` only ever counted the unfiled ones and forty came through.
+
+     Every open task is looked at, not the first four hundred. The slice was
+     there to bound the work, but it silently made task four hundred and one
+     unfindable while the search box still found it, and a search that quietly
+     misses things is worse than a slow one. The cap ends the loop as soon as
+     eight have matched, so the scan only runs to the end when there is nothing
+     to find — one `includes` per task, which is not the expensive part. */
+  if(q){
+    let hits=0;
+    for(const t of S.tasks){
+      if(hits>=8)break;
+      if(t.done||!haystack(t).includes(q))continue;
+      hits++;
+      const p=projectOf(t);
+      out.push({t:t.title,h:p?p.name:(t.type==='shipment'?'Shipment':'Task'),
+        ico:t.type==='shipment'?I.truck:I.check,col:p?p.color:'var(--gray)',run:()=>openDetail(t.id)});
+    }
   }
   const rows=out.slice(0,40);
   /* A palette that can only *find* things answers half the question. What has

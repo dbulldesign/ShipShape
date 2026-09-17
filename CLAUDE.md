@@ -423,9 +423,16 @@ is the body: **the kind**, **the job**, and the punctuation that was joining the
   - Only when a **kind word was actually taken off**. A line that never named
     one has had nothing lifted out of it, and "For the record, call Dana" is
     somebody's sentence.
-  - Only **"for"**. `in` and `on` are how a date announces itself to
-    `extractDate` — "in two weeks", "on tuesday" — so taking one off the front
-    would silently stop the line dating, which is worse than a stray word.
+  - **Never when it costs the line its date.** `for` is *itself* in `DATE_LEAD`
+    — one of the words that tells `extractDate` a date is coming — so dropping
+    it left "tuesday meeting" opening the line, which the leading-date rule
+    correctly refuses to date, and "add a task for tuesday meeting" stopped
+    being "meeting" due Tuesday. `the` is worse: the day-of-the-month pattern is
+    written `the 15th` and requires the word, so "new task for the 15th" stopped
+    dating at all. Naming `in` and `on` as the words to avoid was the first cut
+    of this guard and it named the wrong ones. So both readings are compared
+    (`sameDate`) and the strip only happens when the date is unaffected — the
+    same parse-both-and-compare bargain `readTitleNotation` makes.
   - After the project rules, never before: a "for" that named a job is already
     gone by then.
   - Never down to nothing. "add a time for" keeps its "for" rather than becoming
@@ -1054,6 +1061,50 @@ reduced-motion check and the cap.
 - `dayGoal` is a per-device preference with the other look-and-feel ones
   (`DAY_GOAL`: Never / 3 / 5 / 8 / 12, default 5), and "Try the big one" in
   Settings shows it without spending the day's one go.
+
+## The month calendar pages on the first
+
+`calMonth` is always the **first** of the month, set only through `setCalMonth`
+and moved only through `shiftCalMonth`. It used to be seeded from `midnight()`
+— today's date — and paged with `setMonth`, which is the overflow the repeats
+had to be rescued from: Oct 31 plus a month is Nov 31, which JavaScript
+normalises to **Dec 1**, so paging forward from October skipped November
+outright, and Jan 31 landed on March 3rd. Backwards had its own version: Oct 31
+minus a month is Sep 31, which normalises back to Oct 1, so the first press of
+Back appeared to do nothing at all.
+
+`renderCalendar` only ever reads the year and the month off it, so pinning it to
+the 1st loses nothing and leaves no arithmetic to get wrong. Don't write
+`setMonth` anywhere near a date somebody's clock supplied.
+
+## A hidden menu button
+
+`.menu button` is `display:block`, which beats the UA's `[hidden]{display:none}`
+— the same trap `.durs`, `#updbar` and `.notesugg` each had to be written out
+for. So every `.hidden=true` on a menu button did nothing, and "Save this
+search…" sat in the ⋯ menu with no search running, clickable, against the
+instruction in its own code comment.
+
+`.menu button[hidden]{display:none}` is written **once**, beside the rule that
+causes it, rather than per button — the same bargain the `option,optgroup`
+colour rule makes. Anything in this app that is `display:` something and also
+gets `hidden` needs its own line, and the pattern is common enough to check for
+by habit.
+
+## What ⌘K looks at
+
+Two bugs lived in six lines, and both were silent.
+
+- The cap on task rows read `h==='Task'` back off the row it had just built —
+  but `h` is the **project's name** for any task that has one, so it only ever
+  counted unfiled tasks and forty rows came through where eight were meant to.
+  Count what you are capping, don't infer it from what you rendered.
+- It looked at `S.tasks.filter(t=>!t.done).slice(0,400)`. The slice was there to
+  bound the work and instead made the four-hundred-and-first open task
+  **unfindable in the palette while the search box still found it**. A search
+  that quietly misses things is worse than a slow one. The loop now ends as soon
+  as eight have matched, so it only runs to the end when there is nothing to
+  find, which is one `includes` per task and not the expensive part.
 
 ## Dropdowns
 
