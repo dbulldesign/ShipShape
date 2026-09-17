@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.68.0">
+<meta name="app-version" content="1.69.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2490,6 +2490,21 @@ function parseQuickAdd(raw){
     const m=text.match(QA_PROJ3);
     if(m&&m[1]){const pr=namedProject(m[1].trim());
       if(pr){out.project=pr.name;text=text.replace(m[0],' ');}}
+  }
+  /* A preposition left at the front was joining the kind word to the thing
+     rather than naming anything: "Add a time FOR matrix meeting for 30min"
+     wants an entry called "matrix meeting". The colon path already drops one \u2014
+     this is the same word doing the same job without a colon to mark it.
+
+     Only when a kind word was actually taken off, because a line with no kind
+     word has had nothing lifted out of it and "For the record, call Dana" is
+     somebody's sentence. And only "for": `in` and `on` are how a date announces
+     itself to `extractDate` ("in two weeks", "on tuesday"), and taking one off
+     the front would silently stop the line dating. The project rules have
+     already had their say by here, so a "for" that named a job is long gone. */
+  if(out.kind){
+    const t2=text.replace(/^[\s:;,.\u2014-]*for\s+(?:the\s+)?/i,'');
+    if(t2.trim())text=t2;                     // never strip the line away entirely
   }
   // whatever was joining the preamble to the line
   out.body=text.replace(/^[\s:;,.\u2014-]+/,'').replace(/\s+/g,' ').trim();
@@ -7318,7 +7333,18 @@ function paletteRows(q,raw){
     const p=quickPlan(line);
     const what=p.kind==='time'?(p.entry&&p.entry.label)||p.body
       :p.kind==='task'||p.kind==='shipment'?(p.task&&p.task.title)||p.body:p.body;
-    if(!p.empty&&p.body&&what)rows.push({t:what,h:'Add · '+QA_LABEL[p.kind],
+    /* An hour's whole content is how long it was, so the row says so — the
+       question anybody has about "…for 30min" is whether the 30 was read, and
+       the answer belongs beside the row rather than in the toast afterwards.
+       A length nobody gave is the quick add's own default, and saying that is
+       the point too. */
+    let tail=QA_LABEL[p.kind];
+    if(p.kind==='time'&&p.entry){
+      const x=entryFromLine(p.entry,null,p.body),d=new Date(x.start);
+      tail+=' · '+clockHM(x.end-x.start)
+        +(iso(d)===iso(midnight())?'':' · '+WD[d.getDay()]);
+    }
+    if(!p.empty&&p.body&&what)rows.push({t:what,h:'Add · '+tail,
       ico:p.kind==='shipment'?I.truck:p.kind==='time'?I.clock:p.kind==='project'?I.box:I.check,
       col:'var(--blue)',run:()=>runQuickAdd(line)});
   }

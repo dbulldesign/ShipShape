@@ -415,6 +415,21 @@ is the body: **the kind**, **the job**, and the punctuation that was joining the
   project called Tuesday — the trap the composer's markers avoid by needing a
   `#`. `#Name` still works everywhere, because the body goes through the
   composer's parser afterwards and that is where `#` is read.
+- **The word that joined the kind to the thing goes with it.** "Add a time *for*
+  matrix meeting for 30min" wants an entry called "matrix meeting", not "for
+  matrix meeting" — the preposition was pointing at the thing, not naming it.
+  The colon path already dropped one; this is the same word doing the same job
+  without a colon to mark it, so it is dropped on every kind.
+  - Only when a **kind word was actually taken off**. A line that never named
+    one has had nothing lifted out of it, and "For the record, call Dana" is
+    somebody's sentence.
+  - Only **"for"**. `in` and `on` are how a date announces itself to
+    `extractDate` — "in two weeks", "on tuesday" — so taking one off the front
+    would silently stop the line dating, which is worse than a stray word.
+  - After the project rules, never before: a "for" that named a job is already
+    gone by then.
+  - Never down to nothing. "add a time for" keeps its "for" rather than becoming
+    an empty line.
 - **The preview is drawn by `quickPlan` and Add runs `quickPlan`**, so the two
   cannot describe different things.
 - **The kind can be overruled by hand** and then keeps winning while the line is
@@ -592,6 +607,12 @@ and the palette never grew its own idea of a date, a PO or a maker.
   from the same plan that will run, in the same shape every other row has. A
   kind word at the front is read as the kind, so "crate of sconces" makes a
   shipment called "of sconces", and the row says so before ↵ rather than after.
+- An hour's row carries **how long** — `matrix meeting` / `Add · Time · 30m`,
+  and the weekday when it is not today. The length is the whole content of an
+  entry, so the question anybody has about "…for 30min" is whether the 30 was
+  read; the answer belongs beside the row rather than in the toast afterwards.
+  A length nobody gave reads `1h 00m`, which is the quick add's own default and
+  worth saying out loud for the same reason.
 
 **One key per thing the + menu makes**: `n` task, `s` shipment, `t` time entry,
 `i` idea, `p` project, `a` quick add — plus `/` search, `?` the list and ⌘K.
