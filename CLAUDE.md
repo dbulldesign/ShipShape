@@ -568,6 +568,40 @@ Settings line can never disagree. It stays up until it is taken.
 - `#updbar[hidden]{display:none}` — `display:flex` beats the UA rule, the same
   trap `.durs` and the entry sheet's rows have.
 
+## The run card reads the same sentence
+
+"What are you working on?" now takes the same line `parseEntryLine` reads
+everywhere else, and **what the line says decides what the button does**: a time
+or a length means the work has already happened, so it is written down and no
+clock starts; words alone start one. That is the whole rule, and it is the
+distinction anybody already makes when they type "year end review 2h" instead of
+"year end review".
+
+- `runCardPlan(raw)` is the **one** reading, asked by the markup, by the redraw
+  as it is typed and by the button itself. Three callers concluding different
+  things about the same sentence is the failure to avoid, which is also why Enter
+  and the button both go through `runCardGo()` — the Enter handler used to call
+  `startTimer` directly and would have kept starting timers on a line that said
+  two hours.
+- The button says **Start** or **Add**, live, and the hint line underneath says
+  what will be written — `2h 00m · 13:00 – 15:00 · “year end review” — written
+  down, not timed.` Same bargain the entry sheet's blurb makes: this is the one
+  place a line somebody typed is rewritten, so it says so before the tap, not
+  after.
+- `entryFromLine` is shared with the quick add, so a parsed line becomes a record
+  by one set of rules. A `start` names a clock time and the day decides the rest;
+  without one the length is anchored at the **end**, the way the chips anchor a
+  new entry — "three hours" written down now means the three hours up to now.
+- A **day alone is not a time**. "Matrix meeting on Tuesday" starts a timer:
+  `lineHasTime` asks for a length or a clock time, and guessing a length from a
+  day would be inventing one.
+- The added entry is **undoable**, like every other write in the tracker.
+- `tmWhat0` holds the line outside the card, because the card is a slot and a
+  background pull rebuilds it — and rebuilding an input somebody is typing into
+  throws the words away. The line is part of the slot's signature, so the time
+  branch of `renderList` puts the caret back afterwards, the way `renderNav` does
+  for `#npsort`.
+
 ## Three ways to write an hour down
 
 An hour reaches the record at three different moments, and the entry sheet now

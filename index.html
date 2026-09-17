@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.66.0">
+<meta name="app-version" content="1.67.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2515,6 +2515,27 @@ function quickPlan(raw){
   return {kind:kind||inferred,project:q.project||d.project,body,task:d};
 }
 
+/* A parsed line, made into a real entry. Two callers — the quick add and the
+   run card — and one set of rules about what an absent piece means, because two
+   would drift.
+
+   `start` names a clock time, so the day it is on decides the rest; without one
+   the length is anchored at the end, the way the chips anchor a new entry, and
+   the end is now on today or the same time of day on the day named. */
+function entryFromLine(e,projectId,fallbackLabel){
+  const day=e.day?fromISO(e.day):midnight();
+  let start,end;
+  if(e.start!=null){start=+day+e.start*6e4;end=+day+(e.end!=null?e.end:e.start+60)*6e4;}
+  else{const ms=e.ms||36e5;
+    end=e.day?+day+Math.round((now()-midnight())/6e4)*6e4:Math.round(now()/6e4)*6e4;
+    start=end-ms;}
+  return {id:uid(),taskId:null,projectId:projectId||null,
+    label:(e.label||fallbackLabel||'').slice(0,120),start,end,u:now()};
+}
+/* Did the line say how long, or when? That is the whole of what tells "start a
+   clock now" from "write down what I already did". */
+const lineHasTime=e=>!!e&&(e.ms!=null||e.start!=null);
+
 /* ============ the same idea, for an hour ============
    The composer reads a task out of a line; this reads an entry out of one.
    "Matrix meeting for 1h on Tuesday", "Matrix meeting 1h", "10:30am for 1 hr",
@@ -3326,6 +3347,28 @@ function timeCalHTML(){
 }
 /* The Time view. Three things and no more: what is running, what you did today,
    and where the week went. Anything else belongs in a timesheet, not here. */
+/* The run card's line survives the render it provokes. The card is a slot like
+   any other, so a background pull rebuilds it — and rebuilding an input somebody
+   is typing into throws the words away. */
+let tmWhat0='';
+/* What the line says, and therefore what the button does. One reading, asked by
+   the markup, by the redraw as it is typed and by the button itself, or the
+   three end up concluding different things about the same sentence.
+
+   Saying how long, or when, is saying it has already happened: the line is
+   written down as an entry and no clock starts. Words alone start one. */
+function runCardPlan(raw){
+  const s=String(raw||'').trim();
+  const e=s?parseEntryLine(s):null;
+  if(!lineHasTime(e))return {timed:false,go:'Start',
+    hint:'Or start one from any task — hold it, or right-click, and pick Start timer.'};
+  const x=entryFromLine(e,null,s),d=new Date(x.start);
+  return {timed:true,e,go:'Add',
+    hint:`${clockHM(x.end-x.start)} · ${hhmm(x.start)} – ${hhmm(x.end)}`
+      +(iso(d)===iso(midnight())?'':` · ${WD[d.getDay()]}`)
+      +(x.label&&x.label!==s?` · “${x.label}”`:'')
+      +' — written down, not timed.'};
+}
 function timeHTML(){
   const e=running();let h='';
   const projOpts=sel=>'<option value="">No project</option>'
@@ -3341,13 +3384,14 @@ function timeHTML(){
         ${e.taskId&&S.tasks.find(x=>x.id===e.taskId)?`<button class="btn ghost" data-tm="open:${e.taskId}" style="margin:0">Open the task</button>`:''}
       </div></div>`;
   }else{
+    const rc=runCardPlan(tmWhat0);
     h+=`<div class="startcard">
-      <input id="tmwhat" placeholder="What are you working on?" autocomplete="off" enterkeyhint="go">
+      <input id="tmwhat" placeholder="What are you working on? — or “year end review 2h”" autocomplete="off" enterkeyhint="go" value="${esc(tmWhat0)}">
       <div class="sr">
-        <select id="tmproj" aria-label="Project">${projOpts(view.t==='time'?null:null)}</select>
-        <button class="btn" data-tm="start" style="margin:0">Start</button>
+        <select id="tmproj" aria-label="Project">${projOpts(null)}</select>
+        <button class="btn" data-tm="start" id="tmgo" style="margin:0">${esc(rc.go)}</button>
       </div>
-      <div class="sh">Or start one from any task — hold it, or right-click, and pick Start timer.</div>
+      <div class="sh" id="tmsh">${esc(rc.hint)}</div>
     </div>`;
   }
   // today
@@ -3808,7 +3852,15 @@ function renderList(){
       <button data-v="timelog" ${view.t==='timelog'?'class="on" aria-selected="true"':''} role="tab">Log</button>
       <button data-v="timecal" ${view.t==='timecal'?'class="on" aria-selected="true"':''} role="tab">Calendar</button></div>`);
     chunk('time',view.t==='timelog'?timeLogHTML():view.t==='timecal'?timeCalHTML():timeHTML());
-    patch(el,out);syncTick();return;
+    /* The run card's line is part of the slot's signature, so typing into it and
+       a background pull landing together rebuild the input under the cursor.
+       Put the caret back where it was, the way renderNav does for #npsort. */
+    const a=document.activeElement;
+    const keep=a&&a.id==='tmwhat'?[a.selectionStart,a.selectionEnd]:null;
+    patch(el,out);
+    if(keep){const w=$('#tmwhat');
+      if(w){w.focus();try{w.setSelectionRange(keep[0],keep[1]);}catch{}}}
+    syncTick();return;
   }
   if(view.t==='pos'&&!query){chunk('pos',posHTML());patch(el,out);return;}
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
@@ -5715,11 +5767,34 @@ function addStep(){
   t.u=now();$('#dstepnew').value='';save();renderSteps(t);render();
   $('#dstepnew').focus();                       // a punch list is typed in one go
 }
+/* Enter and the button must not conclude different things from the same
+   sentence, so both come through here. */
+function runCardGo(){
+  const what=$('#tmwhat');
+  const raw=what?what.value.trim():'';
+  if(!raw){what&&what.focus();return toast('Say what you are working on first.');}
+  const projectId=$('#tmproj')?$('#tmproj').value||null:null;
+  const rc=runCardPlan(raw);
+  tmWhat0='';
+  if(!rc.timed)return startTimer({label:raw,projectId});
+  const x=entryFromLine(rc.e,projectId,raw);
+  S.times.push(x);save();render();buzz(6);
+  toast(`Added ${clockHM(x.end-x.start)}`,()=>{
+    S.times=S.times.filter(y=>y.id!==x.id);S.tomb[x.id]=now();save();render();});
+}
+/* The card is rebuilt by every render, so the line it holds is kept out here and
+   the listeners are delegated onto #list, which is not. */
+function drawRunCard(){
+  const w=$('#tmwhat');if(!w)return;
+  tmWhat0=w.value;
+  const rc=runCardPlan(tmWhat0),go=$('#tmgo'),sh=$('#tmsh');
+  if(go)go.textContent=rc.go;
+  if(sh)sh.textContent=rc.hint;
+}
+$('#list').addEventListener('input',e=>{if(e.target.id==='tmwhat')drawRunCard();});
 $('#list').addEventListener('keydown',e=>{
   if(e.key!=='Enter'||e.target.id!=='tmwhat')return;
-  e.preventDefault();
-  const label=e.target.value.trim();
-  if(label)startTimer({label,projectId:$('#tmproj').value||null});
+  e.preventDefault();runCardGo();
 });
 $('#dtimebtn').addEventListener('click',()=>{
   const t=S.tasks.find(x=>x.id===editing);if(!t)return;
@@ -6871,12 +6946,7 @@ $('#list').addEventListener('click',e=>{
     // how far back the log reaches, kept in the view so a re-render honours it
     if(k==='all'||k==='recent'){view.v=k==='all'?'all':undefined;renderList();$('#scroll').scrollTop=0;buzz(4);return;}
     if(k==='open')return openDetail(arg);
-    if(k==='start'){
-      const what=$('#tmwhat');
-      const label=what?what.value.trim():'';
-      if(!label){what&&what.focus();return toast('Say what you are working on first.');}
-      return startTimer({label,projectId:$('#tmproj').value||null});
-    }
+    if(k==='start')return runCardGo();
     if(k==='again'){
       const x=S.times.find(y=>y.id===arg);if(!x)return;
       return startTimer({taskId:x.taskId,projectId:x.projectId,label:x.label});
@@ -7373,15 +7443,9 @@ function runQuickAdd(){
     return addIdea();
   }
   if(p.kind==='time'){
-    const e=p.entry;
-    const day=e.day?fromISO(e.day):midnight();
-    let start,end;
-    if(e.start!=null){start=+day+e.start*6e4;end=+day+(e.end!=null?e.end:e.start+60)*6e4;}
-    else{const ms=e.ms||36e5;end=e.day?+day+Math.round((now()-midnight())/6e4)*6e4:Math.round(now()/6e4)*6e4;start=end-ms;}
-    const x={id:uid(),taskId:null,projectId:findProjectId(p.project),
-      label:(e.label||p.body).slice(0,120),start,end,u:now()};
+    const x=entryFromLine(p.entry,findProjectId(p.project),p.body);
     S.times.push(x);save();render();
-    return toast(`Added ${clockHM(end-start)}`,()=>{
+    return toast(`Added ${clockHM(x.end-x.start)}`,()=>{
       S.times=S.times.filter(y=>y.id!==x.id);S.tomb[x.id]=now();save();render();});
   }
   const d={...p.task,type:p.kind,project:p.project||p.task.project};
