@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.65.0">
+<meta name="app-version" content="1.66.0">
 <meta name="app-build" content="2026-09-17">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2527,18 +2527,42 @@ function quickPlan(raw){
    names where it starts. The date goes LAST, past a GAP, for exactly the reason
    the composer's PO does — "1h on tuesday" would otherwise look to `extractDate`
    as though the date opened the line once the duration had gone. */
-const T_RANGE=/\b(?:from |between )?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to|until|till|til)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i;
+/* `[:.]` because half this trade writes 9.00 and half writes 9:00. Without the
+   dot, "9.00-11.00" matched "00-11" in the middle of it — eleven hours, and a
+   label left reading "9. .00". The minutes are two digits exactly, so "1.5h" is
+   never mistaken for one past five.
+
+   No "through". It reads a range in English, but "Detail 9 through 11 on the
+   drawings" is a likelier line in this trade than "9 through 11" meaning a
+   morning — and "to" and a dash already carry every way anybody writes it. */
+const T_RANGE=/\b(?:from |between )?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to|until|till|til)\s*(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?\b/i;
 /* A bare number is never a clock time. "Call 3" is not three o'clock, and the
    one thing worse than not reading a time is reading one nobody wrote — so
    either the minutes or an am/pm has to be there. */
-const T_AT=/\b(?:at |from )?(?:(\d{1,2}):(\d{2})\s*(am|pm)?|(\d{1,2})\s*(am|pm))\b/i;
+const T_AT=/\b(?:at |from )?(?:(\d{1,2})[:.](\d{2})\s*(am|pm)?|(\d{1,2})\s*(am|pm))\b/i;
+/* The date parser has understood "in two weeks" since it was written; there was
+   no reason for the duration parser not to understand "two hours", and the
+   number words are already on the shelf. Decimals ride along in the same token,
+   so "1.5 hours" and "two hours" go down one path.
+
+   Order is the whole of the correctness here: every "and a half" rule has to be
+   tried before the plain one, or "an hour and a half" matches the plain rule,
+   comes out as sixty minutes, and leaves "and a half" sitting in the label. */
+const DUR_N=NUMS.replace('\\d+','\\d+(?:\\.\\d+)?');
+const durNum=s=>/^\d/.test(s)?parseFloat(s):(NUMW[String(s).toLowerCase()]||1);
+const H='(?:h|hrs?|hours?)';
 const T_DURS=[
-  [/\b(?:for )?(\d{1,2})\s*h(?:rs?|ours?)?\s*(\d{1,2})\s*(?:m|mins?|minutes?)?\b/i,
-    m=>(+m[1]*60+ +m[2])*6e4],                                   // 1h30, 2 hrs 15 min
-  [/\b(?:for )?(\d+(?:\.\d+)?)\s*(?:h|hrs?|hours?)\b/i,m=>+m[1]*36e5],   // 1h, 1.5 hours
-  [/\b(?:for )?(\d+)\s*(?:m|mins?|minutes?)\b/i,m=>+m[1]*6e4],            // 90m, 45 min
+  // 1h30, 2 hrs 15 min — both units, so neither is a guess
+  [new RegExp(`\\b(?:for )?(${DUR_N})\\s*h(?:rs?|ours?)?\\s*(\\d{1,2})\\s*(?:m|mins?|minutes?)?\\b`,'i'),
+    m=>(durNum(m[1])*60+ +m[2])*6e4],
+  [new RegExp(`\\b(?:for )?(${DUR_N})\\s*${H}\\s+and\\s+a\\s+half\\b`,'i'),
+    m=>durNum(m[1])*36e5+18e5],                                  // an hour and a half
+  [new RegExp(`\\b(?:for )?(${DUR_N})\\s+and\\s+a\\s+half\\s*${H}\\b`,'i'),
+    m=>durNum(m[1])*36e5+18e5],                                  // 1 and a half hours
   [/\bhalf an hour\b/i,()=>18e5],
-  [/\b(?:an|one) hour\b/i,()=>36e5],
+  [new RegExp(`\\b(?:for )?(?:a )?couple of\\s*${H}\\b`,'i'),()=>72e5],   // a couple of hours
+  [new RegExp(`\\b(?:for )?(${DUR_N})\\s*${H}\\b`,'i'),m=>durNum(m[1])*36e5],
+  [new RegExp(`\\b(?:for )?(${DUR_N})\\s*(?:m|mins?|minutes?)\\b`,'i'),m=>durNum(m[1])*6e4],
 ];
 /* Minutes past midnight. A bare hour of 1 to 6 is the afternoon — nobody logs
    work at four in the morning and calls it "4" — and anything else is read as

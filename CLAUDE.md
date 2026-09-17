@@ -489,6 +489,22 @@ time names where it starts. The date goes **last, past a `GAP`**, for exactly th
 reason the composer's PO does — "1h on tuesday" would otherwise look to
 `extractDate` as though the date opened the line once the duration had gone.
 
+- **A length can be written in words.** `extractDate` has understood "in two
+  weeks" since it was written and `NUMW`/`NUMS` were already on the shelf, so
+  there was no reason the duration parser should not understand "two hours".
+  Decimals ride in the same token (`DUR_N`), so "1.5 hours" and "two hours" go
+  down one path; `durNum` reads either.
+- **Every "and a half" rule is tried before the plain one.** The other way round,
+  "an hour and a half" matched the plain rule, came out as sixty minutes, and
+  left "and a half" sitting in the label. Order is the whole of the correctness
+  in `T_DURS`.
+- **A dot separates a clock time as well as a colon.** Half this trade writes
+  9.00 and half writes 9:00, and without the dot "9.00-11.00" matched "00-11" in
+  the middle of itself — eleven hours, and a label left reading "9. .00". The
+  minutes are two digits exactly, so "1.5h" is never read as one past five.
+- **No "through".** It reads a range in English, but "Detail 9 through 11 on the
+  drawings" is a likelier line in this trade than "9 through 11" meaning a
+  morning, and a dash and "to" already carry every way anybody writes one.
 - **A bare number is never a clock time.** "Call Dana 3" is not three o'clock,
   and the one thing worse than not reading a time is reading one nobody wrote, so
   either the minutes or an am/pm has to be there. `T_AT` enforces it.
