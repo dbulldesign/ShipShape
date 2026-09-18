@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.70.0">
-<meta name="app-build" content="2026-09-17">
+<meta name="app-version" content="1.71.0">
+<meta name="app-build" content="2026-09-18">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -820,6 +820,41 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 .keys kbd{font-family:var(--mono);font-size:12px;background:var(--fill2);border-radius:6px;
   padding:3px 7px;min-width:26px;text-align:center;color:var(--label)}
 .keys .kr span{color:var(--label2)}
+/* The search help groups its terms the way somebody asks the question. Its
+   kbd is a target rather than a label, so it says so. */
+.keys .qhgrp{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--label3);padding:14px 2px 5px}
+.keys .qhgrp:first-child{padding-top:4px}
+/* A description long enough to wrap left the term floating at the middle of two
+   lines, so these rows hang from the top. */
+#qhelplist .kr{align-items:flex-start}
+#qhelplist .kr span{padding-top:2px}
+.keys kbd[data-runq]{cursor:pointer;white-space:nowrap}
+#brieftext{display:block;width:calc(100% - 28px);margin:4px 14px 12px;padding:12px;
+  background:var(--bg);border:0;border-radius:10px;resize:vertical;
+  font-family:var(--mono);font-size:12.5px;line-height:1.55;color:var(--label);
+  white-space:pre;overflow:auto}
+@media print{
+  /* The brief is the one thing on the page when it is the thing being printed. */
+  body[data-brief] #app,body[data-brief] #tabbar,body[data-brief] #fab,
+  body[data-brief] .sheettitle button,body[data-brief] #briefsheet .row2{display:none!important}
+  body[data-brief] #scrim{display:none!important}
+  body[data-brief] #briefsheet{position:static;max-height:none;box-shadow:none;background:#fff}
+  body[data-brief] #brieftext{border:0;background:#fff;color:#000;height:auto;overflow:visible}
+}
+#undolist{padding:4px 14px 14px}
+.undorow{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;
+  padding:10px 2px;border-bottom:.5px solid var(--sep);font-size:15px}
+.undorow:last-of-type{border-bottom:0}
+.undorow:hover{background:var(--fill2)}
+.undorow:active{transform:scale(.99)}
+.undorow .t{flex:1}
+.undorow .t i{font-style:normal;color:var(--label2)}
+/* One dot per maker, coloured by how late they run — the column you scan down. */
+.mdot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;margin-top:6px}
+.undorow .w{color:var(--label3);font-size:12.5px;white-space:nowrap}
+.keys kbd[data-runq]:hover{background:var(--blue);color:#fff}
+.keys kbd[data-runq]:active{transform:scale(.94)}
 /* Compact rows: the same list, more of it on screen at once. */
 #app.compact .row{padding:7px 12px 8px}
 #app.compact .tt{font-size:15px}
@@ -882,6 +917,9 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
             <button data-m="settings">Settings…</button>
             <hr>
             <button data-m="saveq" id="msaveq">Save this search…</button>
+            <button data-m="qhelp">What search understands…</button>
+            <button data-m="undolist">Recent changes…</button>
+            <button data-m="brief">Morning brief…</button>
             <button data-m="newproj">New project</button>
             <button data-m="calendar">Calendar…</button>
             <button data-m="scan">Scan a shipping label</button>
@@ -999,6 +1037,15 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 <div class="sheet" role="dialog" aria-modal="true" id="setsheet"><div class="grab"></div>
   <div class="sheettitle">Settings<button class="x" id="setclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
 
+  <div class="sethead">You</div>
+  <div class="fgroup">
+    <div class="field"><label for="setme">Your name</label>
+      <input id="setme" placeholder="Nobody yet" autocomplete="off" maxlength="40"></div>
+  </div>
+  <div class="blurb">Put on the hours you log and the work you tick off, so a second
+    person’s can be told from yours. It stays on this device — it says who is sitting
+    here, not who the workspace belongs to. Leave it empty and nothing is stamped.</div>
+
   <div class="sethead">The list</div>
   <div class="fgroup">
     <div class="field"><label for="setsort">Sort</label><select id="setsort"></select></div>
@@ -1049,6 +1096,32 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 <div class="sheet" role="dialog" aria-modal="true" id="keysheet"><div class="grab"></div>
   <div class="sheettitle">Keyboard<button class="x" id="kclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="keys" id="keyslist"></div>
+</div>
+
+<!-- What is owed, what is arriving and who has gone quiet, as plain text —
+     because the point of a brief is that it leaves the app. -->
+<div class="sheet" role="dialog" aria-modal="true" id="briefsheet"><div class="grab"></div>
+  <div class="sheettitle">Morning brief<button class="x" id="bfclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <textarea id="brieftext" class="mono" rows="18" readonly spellcheck="false" aria-label="Today's brief"></textarea>
+  <div class="row2" style="padding:0 14px 16px;display:flex;gap:8px">
+    <button class="btn" id="bfcopy" style="flex:1;margin:0">Copy</button>
+    <button class="btn ghost" id="bfprint" style="flex:1;margin:0">Print</button>
+  </div>
+</div>
+
+<!-- Twenty changes were always kept and none of them could be seen, so undo was
+     one step in practice. -->
+<div class="sheet" role="dialog" aria-modal="true" id="undosheet"><div class="grab"></div>
+  <div class="sheettitle">Recent changes<button class="x" id="unclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div id="undolist"></div>
+</div>
+
+<!-- The search grammar is worth nothing nobody can find. It used to be named
+     only in the saved-search sheet's blurb, which is behind a search you would
+     already have had to know how to write. -->
+<div class="sheet" role="dialog" aria-modal="true" id="qhelpsheet"><div class="grab"></div>
+  <div class="sheettitle">What search understands<button class="x" id="qhclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="keys" id="qhelplist"></div>
 </div>
 
 <!-- A new build is on the server and this tab is running the old one. Installed
@@ -1185,7 +1258,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="qsname">Name</label><input id="qsname" placeholder="What to call it"></div>
     <div class="field"><label for="qsq">Search</label><input id="qsq" class="mono" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="is:flagged late:"></div>
   </div>
-  <div class="blurb">Anything the search box takes: plain words, or <b>is:</b> <b>late:</b> <b>maker:</b> <b>to:</b> <b>project:</b> <b>po:</b> <b>stage:</b></div>
+  <div class="blurb">Anything the search box takes — plain words, or <b>is:</b> <b>late:</b> <b>due:</b> <b>maker:</b> <b>to:</b> <b>project:</b> <b>po:</b> <b>cost:</b> <b>qty:</b> <b>has:</b> <b>wait:</b> <b>stage:</b>. The ⋯ menu lists every one of them with an example.</div>
   <div style="padding:0 14px 6px"><button class="btn" id="qssave" style="width:100%;margin:0;text-align:center">Save</button></div>
   <button class="danger" id="qsdel">Remove</button>
 </div>
@@ -1547,6 +1620,16 @@ let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
 let sortBy='smart',groupBy='auto',projSort='order',doneFold=false,compact=false,sfx=false,digestOff=false,streakOn=false,chaseAfter=7;
+/* Who is sitting at this device. Sync moves records between devices and has
+   never had any idea who made one, so "who marked that delivered" and "whose
+   hours are these" had no answer at all once more than one person touched it.
+
+   A per-device preference rather than a synced record, because it answers
+   "who is here", which is a fact about the device and not about the workspace —
+   the same reason the row height and the sort live here. Empty is the honest
+   default: nobody has said, and stamping a name nobody chose would be worse
+   than stamping none. */
+let me='';
 /* How many finished in one day earns the bigger celebration, and the day it
    last fired so it only happens once. Per device, with the other look-and-feel
    preferences — how much fuss you want is a matter of temperament. */
@@ -1608,6 +1691,7 @@ async function loadAll(){
     if(typeof v.bigDay==='string')bigDay=v.bigDay;
     doneFold=!!v.doneFold;
     compact=!!v.compact;sfx=!!v.sfx;digestOff=!!v.digestOff;streakOn=!!v.streakOn;
+    me=typeof v.me==='string'?v.me:'';
     if(CHASE_DAYS.some(c=>c[0]===v.chaseAfter))chaseAfter=v.chaseAfter;
     if(v.fx){
       if(FX_STYLES.some(x=>x[0]===v.fx.style))fx.style=v.fx.style;
@@ -1763,7 +1847,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();}
 function save(){saveLocal();schedulePush();}
 async function saveSyncCfg(){try{await local.set(SKEY,JSON.stringify(sync));}catch(e){}}
 const VKEY='shipshape:view';
-async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,projSort,doneFold,dayGoal,bigDay,compact,sfx,digestOff,streakOn,chaseAfter,fx}));}catch(e){}}
+async function saveView(){try{await local.set(VKEY,JSON.stringify({sortBy,groupBy,projSort,doneFold,dayGoal,bigDay,compact,sfx,digestOff,streakOn,chaseAfter,me,fx}));}catch(e){}}
 
 /* ============ sync over Supabase REST ============ */
 let lastCfgWrite=0,probing=false;
@@ -2566,7 +2650,7 @@ function entryFromLine(e,projectId,fallbackLabel){
     end=e.day?+day+Math.round((now()-midnight())/6e4)*6e4:Math.round(now()/6e4)*6e4;
     start=end-ms;}
   return {id:uid(),taskId:null,projectId:projectId||null,
-    label:(e.label||fallbackLabel||'').slice(0,120),start,end,u:now()};
+    label:(e.label||fallbackLabel||'').slice(0,120),start,end,who:me||'',u:now()};
 }
 /* Did the line say how long, or when? That is the whole of what tells "start a
    clock now" from "write down what I already did". */
@@ -2720,24 +2804,127 @@ function countQuery(q){
   try{query=q;qParsed={q:null,f:null};return S.tasks.filter(t=>matches(t)&&!t.arch).length;}
   finally{query=q0;qParsed=p0;}
 }
+/* What a set of items came to, and how much of it is actually priced. One
+   function for the purchase order and the job alike: `t.cost` is per item and
+   optional, so a total over three of eight lines is not the total and must
+   never pretend to be. The PO page has always said so; the job could not say
+   anything at all. */
+function costOf(items){
+  const priced=items.filter(t=>t.cost!=null&&t.cost!==''&&!isNaN(+t.cost));
+  return {priced,n:items.length,total:priced.reduce((n,t)=>n+ +t.cost,0)};
+}
 function stats(pid){
   const all=S.tasks.filter(t=>t.projectId===pid),done=all.filter(t=>t.done).length;
   return{all:all.length,done,open:all.length-done,pct:all.length?done/all.length:0,
     next:all.filter(t=>!t.done&&t.due).sort((a,b)=>a.due<b.due?-1:1)[0],
     late:all.filter(t=>!t.done&&t.due&&diff(t.due)<0).length};
 }
-/* Search understands a few filters alongside free text:
-   is:shipment  is:task  is:done  is:flagged  is:archived  is:repeating  is:invoice
-   is:latemaker  late:  stage:shipped
-   maker:lumina  to:chicago  project:harbor  po:4417                        */
+/* A query is split on spaces, so a value with a space in it needs quoting:
+   `maker:"lumina studio"` and `due:"oct 15"` are one token each. Without this
+   the second word fell through to the free text and quietly narrowed the search
+   by something nobody had asked for. A quoted run with no key in front is just
+   text, which is what it already was — the whole text is matched as one
+   substring, so a phrase has always worked there. */
+function qTokens(q){
+  const out=[],re=/([a-z]+:(?:>=|<=|>|<)?)?"([^"]*)"|(\S+)/gi;
+  let m;
+  while((m=re.exec(q||''))!==null)out.push(m[3]!==undefined?m[3]:(m[1]||'')+m[2]);
+  return out;
+}
+/* What a `due:` or `eta:` value means, as a test on the ISO day a record holds
+   — or on its absence.
+
+   A single day goes through **`extractDate`**, the same reader the composer,
+   the title parser and the notes all use, so `due:friday`, `due:tomorrow` and
+   `due:"oct 15"` mean here exactly what those words mean when typed into a
+   title. Growing a second idea of what Friday is was the thing to avoid.
+
+   Only the words that describe a *window* rather than a day are named here,
+   because a window is not something `extractDate` has ever had to return. They
+   are checked first, or `extractDate` would read "week" as a date of its own. */
+function dateTest(raw){
+  let v=String(raw||'').trim().toLowerCase(),op='';
+  const m=v.match(/^(>=|<=|>|<)\s*/);
+  if(m){op=m[1];v=v.slice(m[0].length).trim();}
+  if(!v)return null;
+  if(!op){
+    if(v==='none'||v==='never')return d=>!d;   // undated, which is a real question
+    if(v==='any')return d=>!!d;
+    if(v==='week'||v==='thisweek'){
+      const w=weekDays(),lo=iso(w[0]),hi=iso(w[6]);
+      return d=>!!d&&d>=lo&&d<=hi;             // the week the Week view shows
+    }
+    if(v==='month'||v==='thismonth'){
+      const t=midnight(),lo=iso(new Date(t.getFullYear(),t.getMonth(),1)),
+        hi=iso(new Date(t.getFullYear(),t.getMonth()+1,0));
+      return d=>!!d&&d>=lo&&d<=hi;
+    }
+  }
+  const hit=extractDate(v);
+  if(!hit)return null;                         // unreadable, so it stays free text
+  const day=iso(hit.date);
+  if(op==='>')return d=>!!d&&d>day;
+  if(op==='<')return d=>!!d&&d<day;
+  if(op==='>=')return d=>!!d&&d>=day;
+  if(op==='<=')return d=>!!d&&d<=day;
+  return d=>d===day;
+}
+/* The same shape for a number — `cost:>5000`, `qty:2`, `cost:none`. A comma or
+   a space inside the figure is how anybody writes five thousand, so both go. */
+function numTest(raw){
+  let v=String(raw||'').trim().toLowerCase(),op='';
+  const m=v.match(/^(>=|<=|>|<)\s*/);
+  if(m){op=m[1];v=v.slice(m[0].length).trim();}
+  if(!op){
+    if(v==='none'||v==='never')return n=>n==null||n===''||isNaN(+n);
+    if(v==='any')return n=>n!=null&&n!==''&&!isNaN(+n);
+  }
+  const x=parseFloat(v.replace(/[,$\s]/g,''));
+  if(isNaN(x))return null;
+  const num=n=>(n==null||n===''||isNaN(+n))?null:+n;
+  if(op==='>')return n=>num(n)!==null&&num(n)>x;
+  if(op==='<')return n=>num(n)!==null&&num(n)<x;
+  if(op==='>=')return n=>num(n)!==null&&num(n)>=x;
+  if(op==='<=')return n=>num(n)!==null&&num(n)<=x;
+  return n=>num(n)===x;
+}
+/* `has:` is the presence of something the record either carries or does not.
+   Everything here is a field this app already keeps — none of it is new data,
+   which is the whole reason the grammar is worth widening rather than adding
+   another view. */
+const HAS={
+  po:t=>!!t.po,
+  link:t=>(t.links||[]).length>0,
+  note:t=>!!(t.notes||'').trim(),
+  cost:t=>t.cost!=null&&t.cost!==''&&!isNaN(+t.cost),
+  tracking:t=>trackNumbers(t).length>0,
+  eta:t=>!!t.eta,
+  due:t=>!!t.due,
+  steps:t=>stepsOf(t).length>0,
+  project:t=>!!t.projectId,
+  // tallied once per render, before filtered() runs, so this costs nothing
+  time:t=>(timeByTask.get(t.id)||0)>0,
+};
+/* Search understands these filters alongside free text:
+   is:shipment  is:task  is:done  is:open  is:flagged  is:archived  is:repeating
+   is:invoice  is:latemaker  is:waiting  is:unfiled
+   late:  stage:shipped  maker:lumina  to:chicago  project:harbor  po:4417
+   due:friday  due:week  due:>friday  due:none   eta: the same
+   cost:>5000  qty:>10  has:link  wait:dana                                  */
+const QKEYS=/^(is|stage|maker|to|project|po|late|due|eta|cost|qty|has|wait|by):(.*)$/i;
 function parseQuery(q){
-  const f={text:'',is:[],stage:null,maker:null,to:null,project:null,po:null,late:false};
+  const f={text:'',is:[],stage:null,maker:null,to:null,project:null,po:null,late:false,
+    due:null,eta:null,cost:null,qty:null,has:[],wait:null,by:null};
   const words=[];
-  for(const w of (q||'').trim().split(/\s+/)){
+  for(const w of qTokens(q)){
     if(!w)continue;
-    const m=w.match(/^(is|stage|maker|to|project|po|late):(.*)$/i);
+    const m=w.match(QKEYS);
     if(!m){words.push(w);continue;}
     const k=m[1].toLowerCase(),v=m[2].toLowerCase();
+    /* A term whose value cannot be read is left as free text rather than
+       silently matching everything — "due:whenever" is somebody's word, and a
+       filter that quietly stands down is worse than one that finds nothing. */
+    const keep=()=>words.push(w);
     if(k==='is'&&v)f.is.push(v);
     else if(k==='late')f.late=true;
     else if(k==='stage'&&v)f.stage=v;
@@ -2745,7 +2932,12 @@ function parseQuery(q){
     else if(k==='to'&&v)f.to=v;
     else if(k==='project'&&v)f.project=v;
     else if(k==='po'&&v)f.po=v;
-    else words.push(w);                    // "maker:" with nothing after it is just text
+    else if(k==='wait'&&v)f.wait=v;
+    else if(k==='by'&&v)f.by=v;
+    else if(k==='has'&&HAS[v])f.has.push(v);
+    else if(k==='due'||k==='eta'){const t=dateTest(v);t?f[k]=t:keep();}
+    else if(k==='cost'||k==='qty'){const t=numTest(v);t?f[k]=t:keep();}
+    else keep();                           // "maker:" with nothing after it is just text
   }
   f.text=words.join(' ').toLowerCase();
   return f;
@@ -2783,13 +2975,26 @@ function matches(t){
     if(v==='repeating'&&!t.rep)return false;
     if(v==='invoice'&&!isInvoice(t))return false;
     if(v==='latemaker'&&!makerLate(t))return false;
+    if(v==='waiting'&&!t.wait)return false;
+    if(v==='unfiled'&&t.projectId)return false;
   }
   if(f.late&&!(t.due&&!t.done&&diff(t.due)<0))return false;
   if(f.stage&&!(t.type==='shipment'&&STAGES[t.stage].toLowerCase().startsWith(f.stage)))return false;
   if(f.maker&&!(t.manufacturer||'').toLowerCase().includes(f.maker))return false;
   if(f.to&&!(t.destination||'').toLowerCase().includes(f.to))return false;
-  if(f.project&&!((p&&p.name)||'').toLowerCase().includes(f.project))return false;
+  // "project:none" is the unfiled work, which a substring test could never ask for
+  if(f.project&&(f.project==='none'
+    ? !!t.projectId
+    : !((p&&p.name)||'').toLowerCase().includes(f.project)))return false;
   if(f.po&&!(t.po||'').toLowerCase().includes(f.po))return false;
+  if(f.wait&&!(t.wait||'').toLowerCase().includes(f.wait))return false;
+  // who ticked it off — the one question sync could never answer
+  if(f.by&&!(t.doneBy||'').toLowerCase().includes(f.by))return false;
+  if(f.due&&!f.due(t.due||null))return false;
+  if(f.eta&&!f.eta(t.eta||null))return false;
+  if(f.cost&&!f.cost(t.cost))return false;
+  if(f.qty&&!f.qty(t.qty))return false;
+  for(const h of f.has)if(!HAS[h](t))return false;
   if(!f.text)return true;
   const q=f.text;
   return haystack(t).includes(q)||((p&&p.name)||'').toLowerCase().includes(q);
@@ -2960,7 +3165,10 @@ function renderNav(){
     }
   }
   const mf=uniq('manufacturer');
-  if(mf.length){h+='<div class="navsec">Makers</div>';
+  /* Comparing one maker with nobody says nothing, so the door only appears once
+     there are two — the same bargain the project sort makes. */
+  if(mf.length){h+='<div class="navsec">Makers'
+    +(mf.length>1?'<button data-v="makers">Compare</button>':'')+'</div>';
     for(const m of mf)h+=navItem(I.box,colorFor(m),m,openT().filter(t=>t.manufacturer===m).length,view.t==='mfr'&&view.v===m,`data-v="mfr" data-val="${esc(m)}"`);}
   const de=uniq('destination');
   if(de.length){h+='<div class="navsec">Destinations</div>';
@@ -3134,6 +3342,72 @@ function chaseHTML(){
           d>=14?`${Math.floor(d/7)} weeks`:`${d} days`}</span></button>`;}).join('')
     +(due.length>5?`<div class="cmore">and ${due.length-5} more</div>`:'')+'</div>';
 }
+/* The morning brief: what is owed, what is arriving, and who has gone quiet.
+
+   Plain text on purpose. The whole point of a brief is that it leaves the app —
+   pasted into an email, sent to somebody, read on a phone at a bench — and
+   every one of those wants text rather than markup. It is also exactly the
+   payload `notify/` would send once that function is deployed, so the two
+   cannot drift into two different ideas of what the morning looks like.
+
+   Everything here is counted by a predicate that already exists. A brief that
+   invented its own idea of "late" would sooner or later disagree with the list
+   it is summarising, which is the failure the saved-search badge was written to
+   avoid. */
+function briefText(){
+  const t0=iso(midnight()),wk=weekDays(),hi=iso(wk[6]);
+  const open=openT();
+  const nm=t=>{const p=projectOf(t);return '· '+t.title+(p?`  (${p.name})`:'');};
+  const sec=(head,rows)=>rows.length?[head,...rows,''].join('\n'):'';
+  const overdue=open.filter(t=>t.due&&t.due<t0).sort((a,b)=>a.due<b.due?-1:1);
+  const today=open.filter(t=>t.due===t0);
+  const week=open.filter(t=>t.due&&t.due>t0&&t.due<=hi).sort((a,b)=>a.due<b.due?-1:1);
+  const landing=open.filter(t=>t.type==='shipment'&&t.eta&&t.eta>=t0&&t.eta<=hi)
+    .sort((a,b)=>a.eta<b.eta?-1:1);
+  const adrift=open.filter(makerLate);
+  const quiet=chaseAfter?open.filter(t=>t.wait==='them'&&waitDays(t)>=chaseAfter)
+    .sort((a,b)=>(a.waitAt||0)-(b.waitAt||0)):[];
+  const run=running();
+  const head=`Shipshape · ${new Date().toLocaleDateString(undefined,
+    {weekday:'long',day:'numeric',month:'long'})}`;
+  const out=[];
+  out.push(sec(`OVERDUE (${overdue.length})`,overdue.map(t=>nm(t)+`  ${fmtDue(t.due)}`)));
+  out.push(sec(`DUE TODAY (${today.length})`,today.map(nm)));
+  out.push(sec(`REST OF THE WEEK (${week.length})`,week.map(t=>nm(t)+`  ${fmtDue(t.due)}`)));
+  out.push(sec(`ARRIVING THIS WEEK (${landing.length})`,
+    landing.map(t=>nm(t)+`  ${fmtDue(t.eta)}${t.manufacturer?`, ${t.manufacturer}`:''}`)));
+  out.push(sec(`PAST THE DATE THE MAKER GAVE (${adrift.length})`,
+    adrift.map(t=>nm(t)+`  ${t.manufacturer||'no maker'}, ${-diff(t.eta)} days over`)));
+  out.push(sec(`NOTHING HEARD (${quiet.length})`,
+    quiet.map(t=>nm(t)+`  ${waitDays(t)} days`)));
+  if(run)out.push(`STILL RUNNING\n· ${run.label} — since ${hhmm(run.start)}\n`);
+  /* Empty sections are dropped, and the blank line under the heading is added
+     back after that filter rather than pushed in with them — a `''` pushed as a
+     spacer is falsy and went out with the sections nobody wanted. */
+  const body=out.filter(Boolean).join('\n').trim();
+  // "nothing" is an answer, and a brief that says so beats one that says nothing
+  return head+'\n\n'+(body||'Nothing owed, nothing arriving and nobody to chase. All clear.');
+}
+function openBrief(){
+  $('#brieftext').value=briefText();
+  closeSheets();rememberFocus();
+  $('#scrim').classList.add('on');$('#briefsheet').classList.add('on');
+  // the print rules key off this, so the brief prints as the page rather than
+  // as a sheet floating over one
+  document.body.dataset.brief='1';
+}
+$('#bfclose').addEventListener('click',closeSheets);
+$('#bfcopy').addEventListener('click',async()=>{
+  const el=$('#brieftext');
+  try{await navigator.clipboard.writeText(el.value);toast('Brief copied');}
+  catch(e){
+    /* A clipboard write needs a secure context and a permission that is not
+       always there. Selecting it is the fallback that always works: the text is
+       in front of somebody who can copy it themselves. */
+    el.focus();el.select();toast('Select all and copy');
+  }
+});
+$('#bfprint').addEventListener('click',()=>print());
 function digestHTML(){
   if(digestOff)return '';
   const since=now()-7*864e5;
@@ -3162,6 +3436,11 @@ function rowHTML(t){
     aria-label="Show everything from ${esc(t.manufacturer)}">${esc(t.manufacturer)}</button>`);
   if(t.destination)chips.push(`<button class="chip go" data-v="dest" data-val="${esc(t.destination)}"
     aria-label="Show everything going to ${esc(t.destination)}">→ ${esc(t.destination)}</button>`);
+  /* Who ticked it off, once there is more than one person it could have been.
+     `manyHands()` is read from outside the task, so `hands.size` is in rowCtx —
+     without it the chip would not appear on rows already drawn when the second
+     person's first record arrived. */
+  if(t.done&&t.doneBy&&manyHands())chips.push(`<span class="chip">✓ ${esc(t.doneBy)}</span>`);
   if(t.qty)chips.push(`<span class="chip">×${t.qty}</span>`);
   if(t.cost!=null)chips.push(`<span class="chip">${money(t.cost)}</span>`);
   /* A PO groups a whole order — several crates, several makers — so the chip runs
@@ -3247,6 +3526,7 @@ function tmRowHTML(x,from,to){
         ${overruns&&!startedEarlier?`<span class="tmover">→ ${WD[new Date(ends).getDay()]}</span>`:''}
         ${p?`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`:''}
         ${x.taskId&&S.tasks.find(y=>y.id===x.taskId)?`<button class="chip go" data-opentask="${x.taskId}">↗ the task</button>`:''}
+        ${x.who&&manyHands()?`<span class="chip">${esc(x.who)}</span>`:''}
       </div></div>
     <div class="tmr"><span class="tmdur">${x.end===null?'running':clockHM(elapsed(x))}</span>
       <button class="tmagain" data-tm="again:${x.id}" aria-label="Start this again">↻</button>
@@ -3270,7 +3550,27 @@ function tmByProjectHTML(label,lo,hi){
       <div class="tmr"><span class="tmdur">${clockHM(ms)}</span>
       <span class="tmbar"><i style="width:${total?Math.round(ms/total*100):0}%;background:${p?p.color:'var(--gray)'}"></i></span></div></div>`;
   }
-  return h+'</div>';
+  h+='</div>';
+  /* The same window, split by who logged it. This is the billing question once
+     two people are keeping time — "whose hours are these" — and it only appears
+     once there is more than one answer, like every other place a name is shown.
+     Counted with the same `overlap`, so the two blocks always add to the same
+     total rather than to two different ideas of the week. */
+  if(manyHands()){
+    const who=new Map();
+    for(const x of inside){const k=x.who||'';who.set(k,(who.get(k)||0)+overlap(x,lo,hi));}
+    const wr=[...who.entries()].sort((a,b)=>b[1]-a[1]);
+    if(wr.length>1){
+      h+=`<div class="grp">${label}, by who logged it</div><div class="card">`;
+      for(const [nm,ms] of wr)
+        h+=`<div class="tmrow"><div class="tmmain"><div class="tt">${
+          nm?esc(nm):'<span style="color:var(--label3)">Unnamed</span>'}</div></div>
+          <div class="tmr"><span class="tmdur">${clockHM(ms)}</span>
+          <span class="tmbar"><i style="width:${total?Math.round(ms/total*100):0}%;background:${colorFor(nm||'?')}"></i></span></div></div>`;
+      h+='</div>';
+    }
+  }
+  return h;
 }
 /* A day heading in the log or under the calendar. Its total is the day's own
    share of everything that touches it, which is the same arithmetic the Today
@@ -3521,8 +3821,7 @@ function poHead(){
   const projs=[...new Set(items.map(t=>projectOf(t)).filter(Boolean))];
   const makers=[...new Set(items.map(t=>t.manufacturer).filter(Boolean))];
   const dests=[...new Set(items.map(t=>t.destination).filter(Boolean))];
-  const priced=items.filter(t=>t.cost!=null);
-  const total=priced.reduce((n,t)=>n+t.cost,0);
+  const {priced,total}=costOf(items);
   const eta=items.filter(t=>!t.done&&t.eta).map(t=>t.eta).sort()[0];
   const late=items.filter(t=>!t.done&&t.due&&diff(t.due)<0).length;
   const raised=Math.min(...items.map(t=>t.created||now()));
@@ -3607,9 +3906,64 @@ function projectsHTML(){
         <span class="chip">${s.open} open · ${Math.round(s.pct*100)}%</span>
         ${p.client?`<span class="chip">${esc(p.client)}</span>`:''}
         ${s.late?`<span class="chip" style="color:var(--red)">${s.late} late</span>`:s.next?`<span class="chip">Next ${fmtDue(s.next.due)}</span>`:''}
+        ${(()=>{const c=costOf(S.tasks.filter(t=>t.projectId===p.id));
+          return c.priced.length?`<span class="chip">${money(c.total)}${
+            c.priced.length<c.n?` · ${c.priced.length} of ${c.n} priced`:''}</span>`:'';})()}
       </div></div></div></div>`;
   }
   return h+'</div>';
+}
+/* Every maker's record side by side, worst first.
+
+   The figure itself is not new — `makerRecord` has counted it since makers got
+   a record, and a maker's own page has always shown it. What it could not
+   answer is the question anybody actually asks before placing the next order:
+   **who is late, and by how much, compared with everyone else.** One page at a
+   time is not a comparison.
+
+   Worst first is the order, because "who is late" is the question. A maker with
+   nothing judged yet sits at the bottom under its own heading rather than being
+   ranked as though no news were good news — never having shipped is not a
+   record, and sorting it among the reliable ones would be a lie. */
+function makersHTML(){
+  const names=uniq('manufacturer');
+  if(!names.length)return `<div class="empty"><div class="g">🏭</div><h3>No makers yet</h3>
+    <p>Put a maker on a shipment — <b>@Lumina Studio</b> in the composer — and this page
+      starts keeping their record: how many landed by the date they gave, and how far out
+      the rest were.</p>
+    <div><button class="btn" data-a="new">New shipment</button></div></div>`;
+  const rows=names.map(n=>({n,r:makerRecord(n),
+    open:S.tasks.filter(t=>t.type==='shipment'&&!t.done&&!t.arch
+      &&makerKey(t.manufacturer)===makerKey(n)).length}));
+  const judged=rows.filter(x=>x.r).sort((a,b)=>
+    b.r.avg-a.r.avg||(a.r.onTime/a.r.n)-(b.r.onTime/b.r.n)||a.n.localeCompare(b.n));
+  const rest=rows.filter(x=>!x.r).sort((a,b)=>a.n.localeCompare(b.n));
+  const card=x=>{
+    const r=x.r,pct=r?Math.round(r.onTime/r.n*100):0;
+    // green on the day or early, orange a little over, red a week or more
+    const col=!r?'var(--label3)':r.avg<=0?'var(--green)':r.avg<7?'var(--orange)':'var(--red)';
+    return `<div class="rowwrap"><div class="row" data-mfr="${esc(x.n)}">
+      <span class="mdot" style="background:${col}"></span>
+      <div class="rowmain"><div class="tt">${esc(x.n)}</div><div class="meta">
+        ${r?`<span class="chip" style="color:${col}">${pct}% on the date they gave</span>
+             <span class="chip">${r.onTime} of ${r.n} landed on time</span>
+             <span class="chip" style="color:${col}">${r.avg>0?`${r.avg} day${r.avg===1?'':'s'} over`
+               :r.avg<0?`${-r.avg} day${r.avg===-1?'':'s'} early`:'on the day'}</span>`
+          :'<span class="chip">Nothing judged yet</span>'}
+        ${x.open?`<span class="chip">${x.open} open</span>`:''}
+      </div></div></div></div>`;
+  };
+  let h='';
+  if(judged.length)h+=`<div class="grp">By how late they run<span class="c">${judged.length}</span></div>`
+    +'<div class="card">'+judged.map(card).join('')+'</div>';
+  if(rest.length)h+=`<div class="grp">No record yet<span class="c">${rest.length}</span></div>`
+    +'<div class="card">'+rest.map(card).join('')+'</div>';
+  /* A record is only as honest as what it is counted from, so the page says
+     what that is rather than leaving the number to be trusted blind. */
+  h+=`<div class="blurb" style="padding:10px 16px 20px">Counted from the day each crate
+    reached <b>Shipped</b> against the date its maker gave. A crate with no ETA, or one
+    that has not shipped, is not counted either way.</div>`;
+  return h;
 }
 /* How many board cards point at this job. The board stores a card's job as
    "ss:<project id>" and keeps its own data under its own key; reading it here is
@@ -3638,6 +3992,13 @@ function projectHead(){
     <div style="flex:1;min-width:0"><h2>${esc(p.name)}</h2><div class="l">
       <span>${s.done}/${s.all} done</span>${p.client?`<span>· ${esc(p.client)}</span>`:''}
       ${p.due?`<span style="${diff(p.due)<0?'color:var(--red)':''}">· target ${fmtDue(p.due)}</span>`:''}
+      ${(()=>{const c=costOf(S.tasks.filter(t=>t.projectId===p.id));
+        /* A job's cost was only ever askable one purchase order at a time, and a
+           job is usually several. It says how much of itself is priced for the
+           same reason the order does: a total over three of eight lines is not
+           the total. */
+        return c.priced.length?`<span>· <b>${money(c.total)}</b>${
+          c.priced.length<c.n?` over ${c.priced.length} of ${c.n}`:''}</span>`:'';})()}
       ${boardCards(p.id)?`<button data-board="#p=ss:${p.id}" style="color:var(--blue);font-weight:600">· ✳ ${boardCards(p.id)} board card${boardCards(p.id)===1?'':'s'}</button>`:''}</div>
       ${linksOf(p).length?`<div class="meta" style="margin-top:6px">${linksOf(p).map(l=>{const k=linkKind(l.url);
         return `<a class="chip track" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" data-noopen="1"
@@ -3877,7 +4238,7 @@ function renderList(){
   tallyTime();
   const r_=running();
   rowCtx=view.t+'|'+iso(midnight())+'|'+S.projects.map(p=>p.id+p.u).join(',')
-    +'|'+(r_?r_.taskId:'')+'|'+timeVer;
+    +'|'+(r_?r_.taskId:'')+'|'+timeVer+'|'+hands.size;
   const chunk=(name,h)=>{if(h)out.push(...slot(name,h));};
   /* The three time views, side by side at the top of each, for the same reason
      Scheduled and Week are: a view nobody can find is not a view, and the
@@ -3900,6 +4261,7 @@ function renderList(){
   }
   if(view.t==='pos'&&!query){chunk('pos',posHTML());patch(el,out);return;}
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
+  if(view.t==='makers'){chunk('makers',makersHTML());patch(el,out);return;}
   if(view.t==='project')chunk('phead',projectHead());
   if(view.t==='mfr')chunk('mhead',makerHead());
   if(view.t==='dest')chunk('dhead',destHead());
@@ -3939,9 +4301,12 @@ function renderList(){
 }
 
 /* ============ actions ============ */
-function toast(msg,undo){
+/* `what` never reaches the toast — it is for the history alone, where three
+   rows all reading "Completed" say nothing about which three. The toast itself
+   stays short: it is read in a second, over the row it is about. */
+function toast(msg,undo,what){
   $('#tmsg').textContent=msg;
-  if(undo){undoStack.push({msg,fn:undo});if(undoStack.length>20)undoStack.shift();}
+  if(undo){undoStack.push({msg,fn:undo,at:now(),what});if(undoStack.length>20)undoStack.shift();}
   $('#tundo').hidden=!undoStack.length;
   $('#toast').classList.add('on');clearTimeout(toast._t);
   toast._t=setTimeout(()=>$('#toast').classList.remove('on'),undo?4200:2200);
@@ -4135,12 +4500,12 @@ function toggleDone(id,el){
   const wasStage=t.stage;
   t.done=!t.done;t.u=now();
   if(t.done){
-    t.completed=now();
+    t.completed=now();t.doneBy=me||'';
     // completing a shipment marks it Delivered, but remember where it was so
     // un-ticking the box puts it back instead of stranding it on Delivered
     if(t.type==='shipment'&&t.stage<4){t.stage0=t.stage;t.stage=4;stampStage(t,4);}
   }else{
-    t.completed=null;
+    t.completed=null;t.doneBy='';
     // only rewind if nothing has touched the stage since; a stage picked by hand
     // while the shipment was complete is the user's choice and stands
     if(t.type==='shipment'&&t.stage0!=null){if(t.stage===4)t.stage=t.stage0;t.stage0=null;}
@@ -4174,7 +4539,7 @@ function toggleDone(id,el){
   if(t.done)toast(spawned?`Completed — next one due ${fmtDue(spawned.due)}`:'Completed',()=>{
     t.done=false;t.completed=null;t.stage=wasStage;t.u=now();
     if(spawned){S.tasks=S.tasks.filter(x=>x.id!==spawned.id);S.tomb[spawned.id]=now();}
-    save();render();});
+    save();render();},t.title);
 }
 /* The next occurrence is a fresh task rather than a moved one, so the record of
    what was done and when stays put. Dates catch up if one was left late: a
@@ -4476,11 +4841,20 @@ const elapsed=x=>Math.max(0,(x.end===null?now():x.end)-x.start);
 const overlap=(x,from,to)=>
   Math.max(0,Math.min(x.end===null?now():x.end,to)-Math.max(x.start,from));
 let timeByTask=new Map(),timeVer='';
+/* Whether more than one person has touched this workspace. A name on every row
+   when there is only one of you is noise — the answer to "whose" is only worth
+   printing once there is more than one possible answer. Counted in the pass
+   that is already walking the log rather than in one of its own. */
+let hands=new Set();
+const manyHands=()=>hands.size>1;
 function tallyTime(){
   timeByTask=new Map();
+  hands=new Set();
+  for(const t of S.tasks)if(t.doneBy)hands.add(t.doneBy);
   let n=0,mx=0;
   for(const x of S.times){
     n++;if((x.u||0)>mx)mx=x.u||0;
+    if(x.who)hands.add(x.who);
     if(!x.taskId)continue;
     timeByTask.set(x.taskId,(timeByTask.get(x.taskId)||0)+elapsed(x));
   }
@@ -4532,7 +4906,7 @@ function startTimer({taskId=null,projectId=null,label=''}={}){
   if(prev)stopTimer(true);
   const e={id:uid(),taskId:taskId||null,
     projectId:projectId||(t?t.projectId:null)||null,
-    label:name,start:now(),end:null,u:now()};
+    label:name,start:now(),end:null,who:me||'',u:now()};
   S.times.push(e);save();render();buzz(10);
   toast(prev?`Switched to ${name}`:`Timing ${name}`);
   return e;
@@ -4832,7 +5206,7 @@ function saveEntry(){
        the moment somebody is finished with the field — the same bargain the
        detail sheet's own change handler makes. */
     const e={id:uid(),taskId:null,projectId:findProjectId($('#tmproject').value),
-      label,start:t.start,end:t.end,u:now()};
+      label,start:t.start,end:t.end,who:me||'',u:now()};
     S.times.push(e);entryDraft=null;
     closeSheets();save();render();
     toast(`Added ${clockHM(elapsed(e))}`,()=>{
@@ -4846,7 +5220,7 @@ function saveEntry(){
   if(x.end!==null)x.end=t.end;
   x.u=now();
   closeSheets();save();render();
-  toast('Entry updated',()=>{Object.assign(x,before);x.u=now();save();render();});
+  toast('Entry updated',()=>{Object.assign(x,before);x.u=now();save();render();},x.label);
 }
 /* Read as it is typed, and applied — but only what has CHANGED since the last
    keystroke, which is the same guard `readTitleNotation` needs and for the same
@@ -4893,7 +5267,7 @@ $('#tmdelete').addEventListener('click',()=>{
   const i=S.times.findIndex(y=>y.id===entryId);if(i<0)return closeSheets();
   const [x]=S.times.splice(i,1);S.tomb[x.id]=now();
   closeSheets();save();render();
-  toast('Entry removed',()=>{delete S.tomb[x.id];x.u=now();S.times.splice(i,0,x);save();render();});
+  toast('Entry removed',()=>{delete S.tomb[x.id];x.u=now();S.times.splice(i,0,x);save();render();},x.label);
 });
 
 /* ============ clearing out ============
@@ -5238,6 +5612,7 @@ function closeSheets(){
   if(a&&a.closest&&a.closest('.sheet'))a.blur();
   $('#scrim').classList.remove('on');
   $$('.sheet').forEach(s=>s.classList.remove('on'));
+  delete document.body.dataset.brief;
   editing=null;editProj=null;entryDraft=null;
   if(lastFocus&&document.contains(lastFocus)){lastFocus.focus();lastFocus=null;}
 }
@@ -6781,6 +7156,44 @@ function popUndo(){
   u.fn();
   toast(`Undone: ${u.msg}`);
 }
+const ago=ts=>{
+  const s=Math.max(0,Math.round((now()-(ts||0))/1000));
+  if(s<45)return 'just now';
+  const m=Math.round(s/60);
+  if(m<60)return m+' min ago';
+  const h=Math.round(m/60);
+  return h<24?h+(h===1?' hour ago':' hours ago'):Math.round(h/24)+'d ago';
+};
+/* The twenty were always there and there was no way to see them, so in practice
+   undo was one step: you pressed ⌘Z, read the toast, and guessed at whether to
+   press it again. This is that stack, written down.
+
+   Tapping one undoes **everything back to and including it**, newest first.
+   Undoing out of order is the thing not offered: each entry is a closure over
+   the state at the moment it was made, so reversing the third while the fourth
+   and fifth still stand is not a state anything here guarantees. Going back to
+   a point is coherent; picking one out of the middle is not. */
+function openUndoList(){
+  const rows=undoStack.map((u,i)=>({u,i})).reverse();
+  $('#undolist').innerHTML=rows.length
+    ? rows.map(({u,i})=>`<button class="undorow" data-undoto="${i}">
+        <span class="t">${esc(u.msg)}${u.what?` <i>${esc(u.what)}</i>`:''}</span>
+        <span class="w">${esc(ago(u.at))}</span></button>`).join('')
+      +`<div class="blurb">Tapping one undoes it and everything after it. Twenty are
+        kept, and they last as long as the tab does.</div>`
+    : '<div class="blurb">Nothing to undo yet. Anything you change that can be taken back shows up here.</div>';
+  closeSheets();rememberFocus();
+  $('#scrim').classList.add('on');$('#undosheet').classList.add('on');
+}
+$('#unclose').addEventListener('click',closeSheets);
+$('#undolist').addEventListener('click',e=>{
+  const b=e.target.closest('[data-undoto]');if(!b)return;
+  const i=+b.dataset.undoto;
+  let n=0,last='';
+  while(undoStack.length>i){const u=undoStack.pop();last=u.msg;u.fn();n++;}
+  closeSheets();
+  toast(n===1?`Undone: ${last}`:`Undone ${n} changes`);
+});
 $('#moreBtn').addEventListener('click',e=>{e.stopPropagation();closeAddMenu();
   /* Only while there is a search to save, and it names the saved one when the
      query already is one — the menu is actions, and "save this search" with an
@@ -6805,6 +7218,9 @@ function doMenu(k){
   if(k==='group'){groupBy=GROUPS[(GROUPS.indexOf(groupBy)+1)%GROUPS.length];saveView();render();toast('Group: '+GROUP_LABEL[groupBy]);}
   if(k==='density'){compact=!compact;$('#app').classList.toggle('compact',compact);saveView();render();}
   if(k==='idea')openIdea();
+  if(k==='qhelp')openQHelp();
+  if(k==='undolist')openUndoList();
+  if(k==='brief')openBrief();
   if(k==='quick')openQuickAdd();
   if(k==='saveq'){const mine=query&&S.searches.find(s=>s.q===query);openSavedQ(mine?mine.id:null);}
   if(k==='sfx'){sfx=!sfx;saveView();renderData();if(sfx)ping(880);toast('Sound '+(sfx?'on':'off'));}
@@ -7002,7 +7418,7 @@ $('#list').addEventListener('click',e=>{
     if(k==='del'){
       const i=S.times.findIndex(y=>y.id===arg);if(i<0)return;
       const [x]=S.times.splice(i,1);S.tomb[x.id]=now();save();render();
-      toast('Entry removed',()=>{delete S.tomb[x.id];x.u=now();S.times.splice(i,0,x);save();render();});
+      toast('Entry removed',()=>{delete S.tomb[x.id];x.u=now();S.times.splice(i,0,x);save();render();},x.label);
       return;
     }
   }
@@ -7027,6 +7443,7 @@ $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-editmaker]'))return openMaker(view.v);
   if(e.target.closest('[data-editdest]'))return openDest(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
+  const mk=e.target.closest('[data-mfr]');if(mk)return setView('mfr',mk.dataset.mfr);
   /* Paging keeps the month in view.v for the same reason the week does: a
      re-render, and the pull that provoked it, must land on the month you were
      looking at rather than back on this one. */
@@ -7318,7 +7735,8 @@ function paletteRows(q,raw){
     ['timelog','Time log',I.clock,'var(--green)'],['timecal','Time calendar',I.today,'var(--green)'],
     ['pos','Purchase orders',I.box,'var(--pink)'],['invoices','Invoices',I.check,'var(--teal)'],
     ['done','Completed',I.check,'var(--green)'],
-    ['projects','Projects',I.box,'var(--indigo)'],['archive','Archived',I.box,'var(--label3)']])
+    ['projects','Projects',I.box,'var(--indigo)'],['makers','Makers',I.box,'var(--pink)'],
+    ['archive','Archived',I.box,'var(--label3)']])
     push(l,'View',ico,col,()=>setView(v));
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
   for(const m of uniq('manufacturer'))push(m,'Maker',I.box,colorFor(m),()=>setView('mfr',m));
@@ -7328,8 +7746,9 @@ function paletteRows(q,raw){
   for(const [l,k] of [['New task','new'],['New shipment','newship'],['New time entry','newtime'],
     ['Quick add','quick'],['New project','newproj'],['Scan a shipping label','scan'],
     ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
+    ['What search understands','qhelp'],['Morning brief','brief'],
     ['Save a backup file','export'],['Load from a backup file','import'],
-    ['Undo last change','undo'],['Archive completed','clearDone'],
+    ['Undo last change','undo'],['Recent changes','undolist'],['Archive completed','clearDone'],
     ['Settings','settings'],['New idea','idea'],
     ['Rows: '+(compact?'comfortable':'compact'),'density'],['Sound: '+(sfx?'off':'on'),'sfx'],
     ['Check for updates','update'],['Archived','archive'],
@@ -7614,6 +8033,7 @@ function renderSettings(){
   $('#setgroup').innerHTML=GROUPS.map(v=>`<option value="${v}" ${v===groupBy?'selected':''}>${GROUP_LABEL[v]}</option>`).join('');
   // the only way to reach it on a phone, where .hctl is display:none
   $('#setpsort').innerHTML=PSORTS.map(v=>`<option value="${v}" ${v===projSort?'selected':''}>${PSORT_LABEL[v]}</option>`).join('');
+  if($('#setme')&&document.activeElement!==$('#setme'))$('#setme').value=me;
   seg('set-rows',[['comfortable','Comfortable'],['compact','Compact']],compact?'compact':'comfortable');
   seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');
   seg('set-streak',[['off','Off'],['on','On']],streakOn?'on':'off');
@@ -7658,6 +8078,10 @@ function renderSettings(){
 }
 function openSettings(){renderSettings();rememberFocus();$('#scrim').classList.add('on');$('#setsheet').classList.add('on');}
 $('#setclose').addEventListener('click',closeSheets);
+/* Saved as it is typed rather than on close, because closing a sheet is not a
+   thing anybody thinks of as committing — and this one is typed once and then
+   never again. */
+$('#setme').addEventListener('input',()=>{me=$('#setme').value.trim().slice(0,40);saveView();});
 $('#setsync').addEventListener('click',()=>{closeSheets();openSync();});
 $('#setsort').addEventListener('change',e=>{sortBy=e.target.value;saveView();render();});
 $('#setgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();render();});
@@ -7697,6 +8121,57 @@ const KEYS=[['⌘K / ctrl K','Find anything, or write a new one'],
   ['⌘Z / ctrl Z','Undo'],['esc','Close, or clear the search'],
   ['right-click','Actions for a row'],['shift-click','Select a run of rows'],
   ['⌘click / ctrl click','Select rows one at a time'],['↵','In a sync field, turn sync on']];
+/* Every term the search takes, with the example that shows its shape. Tapping
+   one runs it, because reading "due:>friday" and then retyping it is the step
+   nobody bothers with — and a line that runs is also a line that proves it
+   works. Grouped the way somebody asks the question, not the way `parseQuery`
+   reads it. */
+const QHELP=[
+  ['What kind',[['is:shipment','crates, not tasks'],['is:task','tasks, not crates'],
+    ['is:open','not finished'],['is:done','finished'],['is:flagged','flagged'],
+    ['is:invoice','the invoice word, or the box'],['is:repeating','repeats'],
+    ['is:archived','archived work, which is otherwise out of the way']]],
+  ['When',[['late:','past its due date and not done'],
+    ['is:latemaker','past the date the maker gave'],
+    ['due:today','due that day — friday, tomorrow, "oct 15" all read the same'],
+    ['due:week','due this week'],['due:month','due this month'],
+    ['due:>friday','due after that day — < is before, >= and <= include it'],
+    ['due:none','no due date at all'],['eta:week','the same, for the maker’s date']]],
+  ['Whose and where',[['maker:lumina','the maker'],
+    ['maker:"lumina studio"','quote a value with a space in it'],
+    ['to:chicago','the destination'],['project:harbor','the job'],
+    ['project:none','filed under no job'],['is:waiting','somebody else’s move'],
+    ['wait:dana','waiting on them'],['by:dana','who ticked it off']]],
+  ['Numbers',[['po:41785','the order'],['cost:>5000','more than that'],
+    ['cost:<500','less than that'],['cost:none','no price on it'],
+    ['qty:>10','how many'],['stage:shipped','where a crate has got to']]],
+  ['What it carries',[['has:link','an attached link'],['has:note','notes on it'],
+    ['has:cost','a price'],['has:tracking','a tracking number'],
+    ['has:time','hours logged against it'],['has:steps','a checklist'],
+    ['has:eta','a date from the maker'],['has:project','filed under a job']]],
+];
+function openQHelp(){
+  $('#qhelplist').innerHTML=QHELP.map(([head,rows])=>
+    `<div class="qhgrp">${esc(head)}</div>`
+    +rows.map(([k,l])=>`<div class="kr"><kbd data-runq="${esc(k)}">${esc(k)}</kbd><span>${esc(l)}</span></div>`).join('')
+  ).join('');
+  closeSheets();rememberFocus();
+  $('#scrim').classList.add('on');$('#qhelpsheet').classList.add('on');
+}
+$('#qhclose').addEventListener('click',closeSheets);
+/* Tapping a term runs it. The sheet closes, because the answer is the list
+   behind it and a sheet sitting over the answer is the wrong half. */
+$('#qhelplist').addEventListener('click',e=>{
+  const k=e.target.closest('[data-runq]');if(!k)return;
+  closeSheets();
+  /* The same two views a saved search has to step aside from, and for the same
+     reason: the board draws itself and the archive filters everything out
+     before a query is ever consulted. `setView` was the first cut and it clears
+     the query on the way, so the term ran against nothing. */
+  if(view.t==='board'||view.t==='archive')view={t:'all'};
+  $('#q').value=k.dataset.runq;query=k.dataset.runq;selDay=null;render();
+  $('#scroll').scrollTop=0;
+});
 function openKeys(){
   $('#keyslist').innerHTML=KEYS.map(([k,l])=>
     `<div class="kr"><kbd>${esc(k)}</kbd><span>${esc(l)}</span></div>`).join('');

@@ -896,6 +896,158 @@ tombstone sweep.
   in it shows a blank badge rather than a nought — that is the answer, not a
   count.
 
+## What search understands
+
+The terms were `is:` `late:` `stage:` `maker:` `to:` `project:` `po:`, and every
+one of them tested a string. The fields this app keeps are mostly **dates and
+numbers**, and none of them could be asked about — "what is due this week and
+over five thousand" had no answer in a box that already held both facts.
+
+- **A date value goes through `extractDate`.** `due:friday`, `due:tomorrow` and
+  `due:"oct 15"` mean here exactly what those words mean typed into a title.
+  Growing a second idea of what Friday is was the thing to avoid, and it is the
+  same bargain the quick add, the run card and the notes each make.
+- Only the words that describe a **window** rather than a day are named
+  separately — `week`, `month`, `none`, `any` — because a window is not
+  something `extractDate` has ever had to return. They are checked **first**, or
+  `extractDate` reads "week" as a date of its own.
+- `>` `<` `>=` `<=` in front of a date or a number, and the same shape for
+  both, so `due:>friday` and `cost:>5000` are one rule learned once.
+- **A value that cannot be read stays free text.** `due:whenever` is somebody's
+  word, and a filter that quietly stands down matches everything — which is a
+  worse answer than finding nothing.
+- **A quoted value keeps its spaces**: `maker:"lumina studio"`. Without it the
+  second word fell through to the free text and narrowed the search by something
+  nobody asked for. A quoted run with no key is just text, which it already was.
+- `has:` is presence — link, note, cost, tracking, eta, due, steps, project,
+  time. All of it is data the app already keeps; none of it is new.
+- `project:none` is the unfiled work, which a substring test could never ask for.
+
+**A grammar nobody can find is not a feature.** It used to be named only in the
+saved-search sheet's blurb, which is behind a search you would already have had
+to know how to write. `#qhelpsheet` lists every term with an example, from the ⋯
+menu and the palette, and **tapping one runs it** — reading `due:>friday` and
+then retyping it is the step nobody bothers with, and a line that runs is also a
+line that proves it works. It steps aside from the board and the archive the way
+`runSaved` does; `setView` was the first cut and it clears the query on the way,
+so the term ran against nothing.
+
+## Twenty changes you can see
+
+Undo has kept twenty since it was written. What it could not do was **show**
+them, so in practice it was one step: you pressed ⌘Z, read the toast, and
+guessed at whether to press it again.
+
+`#undosheet` is that stack written down, newest first. Tapping one undoes
+**everything back to and including it**.
+
+- Undoing out of order is deliberately not offered. Each entry is a closure over
+  the state at the moment it was made, so reversing the third while the fourth
+  and fifth still stand is not a state anything here guarantees. Going back to a
+  point is coherent; picking one out of the middle is not.
+- `toast(msg,undo,what)` — `what` never reaches the toast. It is for the history
+  alone, where three rows all reading "Completed" say nothing about which three.
+  The toast itself stays short: it is read in a second, over the row it is about.
+- The stack lasts as long as the tab does, and the sheet says so. It holds
+  closures, so it is not a thing that could be written to storage.
+
+## Who is late, and by how much
+
+`makerRecord` has counted a maker's record since makers got one, and the
+maker's own page has always shown it. What it could not answer is the question
+anybody actually asks before placing the next order: **how they compare.** One
+page at a time is not a comparison.
+
+`view.t==='makers'` puts them side by side, **worst first**, because "who is
+late" is the question.
+
+- A maker with nothing judged yet sits under its own heading rather than being
+  ranked. Never having shipped is not a record, and sorting it among the
+  reliable ones would be a lie.
+- The figures come from `makerRecord`, not from a second count — a page that
+  disagreed with the maker's own would be worse than no page.
+- The dot is green on the day or early, orange under a week over, red past it.
+- It says **what it is counted from** at the foot: the day each crate reached
+  Shipped against the date its maker gave, and that a crate with no ETA is not
+  counted either way. A record is only as honest as what it is counted from.
+- The door is a **Compare** button in the sidebar's Makers heading, and it only
+  appears once there are two — comparing one maker with nobody says nothing, the
+  same bargain the project sort makes.
+
+## The morning brief
+
+What is owed, what is arriving and who has gone quiet — `briefText()`.
+
+**Plain text on purpose.** The whole point of a brief is that it leaves the app:
+pasted into an email, sent to somebody, read at a bench. Every one of those
+wants text rather than markup. It is also exactly the payload `notify/` would
+send once that function is deployed, so the two cannot drift into two different
+ideas of what the morning looks like.
+
+- Every section is counted by a **predicate that already exists** — `makerLate`,
+  `waitDays` against `chaseAfter`, the same week `weekDays()` gives. A brief that
+  invented its own idea of "late" would sooner or later disagree with the list it
+  summarises, which is the failure `countQuery` was written to avoid.
+- Empty sections are dropped, and **"nothing" is an answer**: a day with nothing
+  owed says so rather than printing a page of headings with nothing under them.
+- The blank line under the heading is added back **after** the empty-section
+  filter. A `''` pushed in as a spacer is falsy and went out with the sections
+  nobody wanted.
+- Copy falls back to selecting the text: `navigator.clipboard` needs a secure
+  context and a permission that is not always there, and text in front of
+  somebody who can copy it themselves always works.
+- `body[data-brief]` scopes the print rules, so the brief prints as the page
+  rather than as a sheet floating over one. `closeSheets` clears the flag — the
+  one exit every sheet has.
+
+## What a job came to
+
+`t.cost` is per item and was only ever totalled on a purchase order's page. A job
+is usually several orders, so "what did this one come to" had no answer anywhere.
+
+`costOf(items)` is the one counter, read by the order page and the job alike —
+two counters would sooner or later quote two different totals for the same
+crates. It returns the priced items as well as the sum, because **a total over
+three of eight lines is not the total** and the order page has always said so.
+The job now says it the same way: `10,700.50 over 2 of 4`, and a chip on the
+Projects index so the jobs can be compared without opening each one.
+
+A job with nothing priced shows **nothing**, not `0.00`. Nought is a claim about
+the money; silence is the truth, which is that nobody has typed any in.
+
+## Two people
+
+Sync moves records between devices and never had any idea who made one, so "who
+marked that delivered" and "whose hours are these" had no answer at all once a
+second person touched the workspace.
+
+`me` is a name, **per device**, with the row height and the sort — it answers
+"who is sitting here", which is a fact about the device rather than about the
+workspace. Empty is the honest default: nobody has said, and stamping a name
+nobody chose is worse than stamping none.
+
+Three writes carry it, and they are the three where the question actually
+arises: a completion (`t.doneBy`), a timer, and an entry written by hand
+(`x.who`). Un-ticking clears the name with the rest of the completion.
+
+**Nothing is shown until there is more than one answer.** `manyHands()` — more
+than one distinct name across the log and the completions — gates every place a
+name appears, because "Dana" on every row when Dana is the only person is noise.
+It is counted in `tallyTime`, which is already walking the log, and
+
+- **`hands.size` is in `rowCtx`**, or a row drawn before the second person's
+  first record arrived would never repaint to show the name. Anything `rowHTML`
+  reads from outside the task has to be, and this is exactly that.
+
+The week's hours split **by who logged them** beside the split by project, using
+the same `overlap`, so the two blocks always add to the same total rather than
+to two different ideas of the week. That is the billing question once two people
+are keeping time. `by:dana` searches the completions.
+
+What this is not: permissions, accounts, or a claim that the name is *true*.
+It is a label the device puts on its own writes, and two people who both type
+"Dana" are one Dana as far as this is concerned.
+
 ## Waiting on someone
 
 `t.wait` says whose move it is; `waitAt` is when it became theirs. Without the
