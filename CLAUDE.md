@@ -670,6 +670,56 @@ distinction anybody already makes when they type "year end review 2h" instead of
   branch of `renderList` puts the caret back afterwards, the way `renderNav` does
   for `#npsort`.
 
+## A day on site, and the hours it owns
+
+A site visit is a day, what happened, what to do next, how you got there and how
+long you were there. None of that is a task — filing it as one keeps the title
+and loses the rest — so `visit` is its own record kind in `KINDS`, which is most
+of what makes it sync; the rest is `S.visits` in `migrate`, in `payload()` and in
+`mergeIn`'s list merge and tombstone sweep, the same five places a saved search
+needed.
+
+**The visit owns a time entry.** The hours are the part that has to reach the
+timesheet, and the whole difficulty is that one number now lives in two records.
+So there is one owner:
+
+- `syncVisitTime(v)` is the only thing that writes it, and it runs on **every**
+  save of the visit. No minutes means no entry, and one that existed goes out
+  with its own tombstone — a visit whose hours were cleared has not logged any.
+- **The entry's row in the tracker opens the visit**, not the entry editor. Two
+  editors for one number is how the two come to disagree, and the visit's copy
+  would win the moment anything touched it.
+- Removing the entry from the tracker **clears the visit's hours**. Leaving the
+  visit still claiming them is the same disagreement from the other end, and the
+  next save of the visit would write the entry straight back. Undo restores both.
+- Which end a duration holds is the bargain the entry sheet already makes: a
+  **new** entry is anchored at this time of day, and one that **already exists**
+  keeps the start somebody has got — so editing a visit a week later does not
+  slide its hours across the day.
+- An edit that *makes* an entry leaves it orphaned on undo, because the restored
+  visit does not point at it. It goes with the undo, since nobody else claims a
+  visit's entry.
+- The label is cut to something that reads as a name rather than as prose. A
+  timesheet row is one line wide; the note itself keeps every word.
+
+`visitMins` reads the Hours field through `parseEntryLine`, so "2h 30m", "90m"
+and "two hours" mean here what they mean everywhere else — one parser, one set of
+rules. The one thing it adds is that a **bare number is hours**: in a field
+called Hours, `2.5` is two and a half of them, which is not true of a label.
+
+- The sheet **says the window the hours came out as** (`2h 30m on site · 13:00 –
+  15:30`), because the window is real underneath either way and a hidden one is a
+  secret — the same bargain Amount mode makes.
+- A visit with nothing on it at all is refused. A day and nothing else is not a
+  record of anything.
+- One row, `visitRowHTML`, used by the visits view and by the job's own section,
+  so a visit reads the same in both. A job shows three with a way through to the
+  rest: this sits above the job's list of work, and a year of visits would bury
+  it.
+- The sidebar entry appears **once there is one**, like the orders and the
+  invoices. Search is global, so a query running on the visits view stands them
+  down and searches the work.
+
 ## Three ways to write an hour down
 
 An hour reaches the record at three different moments, and the entry sheet now

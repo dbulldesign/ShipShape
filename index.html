@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.71.0">
-<meta name="app-build" content="2026-09-18">
+<meta name="app-version" content="1.72.0">
+<meta name="app-build" content="2026-09-23">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -1156,6 +1156,30 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 </div></div>
 
 
+<!-- A site visit is a day, what happened, what to do next, how you got there
+     and how long you were on site. The hours are the part that has to reach the
+     timesheet, so the visit writes a time entry and keeps owning it. -->
+<div class="sheet" role="dialog" aria-modal="true" id="vsheet"><div class="grab"></div>
+  <div class="sheettitle"><span id="vtitle">Site visit</span><button class="x" id="vclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="fgroup cols">
+    <div class="field"><label for="vday">Day</label><input id="vday" type="date"></div>
+    <div class="field"><label for="vproject">Job</label><input id="vproject" placeholder="Type or pick" autocomplete="off"></div>
+  </div>
+  <div class="sethead">How you got there</div>
+  <div class="seg" id="vtravel" role="group" aria-label="Transport"></div>
+  <div class="sethead">Time on site</div>
+  <div class="durs" id="vdurs"></div>
+  <div class="fgroup cols">
+    <div class="field"><label for="vmins">Hours</label><input id="vmins" inputmode="decimal" placeholder="e.g. 2.5 or 2h 30m" autocomplete="off"></div>
+  </div>
+  <div class="blurb" id="vtime">Leave it empty and no time is logged.</div>
+  <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="vwhat">What happened</label><textarea id="vwhat" placeholder="Walked the corridors with Dana. Two sconces short on floor 6."></textarea></div></div>
+  <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="vnext">Next steps</label><textarea id="vnext" placeholder="Chase the missing sconces. Send the survey by Friday."></textarea></div></div>
+  <div style="padding:0 14px 16px;display:flex;gap:10px">
+    <button class="btn sec" id="vdel" style="flex:1;margin:0;text-align:center">Delete</button>
+    <button class="btn" id="vsave" style="flex:1;margin:0;text-align:center">Save</button></div>
+</div>
+
 <div class="sheet" role="dialog" aria-modal="true" id="psheet"><div class="grab"></div>
   <div class="sheettitle"><span id="ptitle">New project</span><button class="x" id="pclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="swatches" id="pswatches"></div>
@@ -1616,7 +1640,7 @@ function trackInfo(t){
   if(!c.url)return {number:n,carrier:c,noLink:true};
   return {number:n,carrier:c,auto:!picked,guess:!picked&&!!c.guess,url:c.url(encodeURIComponent(n))};
 }
-let S={v:3,projects:[],tasks:[],makers:[],tomb:{},started:false};
+let S={v:3,projects:[],tasks:[],makers:[],visits:[],tomb:{},started:false};
 // view preferences are per device, not synced: they are how you like to look at
 // the list, not part of the data
 let sortBy='smart',groupBy='auto',projSort='order',doneFold=false,compact=false,sfx=false,digestOff=false,streakOn=false,chaseAfter=7;
@@ -1706,6 +1730,11 @@ function migrate(){
      of a list is a matter of where you are sitting; "the things I am chasing" is
      not, and a search pinned on the laptop is wanted on the phone. */
   S.searches=S.searches||[];
+  /* A site visit is its own record because it is its own thing: a day, what
+     happened, what to do next, how you got there, and how long you were on
+     site. None of that is a task, and filing it as one would lose all of it
+     but the title. */
+  S.visits=S.visits||[];
   if(!S.v||S.v<2){
     for(const n of [...new Set(S.tasks.map(t=>t.project).filter(Boolean))])
       if(!S.projects.find(p=>p.name===n))S.projects.push({id:uid(),name:n,color:colorFor(n),client:'',due:null,notes:'',u:now()});
@@ -1872,7 +1901,7 @@ async function rpc(fn,body){
   const txt=await r.text();
   return txt?JSON.parse(txt):null;
 }
-const payload=()=>({v:3,projects:S.projects,tasks:S.tasks,makers:S.makers,times:S.times,searches:S.searches,tomb:S.tomb});
+const payload=()=>({v:3,projects:S.projects,tasks:S.tasks,makers:S.makers,times:S.times,searches:S.searches,visits:S.visits,tomb:S.tomb});
 function schedulePush(){
   if(!sync.on)return;
   clearTimeout(pushT);
@@ -2051,7 +2080,8 @@ const ITEM_GRACE=5*60*1000;
    from when task photos existed would have poured them into the task list. A
    missing kind still means task, because the very first rows were written
    without one. */
-const KINDS={task:'tasks',project:'projects',maker:'makers',time:'times',search:'searches'};
+const KINDS={task:'tasks',project:'projects',maker:'makers',time:'times',search:'searches',
+  visit:'visits'};
 function itemsSince(ts){
   const out=[];
   for(const [kind,key] of Object.entries(KINDS))
@@ -2266,12 +2296,14 @@ function mergeIn(remote){
   changed=mergeList(S.makers,remote.makers)||changed;
   changed=mergeList(S.times,remote.times)||changed;
   changed=mergeList(S.searches,remote.searches||[])||changed;
-  const n0=S.tasks.length+S.projects.length+S.times.length+S.searches.length;
+  changed=mergeList(S.visits,remote.visits||[])||changed;
+  const n0=S.tasks.length+S.projects.length+S.times.length+S.searches.length+S.visits.length;
   S.tasks=S.tasks.filter(t=>!(S.tomb[t.id]&&S.tomb[t.id]>=(t.u||0)));
   S.projects=S.projects.filter(p=>!(S.tomb[p.id]&&S.tomb[p.id]>=(p.u||0)));
   S.times=S.times.filter(x=>!(S.tomb[x.id]&&S.tomb[x.id]>=(x.u||0)));
   S.searches=S.searches.filter(x=>!(S.tomb[x.id]&&S.tomb[x.id]>=(x.u||0)));
-  if(n0!==S.tasks.length+S.projects.length+S.times.length+S.searches.length)changed=true;
+  S.visits=S.visits.filter(x=>!(S.tomb[x.id]&&S.tomb[x.id]>=(x.u||0)));
+  if(n0!==S.tasks.length+S.projects.length+S.times.length+S.searches.length+S.visits.length)changed=true;
   const cut=now()-60*864e5;
   for(const id in S.tomb)if(S.tomb[id]<cut)delete S.tomb[id];
   if(changed){S.started=true;sanitizeColors();}   // remote projects are untrusted input
@@ -3135,6 +3167,11 @@ function renderNav(){
    if(n||view.t==='pos')h+=navItem(I.box,'var(--pink)','Purchase orders',n,view.t==='pos','data-v="pos"');}
   {const n=openT().filter(t=>!t.arch&&isInvoice(t)).length;
    if(n||view.t==='invoices')h+=navItem(I.check,'var(--teal)','Invoices',n,view.t==='invoices','data-v="invoices"');}
+  /* Like the orders and the invoices: it appears once there is one, so a
+     workspace that never records a site visit is not carrying a permanent
+     empty entry for it. */
+  if(S.visits.length||view.t==='visits')
+    h+=navItem(I.box,'var(--orange)','Site visits',S.visits.length,view.t==='visits','data-v="visits"');
   h+=navItem(I.check,'var(--green)','Completed','',view.t==='done','data-v="done"');
   if(S.tasks.some(t=>t.arch))h+=navItem(I.box,'var(--label3)','Archived','',view.t==='archive','data-v="archive"');
   h+=navItem(I.list,'var(--yellow)','Everything Board','',view.t==='board','data-v="board"');
@@ -3190,7 +3227,7 @@ function renderNav(){
   rollCounts();
 }
 const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',timelog:'Time',timecal:'Time',pos:'POs',invoices:'Invoices',all:'All open',done:'Completed',
-  projects:'Projects',shipments:'Shipments',archive:'Archived'};
+  projects:'Projects',shipments:'Shipments',archive:'Archived',visits:'Site visits'};
 function renderHead(){
   const d=new Date();
   let name=TITLES[view.t]||'Today',sub='&nbsp;';
@@ -3203,6 +3240,7 @@ function renderHead(){
     sub=e?'Running now':'Hours on the job';}
   if(view.t==='timelog')sub='Every entry';
   if(view.t==='timecal')sub='Hours by month';
+  if(view.t==='visits')sub='Days on site';
   if(view.t==='pos')sub='Everything on order';
   if(view.t==='invoices')sub='Everything invoiced';
   if(view.t==='po'){name='PO '+view.v;sub='Purchase order';}
@@ -4262,7 +4300,12 @@ function renderList(){
   if(view.t==='pos'&&!query){chunk('pos',posHTML());patch(el,out);return;}
   if(view.t==='projects'){chunk('projects',projectsHTML());patch(el,out);return;}
   if(view.t==='makers'){chunk('makers',makersHTML());patch(el,out);return;}
+  // search is global, so a query running here searches the work, not the visits
+  if(view.t==='visits'&&!query){chunk('visits',visitsHTML());patch(el,out);return;}
   if(view.t==='project')chunk('phead',projectHead());
+  /* A job's visits belong on the job, above its work: "what happened when I was
+     last there" is the thing you want before you read the list of what is left. */
+  if(view.t==='project'&&!query)chunk('pvisits',projectVisitsHTML(view.v));
   if(view.t==='mfr')chunk('mhead',makerHead());
   if(view.t==='dest')chunk('dhead',destHead());
   if(view.t==='po')chunk('pohead',poHead());
@@ -5728,6 +5771,7 @@ AC_SRC.cpo=AC_SRC.dpo;
 // somebody picks rather than a coincidence of spelling
 AC_SRC.destname=AC_SRC.ddest;
 AC_SRC.tmproject=AC_SRC.dproj;
+AC_SRC.vproject=AC_SRC.dproj;
 const acEsc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 /* Letters in order but not adjacent — "chwh" finds "Chicago warehouse". Last
    resort, below every kind of real substring match. */
@@ -6676,6 +6720,10 @@ function addOptions(){
      timer, because that is the one that has to happen *now* — the other two are
      about work already done and can wait a tap. */
   const time={k:'time',l:'New time entry',ico:I.clock,col:'var(--green)'};
+  /* A visit is the other thing that happens away from the desk and has to be
+     written down before it is forgotten, and it names the job it belongs to
+     while you are standing in it. */
+  const visit={k:'visit',l:'New site visit'+(p?` to ${p.name}`:''),ico:I.truck,col:'var(--pink)'};
   /* One line for any of them. Last in the list rather than first: somebody who
      knows they want a shipment should not have to go through a parser to say so,
      and this is for the times you would rather just write the sentence. */
@@ -6688,7 +6736,7 @@ function addOptions(){
   const again=lastLike();
   return [...order,
     ...(again?[{k:'again',l:'Another '+likeLabel(again),ico:I.truck,col:'var(--teal)'}]:[]),
-    idea,time,{k:'scan',l:'Scan a shipping label',ico:I.box,col:'var(--gray)'},quick];
+    idea,time,visit,{k:'scan',l:'Scan a shipping label',ico:I.box,col:'var(--gray)'},quick];
 }
 /* Repeat entry. The same maker, the same destination, the same job — four taps
    of picking through datalists that the last thing added already knew.
@@ -6751,6 +6799,7 @@ $('#addmenu').addEventListener('click',e=>{
   if(k==='project')return openProject(null);
   if(k==='idea'){openIdea();return;}
   if(k==='time')return openNewEntry('timer');
+  if(k==='visit')return openVisit(null,view.t==='project'?view.v:null);
   if(k==='quick')return openQuickAdd();
   if(k==='scan')return openScanner('find');
   openComposer(k);
@@ -7221,6 +7270,7 @@ function doMenu(k){
   if(k==='qhelp')openQHelp();
   if(k==='undolist')openUndoList();
   if(k==='brief')openBrief();
+  if(k==='visit')openVisit(null,view.t==='project'?view.v:null);
   if(k==='quick')openQuickAdd();
   if(k==='saveq'){const mine=query&&S.searches.find(s=>s.q===query);openSavedQ(mine?mine.id:null);}
   if(k==='sfx'){sfx=!sfx;saveView();renderData();if(sfx)ping(880);toast('Sound '+(sfx?'on':'off'));}
@@ -7417,13 +7467,21 @@ $('#list').addEventListener('click',e=>{
     }
     if(k==='del'){
       const i=S.times.findIndex(y=>y.id===arg);if(i<0)return;
-      const [x]=S.times.splice(i,1);S.tomb[x.id]=now();save();render();
-      toast('Entry removed',()=>{delete S.tomb[x.id];x.u=now();S.times.splice(i,0,x);save();render();},x.label);
+      const [x]=S.times.splice(i,1);S.tomb[x.id]=now();
+      /* An entry a visit owns is that visit's hours. Taking it away and leaving
+         the visit still claiming them is the two disagreeing, and the next save
+         of the visit would write the entry straight back. */
+      const v=S.visits.find(y=>y.timeId===x.id),vm=v?v.mins:0;
+      if(v){v.mins=0;v.timeId=null;v.u=now();}
+      save();render();
+      toast('Entry removed',()=>{delete S.tomb[x.id];x.u=now();S.times.splice(i,0,x);
+        if(v){v.mins=vm;v.timeId=x.id;v.u=now();}save();render();},x.label);
       return;
     }
   }
   const ac=e.target.closest('[data-a]');
   if(ac){
+    if(ac.dataset.a==='newvisit')return openVisit(null,view.t==='project'?view.v:null);
     if(ac.dataset.a==='new')return openComposer();
     if(ac.dataset.a==='newq')return openComposerWith(query.trim());
     if(ac.dataset.a==='clearq'){$('#q').value='';query='';renderList();return;}
@@ -7434,7 +7492,14 @@ $('#list').addEventListener('click',e=>{
   if(nv&&!selMode){buzz(4);return setView(nv.dataset.v,nv.dataset.val||undefined);}
   /* Last, so the restart, the delete and the project chip all win first. */
   const tr=e.target.closest('.tmrow[data-tmid]');
-  if(tr)return openEntry(tr.dataset.tmid);
+  if(tr){
+    /* One owner, one editor. The visit writes this entry on every save, so an
+       entry editor over the top of it is two ways to set one number, and the
+       visit's copy would win the moment anything touched it. */
+    const x=S.times.find(y=>y.id===tr.dataset.tmid);
+    if(x&&x.visitId&&visitOf(x.visitId))return openVisit(x.visitId);
+    return openEntry(tr.dataset.tmid);
+  }
   const po=e.target.closest('[data-poopen]');
   if(po)return setView('po',po.dataset.poopen);
   if(e.target.closest('[data-po="print"]'))return window.print();
@@ -7444,6 +7509,7 @@ $('#list').addEventListener('click',e=>{
   if(e.target.closest('[data-editdest]'))return openDest(view.v);
   const p=e.target.closest('[data-open]');if(p)return setView('project',p.dataset.open);
   const mk=e.target.closest('[data-mfr]');if(mk)return setView('mfr',mk.dataset.mfr);
+  const vr=e.target.closest('[data-visit]');if(vr)return openVisit(vr.dataset.visit);
   /* Paging keeps the month in view.v for the same reason the week does: a
      re-render, and the pull that provoked it, must land on the month you were
      looking at rather than back on this one. */
@@ -7721,6 +7787,194 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'){e.preventDefault();$('#q').focus();}
 });
 
+/* ============ site visits ============
+   A day, what happened, what to do next, how you got there, and how long you
+   were on site. None of that is a task — filing it as one would keep the title
+   and lose the rest — so it is its own record kind, synced like every other.
+
+   The hours are the part that has to reach the timesheet, so **the visit owns a
+   time entry**. One owner: the visit writes it, and the entry's row in the
+   tracker opens the visit rather than the entry editor, because two editors for
+   one number is how the two come to disagree. */
+const TRAVEL=[['','Not said'],['car','Car'],['subway','Subway'],['train','Train'],['plane','Plane']];
+const travelLabel=k=>(TRAVEL.find(t=>t[0]===k)||TRAVEL[0])[1];
+const TRAVEL_ICON={car:'🚗',subway:'🚇',train:'🚆',plane:'✈️'};
+const visitsFor=pid=>S.visits.filter(v=>v.projectId===pid)
+  .sort((a,b)=>(b.day||'').localeCompare(a.day||''));
+// newest first everywhere, the one order the tracker and the log already use
+const sortedVisits=()=>S.visits.slice().sort((a,b)=>(b.day||'').localeCompare(a.day||''));
+const visitOf=id=>S.visits.find(v=>v.id===id)||null;
+/* How long you were on site, typed however anybody types it: "2.5", "2h 30m",
+   "90m", "two hours". `parseEntryLine` already reads every one of those, so it
+   reads this too rather than growing a second idea of what an hour is. */
+function visitMins(raw){
+  const v=String(raw||'').trim();
+  if(!v)return 0;
+  if(/^\d+(\.\d+)?$/.test(v))return Math.round(parseFloat(v)*60);   // a bare number is hours
+  const e=parseEntryLine(v);
+  return e&&e.ms?Math.round(e.ms/6e4):0;
+}
+/* The entry the visit owns, written through on every save.
+
+   A **new** one is anchored the way `entryFromLine` anchors an amount on a day —
+   ending at this time of day, which is the app's one answer to "an amount, but
+   when". One that **already exists** keeps the start somebody has already got,
+   and only its end moves: the same bargain the duration chips make, and the
+   reason editing a visit a week later does not slide its hours across the day.
+
+   No minutes means no entry, and an entry that existed is taken away with its
+   own tombstone — a visit whose hours were cleared has not logged any. */
+function syncVisitTime(v){
+  const mins=v.mins||0;
+  const old=v.timeId?S.times.find(x=>x.id===v.timeId):null;
+  if(!mins){
+    if(old){S.times=S.times.filter(x=>x.id!==old.id);S.tomb[old.id]=now();}
+    v.timeId=null;return;
+  }
+  const ms=mins*6e4;
+  /* A timesheet row is one line wide. The first line of "what happened" is a
+     paragraph's worth, so it is cut to something that reads as a name rather
+     than as prose — the note itself keeps every word. */
+  const first=(v.what||'').trim().split('\n')[0].trim().replace(/\s+/g,' ');
+  const short=first.length>48?first.slice(0,47).replace(/[\s,;:.–-]+$/,'')+'…':first;
+  const label='Site visit'+(short?' · '+short:'');
+  if(old){
+    old.end=old.start+ms;                 // the start stands, the end moves
+    old.label=label;old.projectId=v.projectId||null;old.u=now();
+    return;
+  }
+  const day=v.day?fromISO(v.day):midnight();
+  const end=+day+Math.round((now()-midnight())/6e4)*6e4;
+  const e={id:uid(),taskId:null,projectId:v.projectId||null,visitId:v.id,
+    label,start:end-ms,end,who:me||'',u:now()};
+  S.times.push(e);v.timeId=e.id;
+}
+let editVisit=null,vTravel='';
+function openVisit(id,pid){
+  const v=id?visitOf(id):null;
+  editVisit=v?v.id:null;
+  vTravel=v?(v.travel||''):'';
+  $('#vtitle').textContent=v?'Site visit':'New site visit';
+  $('#vday').value=v?(v.day||iso(midnight())):iso(midnight());
+  const p=v?P(v.projectId):(pid?P(pid):null);
+  $('#vproject').value=p?p.name:'';
+  $('#vwhat').value=v?(v.what||''):'';
+  $('#vnext').value=v?(v.next||''):'';
+  $('#vmins').value=v&&v.mins?clockHM(v.mins*6e4):'';
+  $('#vdel').style.display=v?'':'none';
+  drawVisitSheet();
+  rememberFocus();$('#scrim').classList.add('on');$('#vsheet').classList.add('on');
+  setTimeout(()=>{(v?$('#vwhat'):$('#vday')).focus();},260);
+}
+function drawVisitSheet(){
+  $('#vtravel').innerHTML=TRAVEL.map(([k,l])=>
+    `<button data-vt="${k}" class="${vTravel===k?'on':''}">${l}</button>`).join('');
+  $('#vdurs').innerHTML=DURS.slice(0,16).map(ms=>
+    `<button data-vd="${ms}" class="${visitMins($('#vmins').value)*6e4===ms?'on':''}">${clockHM(ms)}</button>`).join('');
+  const m=visitMins($('#vmins').value);
+  /* It says the window the hours came out as, exactly as the entry sheet's
+     Amount mode does — the window is real underneath either way, and a hidden
+     one is a secret. An existing visit keeps its own start, so the line shows
+     that rather than a fresh guess. */
+  const v=editVisit?visitOf(editVisit):null;
+  const old=v&&v.timeId?S.times.find(x=>x.id===v.timeId):null;
+  if(!m){$('#vtime').textContent='Leave it empty and no time is logged.';return;}
+  const start=old?old.start:(()=>{const d=$('#vday').value?fromISO($('#vday').value):midnight();
+    return +d+Math.round((now()-midnight())/6e4)*6e4-m*6e4;})();
+  $('#vtime').textContent=`${clockHM(m*6e4)} on site · ${hhmm(start)} – ${hhmm(start+m*6e4)}`
+    +(old?' · the entry it already made':' · logged as a time entry when you save');
+}
+function saveVisit(){
+  const day=$('#vday').value||iso(midnight());
+  const what=$('#vwhat').value.trim(),next=$('#vnext').value.trim();
+  const mins=visitMins($('#vmins').value);
+  // a visit with nothing on it at all is not a visit
+  if(!what&&!next&&!mins&&!vTravel)return toast('Say what happened, or how long you were there.');
+  const pid=findProjectId($('#vproject').value);
+  let v=editVisit?visitOf(editVisit):null;
+  const before=v?JSON.parse(JSON.stringify(v)):null;
+  if(!v){v={id:uid(),created:now()};S.visits.push(v);}
+  Object.assign(v,{projectId:pid||null,day,what,next,travel:vTravel,mins,u:now()});
+  syncVisitTime(v);
+  closeSheets();save();render();
+  if(before)toast('Visit updated',()=>{
+    const cur=visitOf(before.id);if(!cur)return;
+    /* Putting the visit back has to put its entry back too — and an edit that
+       *made* one leaves it orphaned, because the restored visit does not point
+       at it. Nobody else claims a visit's entry, so it goes with the undo. */
+    const made=cur.timeId&&cur.timeId!==before.timeId?cur.timeId:null;
+    Object.assign(cur,before);cur.u=now();syncVisitTime(cur);
+    if(made&&cur.timeId!==made){S.times=S.times.filter(x=>x.id!==made);S.tomb[made]=now();}
+    save();render();},fmtDue(day));
+  else{
+    const id=v.id;
+    toast('Visit added',()=>{
+      const cur=visitOf(id);if(cur){cur.mins=0;syncVisitTime(cur);}
+      S.visits=S.visits.filter(x=>x.id!==id);S.tomb[id]=now();save();render();},fmtDue(day));
+  }
+}
+function delVisit(){
+  const v=editVisit?visitOf(editVisit):null;if(!v)return closeSheets();
+  const snap=JSON.parse(JSON.stringify(v));
+  const ent=v.timeId?S.times.find(x=>x.id===v.timeId):null;
+  const esnap=ent?JSON.parse(JSON.stringify(ent)):null;
+  // the entry goes with it: it was the visit's, and nothing else claims it
+  v.mins=0;syncVisitTime(v);
+  S.visits=S.visits.filter(x=>x.id!==v.id);S.tomb[v.id]=now();
+  closeSheets();save();render();
+  toast('Visit removed',()=>{
+    delete S.tomb[snap.id];snap.u=now();S.visits.push(snap);
+    if(esnap){delete S.tomb[esnap.id];esnap.u=now();S.times.push(esnap);}
+    save();render();},fmtDue(snap.day));
+}
+$('#vclose').addEventListener('click',closeSheets);
+$('#vsave').addEventListener('click',saveVisit);
+$('#vdel').addEventListener('click',delVisit);
+$('#vtravel').addEventListener('click',e=>{
+  const b=e.target.closest('[data-vt]');if(!b)return;
+  vTravel=b.dataset.vt;drawVisitSheet();});
+$('#vdurs').addEventListener('click',e=>{
+  const b=e.target.closest('[data-vd]');if(!b)return;
+  $('#vmins').value=clockHM(+b.dataset.vd);drawVisitSheet();});
+$('#vmins').addEventListener('input',drawVisitSheet);
+$('#vday').addEventListener('input',drawVisitSheet);
+$('#vmins').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveVisit();}});
+/* One row, used by the visits view and by a project's own section, so a visit
+   reads the same in both and one place decides what it says. */
+function visitRowHTML(v,showProject){
+  const p=v.projectId?P(v.projectId):null;
+  const bits=[];
+  if(v.travel)bits.push(`<span class="chip">${TRAVEL_ICON[v.travel]||''} ${esc(travelLabel(v.travel))}</span>`);
+  if(v.mins)bits.push(`<span class="chip">${clockHM(v.mins*6e4)} on site</span>`);
+  if(showProject&&p)bits.push(`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`);
+  if((v.next||'').trim())bits.push('<span class="chip" style="color:var(--orange)">Next steps</span>');
+  return `<div class="rowwrap"><div class="row" data-visit="${v.id}">
+    <div class="rowmain"><div class="tt">${esc(fmtDue(v.day))}${
+      (v.what||'').trim()?` <span style="color:var(--label2);font-weight:400">— ${esc((v.what||'').split('\n')[0].slice(0,90))}</span>`:''}</div>
+      ${bits.length?`<div class="meta">${bits.join('')}</div>`:''}</div></div></div>`;
+}
+/* A job's own visits. Capped at three with a way through to the rest, because
+   this sits above the job's list of work and a year of visits would bury it. */
+function projectVisitsHTML(pid){
+  const mine=visitsFor(pid);
+  if(!mine.length)return `<div class="grp">Site visits<button data-a="newvisit">Add one</button></div>`
+    +`<div class="card"><div class="tmempty">No visits to this job yet.</div></div>`;
+  let h=`<div class="grp">Site visits<span class="c">${mine.length}</span><button data-a="newvisit">Add one</button></div><div class="card">`;
+  for(const v of mine.slice(0,3))h+=visitRowHTML(v,false);
+  h+='</div>';
+  if(mine.length>3)h+=`<div class="cmore"><button data-v="visits">and ${mine.length-3} more</button></div>`;
+  return h;
+}
+function visitsHTML(){
+  if(!S.visits.length)return `<div class="empty"><div class="g">📍</div><h3>No site visits yet</h3>
+    <p>A visit records the day, what happened, what to do next, how you got there and how
+      long you were on site — and the hours go straight onto the timesheet.</p>
+    <div><button class="btn" data-a="newvisit">New site visit</button></div></div>`;
+  let h=`<div class="grp">Site visits<span class="c">${S.visits.length}</span><button data-a="newvisit">New visit</button></div><div class="card">`;
+  for(const v of sortedVisits())h+=visitRowHTML(v,true);
+  return h+'</div>';
+}
+
 /* ============ command palette ============
    Every view, project, maker, destination and menu action reachable by typing
    three letters, plus the tasks themselves. ⌘K used to be a second shortcut for
@@ -7736,6 +7990,7 @@ function paletteRows(q,raw){
     ['pos','Purchase orders',I.box,'var(--pink)'],['invoices','Invoices',I.check,'var(--teal)'],
     ['done','Completed',I.check,'var(--green)'],
     ['projects','Projects',I.box,'var(--indigo)'],['makers','Makers',I.box,'var(--pink)'],
+    ['visits','Site visits',I.truck,'var(--pink)'],
     ['archive','Archived',I.box,'var(--label3)']])
     push(l,'View',ico,col,()=>setView(v));
   for(const p of S.projects)push(p.name,'Project',I.box,p.color,()=>setView('project',p.id));
@@ -7745,7 +8000,7 @@ function paletteRows(q,raw){
   push('Everything Board','View',I.list,'var(--yellow)',()=>openBoard());
   for(const [l,k] of [['New task','new'],['New shipment','newship'],['New time entry','newtime'],
     ['Quick add','quick'],['New project','newproj'],['Scan a shipping label','scan'],
-    ['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
+    ['New site visit','visit'],['Calendar','calendar'],['Sync setup','sync'],['Keyboard shortcuts','keys'],
     ['What search understands','qhelp'],['Morning brief','brief'],
     ['Save a backup file','export'],['Load from a backup file','import'],
     ['Undo last change','undo'],['Recent changes','undolist'],['Archive completed','clearDone'],
