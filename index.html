@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.72.0">
-<meta name="app-build" content="2026-09-23">
+<meta name="app-version" content="1.73.0">
+<meta name="app-build" content="2026-09-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -628,6 +628,22 @@ body[data-dropping] .rowwrap{transition:transform .14s var(--ease)}
 .stamp b{font-weight:600;color:var(--label);min-width:74px}
 .stamp em{font-style:normal;color:var(--label3);margin-left:auto}
 .field textarea{text-align:left;resize:vertical;height:64px;font-size:15px}
+/* A field that holds several thoughts rather than one. The bar goes above the
+   box rather than beside the label, which has its own 90px and no room to
+   share. The box grows with what is in it — a list whose far end is out of
+   sight is the thing a list was meant to avoid — up to a cap, past which it
+   scrolls rather than pushing Save off the bottom of the sheet. */
+.notewrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.notebar{display:flex;gap:5px;flex-wrap:wrap}
+.notebar button{font-size:12px;font-weight:600;padding:4px 8px;border-radius:7px;
+  background:var(--fill2);color:var(--label2);line-height:1.25;
+  transition:transform .12s var(--ease)}
+.notebar button:active{transform:scale(.92)}
+/* flex:none, or `.field textarea`'s flex:1 lets the column decide the height and
+   the one written on by noteGrow is ignored — the box stays at 64px however
+   much is in it. */
+.notewrap textarea{flex:none;width:100%;height:64px;min-height:64px;max-height:44vh;
+  resize:none;overflow-y:auto;line-height:1.5;white-space:pre-wrap;tab-size:2}
 .field input.mono{font-family:var(--mono);font-size:13px}
 /* A project URL, an anon key or a VAPID key is 40-90 characters of monospace. In
    a right-aligned row the end of it runs off the edge with nothing to say so,
@@ -1173,8 +1189,20 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="vmins">Hours</label><input id="vmins" inputmode="decimal" placeholder="e.g. 2.5 or 2h 30m" autocomplete="off"></div>
   </div>
   <div class="blurb" id="vtime">Leave it empty and no time is logged.</div>
-  <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="vwhat">What happened</label><textarea id="vwhat" placeholder="Walked the corridors with Dana. Two sconces short on floor 6."></textarea></div></div>
-  <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="vnext">Next steps</label><textarea id="vnext" placeholder="Chase the missing sconces. Send the survey by Friday."></textarea></div></div>
+  <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="vwhat">What happened</label>
+    <div class="notewrap"><div class="notebar">
+      <button type="button" data-nb="vwhat:bullet" aria-label="Bullet list">•&nbsp;Bullets</button>
+      <button type="button" data-nb="vwhat:number" aria-label="Numbered list">1.&nbsp;Numbers</button>
+      <button type="button" data-nb="vwhat:out" aria-label="Outdent">⇤</button>
+      <button type="button" data-nb="vwhat:in" aria-label="Indent">⇥</button></div>
+    <textarea id="vwhat" placeholder="Walked the corridors with Dana.&#10;• Two sconces short on floor 6&#10;• Bay 4 still blocked"></textarea></div></div></div>
+  <div class="fgroup"><div class="field" style="align-items:flex-start"><label style="padding-top:2px" for="vnext">Next steps</label>
+    <div class="notewrap"><div class="notebar">
+      <button type="button" data-nb="vnext:bullet" aria-label="Bullet list">•&nbsp;Bullets</button>
+      <button type="button" data-nb="vnext:number" aria-label="Numbered list">1.&nbsp;Numbers</button>
+      <button type="button" data-nb="vnext:out" aria-label="Outdent">⇤</button>
+      <button type="button" data-nb="vnext:in" aria-label="Indent">⇥</button></div>
+    <textarea id="vnext" placeholder="Chase the missing sconces.&#10;Send the survey by Friday."></textarea></div></div></div>
   <div style="padding:0 14px 16px;display:flex;gap:10px">
     <button class="btn sec" id="vdel" style="flex:1;margin:0;text-align:center">Delete</button>
     <button class="btn" id="vsave" style="flex:1;margin:0;text-align:center">Save</button></div>
@@ -7787,6 +7815,183 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'){e.preventDefault();$('#q').focus();}
 });
 
+/* ============ writing more than a line ============
+   "What happened" and "Next steps" are the two fields in this app that hold
+   several thoughts rather than one. A textarea gives you returns and nothing
+   else: the first bullet is typed by hand, and so is every one after it — which
+   is the friction that stops the second thought being written down at all.
+
+   **It stays plain text**, and that is the decision the rest rests on. Every
+   record here is text; it is what export writes, what sync moves and what a
+   dozen rows already render. A field that quietly became HTML would be a new
+   escaping surface on every one of them, for a list. So a list is `- ` and
+   `1. `, which is what anybody types anyway. What is added is that the app
+   keeps going once you have started one.
+
+   **Not on the task and project Notes**, which `noteOffers` parses. A marker
+   changes what opens a line and the leading-date rule reads exactly that, so
+   putting bullets there is a question about the parser rather than about the
+   box. These two fields have nothing reading them.
+
+   **Every edit goes through `execCommand('insertText')`**, not through `.value`.
+   It is deprecated and it is also the only thing that leaves the browser's own
+   undo stack intact — an assignment to `.value` empties it, and a text box
+   where ⌘Z does nothing is a worse field than one with no bullets. */
+/* `-` and `*` are read because that is what gets typed and pasted, but the
+   button writes a real `•`. It costs nothing — one character of plain text
+   either way — and a bullet that looks like a hyphen is not what anybody means
+   by the word. Nothing here renders markdown, so there is no dialect to keep
+   faith with. */
+const LI_RE=/^(\s*)([-*•]|\d+[.)])(\s+)(.*)$/;
+const BULLET='• ';
+const INDENT='  ';
+const isNum=mk=>/^\d/.test(mk);
+/* The first line worth reading, with any marker off it — what a row and a
+   timesheet label show of a note that starts with a bullet. */
+function noteFirstLine(s){
+  for(const L of String(s||'').split('\n')){
+    const t=L.trim();if(!t)continue;
+    const m=LI_RE.exec(L);
+    return (m?m[4]:t).trim();
+  }
+  return '';
+}
+// how many items a note lists, or 0 for prose
+const noteItems=s=>String(s||'').split('\n').filter(L=>LI_RE.test(L)).length;
+function noteGrow(el){if(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}}
+/* Replace a run of the field, keeping native undo, and put the caret where the
+   caller says — every one of them knows better than the browser does. */
+function noteWrite(el,a,b,text,selA,selB){
+  el.focus();el.setSelectionRange(a,b);
+  let done=false;
+  try{done=document.execCommand('insertText',false,text);}catch{}
+  // no execCommand is the old browser's problem, not a reason to do nothing
+  if(!done||el.value.slice(a,a+text.length)!==text)
+    el.value=el.value.slice(0,a)+text+el.value.slice(b);
+  el.setSelectionRange(selA,selB===undefined?selA:selB);
+  noteGrow(el);
+}
+/* The whole lines the selection touches, since every operation here is about
+   lines. A selection ending exactly on a line start has not reached that line,
+   so it is not one of them. */
+function noteLines(el){
+  const v=el.value,s=el.selectionStart;
+  let e=el.selectionEnd;
+  if(e>s&&v[e-1]==='\n')e--;
+  const a=v.lastIndexOf('\n',s-1)+1;
+  let b=v.indexOf('\n',e);if(b<0)b=v.length;
+  return {a,b,lines:v.slice(a,b).split('\n'),sel:el.selectionEnd>el.selectionStart};
+}
+const noteLineAt=(v,p)=>{const a=v.lastIndexOf('\n',p-1)+1;
+  let b=v.indexOf('\n',p);if(b<0)b=v.length;return [a,b];};
+/* A numbered list whose numbers are wrong is worse than no numbering, so the
+   run the caret sits in is put back in order after anything that adds or takes
+   away a line. Only the contiguous run at that one indent: a paragraph under it
+   is somebody's prose, and this is the one place the app rewrites what has been
+   typed — it may change digits in a numbered list and nothing else. */
+function renumberRun(el){
+  const v=el.value,s=el.selectionStart;
+  let [a,b]=noteLineAt(v,s);
+  const m=LI_RE.exec(v.slice(a,b));
+  if(!m||!isNum(m[2]))return;
+  const ind=m[1],same=L=>{const q=LI_RE.exec(L);return q&&q[1]===ind&&isNum(q[2])?q:null;};
+  while(a>0){const [pa,pb]=noteLineAt(v,a-1);if(!same(v.slice(pa,pb)))break;a=pa;}
+  let end=b;
+  while(end<v.length){const [na,nb]=noteLineAt(v,end+1);if(!same(v.slice(na,nb)))break;end=nb;}
+  const old=v.slice(a,end).split('\n');
+  let n=1;
+  const out=old.map(L=>{const q=same(L);return q?q[1]+(n++)+q[2].slice(-1)+q[3]+q[4]:L;});
+  if(out.join('\n')===old.join('\n'))return;
+  // keep the caret on the character it was on, however the markers resized
+  let li=0,col=0,acc=a;
+  for(let i=0;i<old.length;i++){
+    if(s<=acc+old[i].length){li=i;col=s-acc;break;}
+    acc+=old[i].length+1;
+  }
+  let pos=a;for(let i=0;i<li;i++)pos+=out[i].length+1;
+  pos+=Math.max(0,Math.min(out[li].length,col+out[li].length-old[li].length));
+  noteWrite(el,a,end,out.join('\n'),pos);
+}
+const nextMarker=mk=>isNum(mk)?(parseInt(mk,10)+1)+mk.slice(-1):mk;
+/* Plan first, then run — the same shape `quickPlan` and `runCardPlan` have, and
+   the reason the key handler can decide whether to take the Enter before
+   anything has been written. Null means this is an ordinary return. */
+function noteEnterPlan(el){
+  const v=el.value,s=el.selectionStart;
+  if(s!==el.selectionEnd)return null;
+  const [a,b]=noteLineAt(v,s);
+  const m=LI_RE.exec(v.slice(a,b));
+  if(!m)return null;
+  // an empty item is somebody saying the list is finished: the marker goes and
+  // the line is left blank, rather than a third bullet with nothing on it
+  if(!m[4].trim())return ()=>{noteWrite(el,a,b,'',a);};
+  const head='\n'+m[1]+nextMarker(m[2])+m[3];
+  return ()=>{noteWrite(el,s,s,head,s+head.length);renumberRun(el);};
+}
+/* One button both ways. A toolbar that can only add is one people press twice
+   and then reach for undo. */
+function noteList(el,kind){
+  const {a,b,lines,sel}=noteLines(el);
+  const mk=n=>kind==='number'?n+'. ':BULLET;
+  if(!lines.some(L=>L.trim())){
+    const t=mk(1);return noteWrite(el,a,b,t,a+t.length);
+  }
+  const off=lines.every(L=>{const m=LI_RE.exec(L);
+    return !L.trim()||(m&&isNum(m[2])===(kind==='number'));});
+  let n=0;
+  const out=lines.map(L=>{
+    if(!L.trim())return L;
+    const m=LI_RE.exec(L);
+    if(off)return m?m[1]+m[4]:L;
+    if(m)return m[1]+mk(++n)+m[4];
+    const ind=/^\s*/.exec(L)[0];
+    return ind+mk(++n)+L.slice(ind.length);
+  });
+  const text=out.join('\n');
+  noteWrite(el,a,b,text,sel?a:a+text.length,sel?a+text.length:undefined);
+}
+function noteIndent(el,dir){
+  const {a,b,lines,sel}=noteLines(el);
+  const out=lines.map(L=>!L.trim()?L
+    :dir>0?INDENT+L
+    :L.startsWith(INDENT)?L.slice(INDENT.length):L.replace(/^\s+/,''));
+  const text=out.join('\n');
+  if(text===lines.join('\n'))return;
+  noteWrite(el,a,b,text,sel?a:a+text.length,sel?a+text.length:undefined);
+  renumberRun(el);
+}
+const inList=el=>{const [a,b]=noteLineAt(el.value,el.selectionStart);
+  return LI_RE.test(el.value.slice(a,b));};
+function attachNotes(el){
+  el.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey&&!e.altKey){
+      const act=noteEnterPlan(el);
+      if(act){e.preventDefault();act();}
+      return;
+    }
+    /* Tab indents a list item, or whatever has been selected. Anywhere else it
+       is left alone: a textarea that swallows Tab everywhere is a keyboard
+       trap, and the sheet's focus ring is the only way out of this box. */
+    if(e.key==='Tab'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){
+      if(el.selectionStart===el.selectionEnd&&!inList(el))return;
+      e.preventDefault();noteIndent(el,e.shiftKey?-1:1);
+    }
+  });
+  el.addEventListener('input',()=>noteGrow(el));
+}
+['#vwhat','#vnext'].forEach(s=>attachNotes($(s)));
+/* Focus never leaves the box, the same bargain the suggestion list makes: a
+   blur here closes the phone's keyboard and reopens it a tap later, and the
+   caret we are about to write at is the one the blur would have thrown away. */
+$('#vsheet').addEventListener('pointerdown',e=>{
+  if(e.target.closest('.notebar'))e.preventDefault();});
+$('#vsheet').addEventListener('click',e=>{
+  const b=e.target.closest('[data-nb]');if(!b)return;
+  const [id,op]=b.dataset.nb.split(':');const el=$('#'+id);
+  if(op==='in'||op==='out')noteIndent(el,op==='in'?1:-1);
+  else noteList(el,op);
+});
+
 /* ============ site visits ============
    A day, what happened, what to do next, how you got there, and how long you
    were on site. None of that is a task — filing it as one would keep the title
@@ -7835,7 +8040,7 @@ function syncVisitTime(v){
   /* A timesheet row is one line wide. The first line of "what happened" is a
      paragraph's worth, so it is cut to something that reads as a name rather
      than as prose — the note itself keeps every word. */
-  const first=(v.what||'').trim().split('\n')[0].trim().replace(/\s+/g,' ');
+  const first=noteFirstLine(v.what).replace(/\s+/g,' ');
   const short=first.length>48?first.slice(0,47).replace(/[\s,;:.–-]+$/,'')+'…':first;
   const label='Site visit'+(short?' · '+short:'');
   if(old){
@@ -7860,6 +8065,9 @@ function openVisit(id,pid){
   $('#vproject').value=p?p.name:'';
   $('#vwhat').value=v?(v.what||''):'';
   $('#vnext').value=v?(v.next||''):'';
+  // opened, not typed, so nothing has fired `input` — the box still has to fit
+  // what is in it, or a visit with eight bullets opens showing three
+  noteGrow($('#vwhat'));noteGrow($('#vnext'));
   $('#vmins').value=v&&v.mins?clockHM(v.mins*6e4):'';
   $('#vdel').style.display=v?'':'none';
   drawVisitSheet();
@@ -7947,10 +8155,14 @@ function visitRowHTML(v,showProject){
   if(v.travel)bits.push(`<span class="chip">${TRAVEL_ICON[v.travel]||''} ${esc(travelLabel(v.travel))}</span>`);
   if(v.mins)bits.push(`<span class="chip">${clockHM(v.mins*6e4)} on site</span>`);
   if(showProject&&p)bits.push(`<button class="chip go" data-v="project" data-val="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`);
-  if((v.next||'').trim())bits.push('<span class="chip" style="color:var(--orange)">Next steps</span>');
+  // how many, once they are a list: "3 next steps" is the thing worth knowing
+  // from the row, and a paragraph has no number to give
+  {const n=noteItems(v.next);
+   if((v.next||'').trim())bits.push(`<span class="chip" style="color:var(--orange)">${
+     n>1?n+' next steps':'Next steps'}</span>`);}
   return `<div class="rowwrap"><div class="row" data-visit="${v.id}">
     <div class="rowmain"><div class="tt">${esc(fmtDue(v.day))}${
-      (v.what||'').trim()?` <span style="color:var(--label2);font-weight:400">— ${esc((v.what||'').split('\n')[0].slice(0,90))}</span>`:''}</div>
+      noteFirstLine(v.what)?` <span style="color:var(--label2);font-weight:400">— ${esc(noteFirstLine(v.what).slice(0,90))}</span>`:''}</div>
       ${bits.length?`<div class="meta">${bits.join('')}</div>`:''}</div></div></div>`;
 }
 /* A job's own visits. Capped at three with a way through to the rest, because

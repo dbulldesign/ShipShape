@@ -670,6 +670,59 @@ distinction anybody already makes when they type "year end review 2h" instead of
   branch of `renderList` puts the caret back afterwards, the way `renderNav` does
   for `#npsort`.
 
+## Writing more than a line
+
+"What happened" and "Next steps" are the two fields in this app that hold
+several thoughts rather than one. A textarea gives you returns and nothing else:
+the first bullet is typed by hand and so is every one after it, which is the
+friction that stops the second thought being written down at all.
+
+**It stays plain text**, and that is the decision the rest rests on. Every record
+here is text; it is what export writes, what sync moves and what a dozen rows
+already render. A field that quietly became HTML would be a new escaping surface
+on every one of them, for a list. So a list is `• `, `- ` or `1. ` — what is
+added is that the app keeps going once you have started one.
+
+- **`-` and `*` are read, and the button writes `•`.** People type and paste
+  hyphens, so those are honoured and a hyphen list stays a hyphen list; but a
+  bullet that looks like a hyphen is not what anybody means by the word, and it
+  costs the same one character. Nothing here renders markdown, so there is no
+  dialect to keep faith with.
+- **Not on the task and project Notes**, which `noteOffers` parses. A marker
+  changes what opens a line and the leading-date rule reads exactly that, so
+  bullets there are a question about the parser rather than about the box. These
+  two fields have nothing reading them.
+- **Every edit goes through `execCommand('insertText')`**, never `.value`. It is
+  deprecated and it is also the only thing that leaves the browser's own undo
+  stack intact — an assignment empties it, and a text box where ⌘Z does nothing
+  is a worse field than one with no bullets. `noteWrite` is the one place that
+  writes, so that is decided once.
+- **Plan then run.** `noteEnterPlan` returns a closure or null, so the key
+  handler knows whether to take the Enter before anything has been written —
+  the same shape `quickPlan` and `runCardPlan` have.
+- **An empty item ends the list.** That is somebody saying they are finished,
+  not asking for a third bullet with nothing on it.
+- **The numbers are put back in order** after anything that adds or removes a
+  line — `renumberRun`, over the contiguous run at that one indent and no
+  further. A numbered list whose numbers are wrong is worse than no numbering,
+  and this is the one place besides `readTitleNotation` that rewrites what has
+  been typed: it may change digits in a numbered list and nothing else.
+- **Tab indents a list item, and nothing else.** A textarea that swallows Tab
+  everywhere is a keyboard trap, and the sheet's focus ring is the only way out
+  of the box.
+- **One button both ways.** A toolbar that can only add is one people press
+  twice and then reach for undo. `pointerdown` on the bar is prevented, the same
+  bargain the suggestion list makes: a blur closes the phone's keyboard and
+  throws away the caret the button was about to write at.
+- **The box grows with what is in it**, capped at 44vh, and `openVisit` grows it
+  by hand because opening fires no `input` — a visit with eight bullets opened
+  showing three. `.notewrap textarea` needs `flex:none`, or `.field textarea`'s
+  `flex:1` lets the column decide the height and the one `noteGrow` writes is
+  ignored.
+- `noteFirstLine` takes the marker off for the places a note is shown as one
+  line — the row and the timesheet label — and `noteItems` counts them, so a row
+  can say `3 next steps`.
+
 ## A day on site, and the hours it owns
 
 A site visit is a day, what happened, what to do next, how you got there and how
