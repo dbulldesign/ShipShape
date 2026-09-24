@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.73.0">
+<meta name="app-version" content="1.73.1">
 <meta name="app-build" content="2026-09-24">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -633,6 +633,14 @@ body[data-dropping] .rowwrap{transition:transform .14s var(--ease)}
    share. The box grows with what is in it — a list whose far end is out of
    sight is the thing a list was meant to avoid — up to a cap, past which it
    scrolls rather than pushing Save off the bottom of the sheet. */
+/* The visit sheet pads each block itself — `.durs` and `.sethead` carry their
+   own, `.fgroup` has a margin — rather than wrapping the lot in a `.pad` the way
+   the composer and the quick add do. So the one bare `.seg` in it has to say
+   where its own left edge is, or it sits flush against the sheet while the
+   duration chips and the field group directly beneath it sit at 14. The top
+   margin is `.durs`' own 10px, for the same reason: the gap under a `.sethead`
+   belongs to what is under it. */
+#vtravel{margin:10px 14px}
 .notewrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .notebar{display:flex;gap:5px;flex-wrap:wrap}
 .notebar button{font-size:12px;font-weight:600;padding:4px 8px;border-radius:7px;
