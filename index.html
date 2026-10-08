@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.75.1">
+<meta name="app-version" content="1.76.0">
 <meta name="app-build" content="2026-10-08">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -1115,12 +1115,13 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     they are added, read exactly as the quick add reads them. In Shortcuts:
     <b>Dictate Text</b>, then <b>Open URL</b> with this and the dictated text joined on
     the end.<br><br>
-    Put the kind in the Shortcut rather than saying it out loud, and one Shortcut
-    does one thing: <b>…#add=time </b> then your words logs an hour
-    (<i>matrix meeting 30min</i>), <b>…#add=new shipment </b> books a crate
-    (<i>40 pendants @Lumina friday</i>). With no kind word in front it reads the
-    sentence the way the composer does — a maker or a PO still means a shipment,
-    anything else is a task.</div>
+    <b>The link on its own</b> opens the quick add sheet with the keyboard up, so
+    you type into the field that previews what it will make. Put a kind on the end
+    and the sheet opens with that already picked — <b>…#add=time </b>,
+    <b>…#add=new shipment </b>. Add the words too and it is written straight in
+    without the sheet, which is what a dictated Shortcut wants.<br><br>
+    With no kind word it reads the sentence the way the composer does — a maker or
+    a PO still means a shipment, anything else is a task.</div>
   <div style="padding:10px 14px 0"><div class="field stack"><label for="setaddurl">The link</label>
     <input id="setaddurl" readonly spellcheck="false"></div></div>
   <div style="padding:8px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
@@ -8706,8 +8707,10 @@ function openIdea(){
    the line being corrected, not to the sheet for ever. */
 let qaKind=null;
 const QA_LABEL={task:'Task',shipment:'Shipment',time:'Time',idea:'Idea',project:'Project'};
-function openQuickAdd(){
-  qaKind=null;$('#qatext').value='';
+/* `kind` is the same override a tap on the kind row sets, so a link that names
+   one and the person who picks one by hand go through exactly the same flag. */
+function openQuickAdd(kind){
+  qaKind=QA_LABEL[kind]?kind:null;$('#qatext').value='';
   drawQuickAdd();
   rememberFocus();$('#scrim').classList.add('on');$('#qasheet').classList.add('on');
   setTimeout(()=>$('#qatext').focus(),260);
@@ -8776,10 +8779,30 @@ const softDecode=s=>{
   try{return decodeURIComponent(s);}catch(e){}
   return s.replace(/(?:%[0-9a-f]{2})+/gi,r=>{try{return decodeURIComponent(r);}catch(e){return r;}});
 };
+/* Three things a link can mean, and the difference is how much was typed into it.
+
+   Nothing at all, or a kind word and nothing else, **opens the quick add sheet**
+   rather than adding — with the kind already picked for the second. That is the
+   better end of the bargain for somebody typing: the sheet has the live preview,
+   so the chips say it understood the PO and the maker before anything is
+   written, where a link that fires straight off says so only afterwards.
+   `…#add=time ` used to answer "Say what to add", which is a dead end on a
+   Home Screen icon whose whole job is to put you in front of that field.
+
+   A kind word **plus a body** is somebody who has already said what they want,
+   so it is added and the sheet never appears. */
 function addFromHash(raw){
   const text0=softDecode(String(raw||'').replace(/\+/g,' '));
-  let text=text0.trim().slice(0,ADD_MAX);
+  const text=text0.trim().slice(0,ADD_MAX);
+  /* `qaKind` is a correction somebody made **on the sheet**, and `quickPlan`
+     reads it — so a link that arrives while one is still set would be read as
+     that kind. Open `…#add=time `, dismiss it, then open `…#add=call Dana
+     friday` and the call became an hour logged. A link is not that sheet, so it
+     starts from nothing and says what it is itself. */
+  qaKind=null;
   if(!text)return openQuickAdd();      // no words: the sheet, with the keyboard up
+  const p=quickPlan(text);
+  if(!p.body)return openQuickAdd(p.kind);
   runQuickAdd(text);
 }
 function readAddHash(){

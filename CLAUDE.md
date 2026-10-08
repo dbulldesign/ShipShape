@@ -464,17 +464,35 @@ its own idea of a date, a PO or the length of an hour.
   covered by the same thing.
 - It answers **`hashchange` as well as the first load**: on a phone the app is
   usually already open behind the Shortcut and nothing reloads in that case.
-- **No words opens the quick add sheet**, which is the useful thing for a
-  Shortcut that only wants to put you in front of the keyboard.
+- **Three things a link can mean**, and the difference is how much was typed
+  into it. Nothing at all, or **a kind word and nothing else**, opens the quick
+  add sheet — with the kind already picked for the second. That is the better
+  end of the bargain for somebody typing: the sheet has the live preview, so
+  the chips say it understood the PO and the maker *before* anything is
+  written. A kind word **plus a body** is already an answer, so it is written
+  in and the sheet never appears. `…#add=time ` used to answer "Say what to
+  add", a dead end on a Home Screen icon whose job is that field.
+- **`qaKind` is reset by every link.** It is a correction made *on the sheet*
+  and `quickPlan` reads it, so a link arriving while one was still set was read
+  as that kind — open `…#add=time `, dismiss it, then add a plain sentence and
+  the sentence became an hour logged. A link is not that sheet.
 - Cut to `ADD_MAX`, and whatever arrives is text: it goes through the same
   `esc()` every other title does, so markup stays words.
 - The link is **built from `location`** rather than written down, so it is right
   on the deployed copy, on a local one, and on wherever this gets moved to.
 
-**The kind word belongs in the Shortcut, not in the dictation.** Without one the
+**The kind word belongs in the Shortcut, not in the typing.** Without one the
 quick add infers from the sentence — a maker or a PO means a shipment, anything
 else is a task — so "matrix meeting 30min" is a *task*, not an hour. A Shortcut
-that prefixes `time ` lets somebody just say the words. One Shortcut, one kind.
+that prefixes `time ` lets somebody just write the words. One Shortcut, one kind.
+
+**Typed and dictated want different links.** `#@>` cannot be spoken, so a
+dictated Shortcut is limited to what the sentence alone carries — a PO, a date,
+and "to the ⟨job⟩ project", which is the spoken form of `#Name` (plain "for
+⟨job⟩" does not file it, the words land in the title). Typed, every marker is in
+play and they survive the URL raw or encoded, since everything past the first
+`#` is the fragment. So the typed answer is the bare link into the sheet and the
+dictated one is the link with the words on the end.
 
 **What is deliberately not here**: a silent route that writes to Supabase without
 opening the app. It is possible — `shipshape_push_items` is a security-definer
