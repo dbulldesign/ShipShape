@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.73.1">
-<meta name="app-build" content="2026-09-24">
+<meta name="app-version" content="1.74.0">
+<meta name="app-build" content="2026-10-08">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -248,6 +248,9 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   transition:transform .18s var(--ease)}
 .stagebar:active{transform:scale(.94)}
 .stagebar i{width:9px;height:4px;border-radius:2px;flex:none}
+/* Which way it is going, in one character. A word would be a third chip on a row
+   that already carries the job, the maker and the date. */
+.stagebar .dir{font-size:11px;font-weight:700;margin-right:3px;color:var(--label3);line-height:1}
 .stagebar span{font-size:12px;font-weight:600;margin-left:4px}
 #scanner{position:fixed;inset:0;z-index:120;background:#000;display:none;flex-direction:column}
 #scanner.on{display:flex}
@@ -661,6 +664,10 @@ body[data-dropping] .rowwrap{transition:transform .14s var(--ease)}
 .field.stack label{display:block;width:auto;margin-bottom:5px}
 .field.stack input{width:100%;text-align:left;background:var(--fill2);border-radius:8px;padding:8px 10px;font-size:12.5px}
 .fgroup{border-radius:12px;overflow:hidden;margin:12px 14px}
+/* Task / Coming in / Going out is three buttons where it used to be two, and
+   "Coming in" wrapped onto a second line inside its own pill. They share the
+   width evenly and keep their words on one line. */
+#ctype button,#dtype button{flex:1;text-align:center;white-space:nowrap;padding-left:8px;padding-right:8px}
 .stages{display:flex;gap:6px;padding:12px 14px 2px}
 .stg{flex:1;padding:8px 2px;border-radius:9px;background:var(--fill2);font-size:11.5px;font-weight:700;text-align:center;color:var(--label2);
   transition:transform .18s var(--ease),background .2s,color .2s;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -973,7 +980,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   </div>
 <div class="sheet" role="dialog" aria-modal="true" id="detail"><div class="grab"></div>
   <div class="sheettitle"><span id="dkind">Task</span><button class="x" id="dclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
-  <div style="padding:12px 14px 0"><div class="seg" id="dtype"><button data-t="task">Task</button><button data-t="shipment">Shipment</button></div></div>
+  <div style="padding:12px 14px 0"><div class="seg" id="dtype"><button data-t="task">Task</button><button data-t="in">Coming in</button><button data-t="out">Going out</button></div></div>
   <div class="stages" id="dstages"></div>
   <div class="fgroup"><div class="cols">
     <div class="field wide"><label for="dtitle">Title</label><input id="dtitle" placeholder="What needs doing"></div>
@@ -994,6 +1001,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
     <div class="field"><label for="dcost">Cost</label><input id="dcost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="None"></div>
     <div class="field"><label for="deta">Expected</label><input id="deta" type="date"></div>
     <div class="field"><label for="dpo">PO number</label><input id="dpo" placeholder="None" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>
+    <div class="field" id="datrow"><label for="dat">Where it is</label><input id="dat" placeholder="Shop, warehouse, site…" autocomplete="off"></div>
   </div>
     <div class="trackhead"><span>Tracking</span><span id="dgot" class="got"></span></div>
     <div id="dtracks"></div>
@@ -1162,7 +1170,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 <div id="scrim"></div>
 
 <div class="sheet" role="dialog" aria-modal="true" id="composer"><div class="grab"></div><div class="pad">
-  <div class="seg" id="ctype"><button data-t="task" class="on">Task</button><button data-t="shipment">Shipment</button></div>
+  <div class="seg" id="ctype"><button data-t="task" class="on">Task</button><button data-t="in">Coming in</button><button data-t="out">Going out</button></div>
   <div class="preview" id="prev"></div>
   <textarea id="ci" rows="2" placeholder="Approve shop drawings #Harbor Lofts fri"></textarea>
   <div class="sugg" id="sugg"></div>
@@ -1340,6 +1348,21 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
      often than anyone would guess — a re-order, a second phase, a replacement
      for a damaged consignment — and retyping fifteen lines by hand is how
      numbers end up wrong. -->
+<!-- Asked the moment a box is marked Here, because that is the one moment
+     somebody is holding it and knows where it went. The places already used are
+     offered as chips, so the common answer is one tap and no typing. -->
+<div class="sheet" role="dialog" aria-modal="true" id="atsheet"><div class="grab"></div>
+  <div class="sheettitle">Where did you put it?<button class="x" id="atclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
+  <div class="blurb" id="atnote"></div>
+  <div class="durs" id="atrecent"></div>
+  <div class="fgroup">
+    <div class="field"><label for="atwhere">Where</label><input id="atwhere" placeholder="Shop, warehouse, site…" autocomplete="off" enterkeyhint="done"></div>
+  </div>
+  <div style="padding:0 14px 16px;display:flex;gap:10px">
+    <button class="btn sec" id="atskip" style="flex:1;margin:0;text-align:center">Not now</button>
+    <button class="btn" id="atsave" style="flex:1;margin:0;text-align:center">Save</button></div>
+</div>
+
 <div class="sheet" role="dialog" aria-modal="true" id="dupsheet"><div class="grab"></div>
   <div class="sheettitle">Duplicate order<button class="x" id="dupclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="blurb" id="dupnote"></div>
@@ -1561,7 +1584,36 @@ const local={
   }
 };
 
-const STAGES=['Quote','Ordered','Making','Shipped','Delivered'];
+/* ============ where a crate has got to ============
+   Five stages — Quote, Ordered, Making, Shipped, Delivered — was a production
+   schedule, and the two questions anybody actually asks a shipment are "has it
+   come in" and "where is it". Three answers both: **Ordered · On its way ·
+   Here**, which is one tap from either end rather than four.
+
+   A shipment **going out** runs the same three indices under different words,
+   because "Here" is the wrong word for something you have sent and "Ordered" is
+   the wrong word for something you are sending. One set of states, two
+   vocabularies — `stageNames` is the only thing that knows which. */
+const STAGES=['Ordered','On its way','Here'];
+const STAGES_OUT=['To send','On its way','Delivered'];
+const dirOf=t=>t&&t.dir==='out'?'out':'in';
+const stageNames=t=>dirOf(t)==='out'?STAGES_OUT:STAGES;
+/* Clamped on the way out as well as on the way in. Another device still on the
+   old build can push a 4 into a record this one has already collapsed, and
+   `STAGES[4]` is undefined — a blank chip and a thrown render. */
+const stageOf=t=>Math.max(0,Math.min(STAGES.length-1,t.stage|0));
+const stageName=t=>stageNames(t)[stageOf(t)];
+/* Old → new. Quote and Ordered are both "ordered and not here"; Making and
+   Shipped are both "not here yet and no longer mine to make". */
+const STAGE_MAP=[0,0,1,1,2];
+/* Named, because `t.stage<4` read as arithmetic and meant "has not arrived".
+   Every one of those was a number that had to move when the stages did. */
+const ST_ORDERED=0,ST_AWAY=1,ST_HERE=2;
+/* A saved search written before this said `stage:shipped`, and a filter that
+   quietly matches nothing is worse than one that errors. The old words keep
+   working and mean what they always meant. */
+const STAGE_ALIAS={quote:'ordered',ordered:'ordered',making:'on its way',
+  shipped:'on its way',transit:'on its way',delivered:'here',arrived:'here'};
 const SORTS=['smart','due','added','title','stage'];
 const SORT_LABEL={smart:'Smart',due:'Due date',added:'Recently added',title:'Title',stage:'Stage'};
 /* Projects get their own sort, because none of the task sorts mean anything for
@@ -1573,7 +1625,12 @@ const PSORT_LABEL={order:'As listed',name:'Name',due:'Target date',open:'Most op
 const GROUPS=['auto','project','maker','stage','wait','none'];
 const GROUP_LABEL={auto:'By date',project:'By project',maker:'By maker',stage:'By stage',
   wait:'By whose move',none:'No grouping'};
-const SC=['var(--gray)','var(--blue)','var(--orange)','var(--purple)','var(--green)'];
+const SC=['var(--blue)','var(--purple)','var(--green)'];
+/* Which way the crate is going. Everything this app held was implicitly coming
+   in — a maker makes it and it lands here — so "what have we sent out" had no
+   answer at all. `in` is the default and what every existing shipment becomes,
+   because that is what they all were. */
+const DIR_LABEL={in:'Coming in',out:'Going out'};
 /* Work that comes round again — quarterly lead-time checks, monthly invoicing.
    Completing one of these leaves the next one behind it. */
 /* The daily reminder covers what is due today. A shipment usually needs chasing
@@ -1712,7 +1769,7 @@ function fmtAgo(ts){
   return `${Math.round(s/86400)} d ago`;
 }
 let view={t:'today'},query='',selDay=null,editing=null,editProj=null,
-    cflag=false,ctype='task',ctypeManual=false,cpoManual=false,undoFn=null,undoStack=[],saveT=null,pcolor=PAL[0],ctx=null,editMaker=null,
+    cflag=false,ctype='task',cdir='in',ctypeManual=false,cpoManual=false,undoFn=null,undoStack=[],saveT=null,pcolor=PAL[0],ctx=null,editMaker=null,
     syncStatus='off',pulling=false,pushT=null,pollT=null,
     sw=null;   // the row a finger is currently dragging, if any
 
@@ -1760,6 +1817,37 @@ async function loadAll(){
     }}catch(e){}}
   $('#app').classList.toggle('compact',compact);
 }
+/* Five stages down to three, on the records themselves.
+
+   `t.sv` is the flag, and it has to be one: a stored `1` is "Ordered" under the
+   old numbering and "On its way" under the new, and nothing about the number
+   tells the two apart. Without the flag this would re-map every record on every
+   load and walk every shipment back to Ordered.
+
+   The stamps move with it, and **which stamp survives a merge matters**. Two old
+   stages fold into one, so the new stage takes the stamp of the old one that
+   names it best rather than the earlier of the pair: `makerRecord` measures a
+   maker against the day a crate reached **Shipped**, and the digest's "shipped
+   this week" reads the same stamp. Taking Making instead would silently rewrite
+   every maker's record and every week's summary. */
+function collapseStages(t){
+  if(t.sv!==2){
+    const s=t.stamps||{},keep={};
+    const pick=(...ks)=>{for(const i of ks)if(s[i])return s[i];return 0;};
+    const a=pick(1,0),b=pick(3,2);       // Ordered over Quote, Shipped over Making
+    if(a)keep[0]=a;if(b)keep[1]=b;if(s[4])keep[2]=s[4];
+    t.stamps=keep;
+    if(t.stage0!=null)t.stage0=STAGE_MAP[t.stage0|0]??0;
+    t.stage=STAGE_MAP[t.stage|0]??0;
+    t.sv=2;
+  }else if(t.stage>2){
+    /* A device still on the old build can push a five-stage number into a record
+       this one has already collapsed. 3 is On its way, not Here — clamping alone
+       would land it in the wrong one. */
+    t.stage=STAGE_MAP[t.stage]??2;
+  }
+  t.stage=Math.max(0,Math.min(STAGES.length-1,t.stage|0));
+}
 function migrate(){
   S.projects=S.projects||[];S.tasks=S.tasks||[];S.tomb=S.tomb||{};S.times=S.times||[];
   /* A saved search is a synced record, not a display preference. The sort order
@@ -1783,6 +1871,13 @@ function migrate(){
   S.v=3;
   for(const t of S.tasks){
     t.type=t.type||'task';t.tracking=t.tracking||'';t.stage=t.stage||0;t.u=t.u||t.created||now();
+    collapseStages(t);
+    /* Which way it is going. Everything written before this was coming in, so
+       that is what they all become — and a task has no direction at all, rather
+       than carrying a field that means nothing on it. */
+    if(t.type==='shipment')t.dir=t.dir==='out'?'out':'in';else delete t.dir;
+    // where the box actually is, once it is here. Free text, remembered.
+    t.at=typeof t.at==='string'?t.at:'';
     t.po=t.po||'';t.carrier=t.carrier||'';t.qty=t.qty||null;t.eta=t.eta||null;t.stamps=t.stamps||{};
     // what the line costs, so an order has a total. Optional everywhere.
     t.cost=Number.isFinite(t.cost)&&t.cost>=0?t.cost:null;
@@ -1862,7 +1957,8 @@ function leadEta(maker,from){
 }
 /* Not shipped by the date the maker gave is late at the maker's end, which is a
    different thing from being late for the job. */
-const makerLate=t=>!!(t.type==='shipment'&&!t.done&&!t.arch&&t.eta&&t.stage<3&&diff(t.eta)<0);
+// past the date the maker gave and not even on its way yet
+const makerLate=t=>!!(t.type==='shipment'&&!t.done&&!t.arch&&t.eta&&stageOf(t)<ST_AWAY&&diff(t.eta)<0);
 /* ============ makers ============
    Tasks keep referring to a maker by name, so nothing has to be migrated. A
    maker record just hangs contact details and a lead time off that name, and
@@ -2310,8 +2406,19 @@ function mergeItems(rows){
     if(!cur){list.push(r.data);changed=true;}
     else if(u>(cur.u||0)){Object.assign(cur,r.data);changed=true;}
   }
-  if(changed){S.started=true;sanitizeColors();}
+  if(changed){S.started=true;sanitizeColors();shapePulled();}
   return changed;
+}
+/* A record arriving from another device never goes through `migrate()` — it is
+   assigned straight into the list — so a device still on the five-stage build
+   can push a 4 in and nothing here would collapse it. Idempotent by `sv`, so
+   running it over every task after a merge costs a comparison each. */
+function shapePulled(){
+  for(const t of S.tasks){
+    if(t.type!=='shipment')continue;
+    collapseStages(t);
+    t.dir=t.dir==='out'?'out':'in';
+  }
 }
 function mergeList(localArr,remoteArr){
   let changed=false;
@@ -2342,7 +2449,9 @@ function mergeIn(remote){
   if(n0!==S.tasks.length+S.projects.length+S.times.length+S.searches.length+S.visits.length)changed=true;
   const cut=now()-60*864e5;
   for(const id in S.tomb)if(S.tomb[id]<cut)delete S.tomb[id];
-  if(changed){S.started=true;sanitizeColors();}   // remote projects are untrusted input
+  // remote projects are untrusted input, and a remote shipment may still be
+  // carrying five stages — see shapePulled
+  if(changed){S.started=true;sanitizeColors();shapePulled();}
   return changed;
 }
 /* Fifteen seconds, whether or not the socket says it is live.
@@ -2972,10 +3081,12 @@ const HAS={
   project:t=>!!t.projectId,
   // tallied once per render, before filtered() runs, so this costs nothing
   time:t=>(timeByTask.get(t.id)||0)>0,
+  // where the box is, once somebody has said
+  at:t=>!!(t.at||'').trim(),
 };
 /* Search understands these filters alongside free text:
    is:shipment  is:task  is:done  is:open  is:flagged  is:archived  is:repeating
-   is:invoice  is:latemaker  is:waiting  is:unfiled
+   is:invoice  is:latemaker  is:waiting  is:unfiled  is:in  is:out  is:here
    late:  stage:shipped  maker:lumina  to:chicago  project:harbor  po:4417
    due:friday  due:week  due:>friday  due:none   eta: the same
    cost:>5000  qty:>10  has:link  wait:dana                                  */
@@ -3045,9 +3156,26 @@ function matches(t){
     if(v==='latemaker'&&!makerLate(t))return false;
     if(v==='waiting'&&!t.wait)return false;
     if(v==='unfiled'&&t.projectId)return false;
+    /* Which way it is going. Only a shipment has a direction at all, so a task
+       is not "coming in" by default — it is neither. */
+    if(v==='in'&&!(t.type==='shipment'&&dirOf(t)==='in'))return false;
+    if(v==='out'&&!(t.type==='shipment'&&dirOf(t)==='out'))return false;
+    if(v==='here'&&!(t.type==='shipment'&&stageOf(t)===ST_HERE))return false;
   }
   if(f.late&&!(t.due&&!t.done&&diff(t.due)<0))return false;
-  if(f.stage&&!(t.type==='shipment'&&STAGES[t.stage].toLowerCase().startsWith(f.stage)))return false;
+  /* The old words still work — STAGE_ALIAS turns `stage:shipped` into the stage
+     it is now, so a search somebody saved before this keeps meaning what it
+     meant. Matched against the names for that shipment's own direction, so
+     `stage:here` finds what landed and `stage:delivered` what went out. */
+  if(f.stage){
+    if(t.type!=='shipment')return false;
+    /* The word as typed **and** what it used to mean, because the two can be
+       different stages now: a shipment going out is called "Delivered", and
+       running `stage:delivered` through the alias alone turned it into "here"
+       and matched only the ones coming in. */
+    const nm=stageName(t).toLowerCase(),alias=STAGE_ALIAS[f.stage];
+    if(!(nm.startsWith(f.stage)||(alias&&nm.startsWith(alias))))return false;
+  }
   if(f.maker&&!(t.manufacturer||'').toLowerCase().includes(f.maker))return false;
   if(f.to&&!(t.destination||'').toLowerCase().includes(f.to))return false;
   // "project:none" is the unfiled work, which a substring test could never ask for
@@ -3097,7 +3225,15 @@ function filtered(){
      the Completed group at the bottom on their own. */
   else if(v.t==='invoices')a=a.filter(isInvoice);
   else if(v.t==='done')a=a.filter(t=>t.done);
-  else if(v.t==='shipments')a=a.filter(t=>!t.done&&t.type==='shipment');
+  /* Shipments, optionally one direction. `view.v` carries which, so paging and a
+     re-render agree on what you were looking at — the same shape `week` and the
+     time views use for their own sub-states. */
+  else if(v.t==='shipments')a=a.filter(t=>!t.done&&t.type==='shipment'
+    &&(!v.v||v.v==='all'||dirOf(t)===v.v));
+  /* A place is not a record, so the view IS the filter over what has been typed.
+     Done ones stay: "what is in the shop" is a question about boxes, and one
+     that has been ticked off is still sitting on the shelf. */
+  else if(v.t==='at')a=a.filter(t=>atKey(t.at)===atKey(v.v));
   else if(v.t==='project')a=a.filter(t=>t.projectId===v.v);
   else if(v.t==='mfr')a=a.filter(t=>t.manufacturer===v.v&&!t.done);
   else if(v.t==='dest')a=a.filter(t=>t.destination===v.v&&!t.done);
@@ -3127,7 +3263,10 @@ function groupOf(t){
     return m?{k:'m'+m.toLowerCase(),l:m,o:1}:{k:'m0',l:'No maker',o:2};}
   if(groupBy==='stage'){
     if(t.type!=='shipment')return {k:'s9',l:'Tasks',o:9};
-    return {k:'s'+t.stage,l:STAGES[t.stage],o:t.stage};}
+    /* Keyed by the name rather than the number: a shipment going out reads
+       "To send" where one coming in reads "Ordered", and the same key under two
+       labels would show one of them over both. */
+    return {k:'s'+stageName(t),l:stageName(t),o:stageOf(t)*2+(dirOf(t)==='out'?1:0)};}
   if(groupBy==='wait')return t.wait
     ? {k:'w'+t.wait,l:WAIT_LABEL[t.wait],o:t.wait==='them'?0:1}
     : {k:'w0',l:'Nobody waiting',o:2};
@@ -3271,6 +3410,10 @@ function renderHead(){
   if(view.t==='project'){const p=P(view.v);name=p?p.name:'Project';sub='Project';}
   if(view.t==='mfr'){name=view.v;sub='Maker';}
   if(view.t==='dest'){name=view.v;sub='Shipping to';}
+  if(view.t==='at'){name=view.v;sub='What is here';}
+  // short on purpose: "Everything moving" wraps to two lines at 390px and
+  // squeezes the title row, which is the one thing the header cannot spare
+  if(view.t==='shipments')sub=view.v==='in'?'Coming in':view.v==='out'?'Going out':'In and out';
   if(view.t==='board')sub='Ideas, notes and images';
   if(view.t==='time'){const e=running();
     sub=e?'Running now':'Hours on the job';}
@@ -3365,13 +3508,18 @@ function seaStateHTML(){
   const ships=open.filter(t=>t.type==='shipment');
   const bits=[];
   const late=open.filter(t=>t.due&&diff(t.due)<0).length;
-  const transit=ships.filter(t=>t.stage===3).length;
-  const making=ships.filter(t=>t.stage===1||t.stage===2).length;
+  /* Split by direction now rather than by production stage: "being made" was a
+     stage that no longer exists, and "how many are on their way to me" and "how
+     many have I got out" are two different questions. */
+  const coming=ships.filter(t=>dirOf(t)==='in'&&stageOf(t)===ST_AWAY).length;
+  const going=ships.filter(t=>dirOf(t)==='out'&&stageOf(t)===ST_AWAY).length;
+  const onOrder=ships.filter(t=>dirOf(t)==='in'&&stageOf(t)===ST_ORDERED).length;
   const week=open.filter(t=>t.due&&diff(t.due)>=0&&diff(t.due)<7).length;
   const mLate=ships.filter(makerLate).length;
   if(late)bits.push([`<b>${late}</b> past due`,'var(--red)','late:']);
-  if(transit)bits.push([`<b>${transit}</b> in transit`,'var(--purple)','stage:shipped']);
-  if(making)bits.push([`<b>${making}</b> being made`,'var(--orange)','stage:making']);
+  if(coming)bits.push([`<b>${coming}</b> on the way in`,'var(--purple)','is:in stage:on']);
+  if(going)bits.push([`<b>${going}</b> on the way out`,'var(--teal)','is:out stage:on']);
+  if(onOrder)bits.push([`<b>${onOrder}</b> on order`,'var(--orange)','is:in stage:ordered']);
   if(mLate)bits.push([`<b>${mLate}</b> over at the maker`,'var(--yellow)','is:latemaker']);
   if(week)bits.push([`<b>${week}</b> due this week`,'var(--blue)','']);
   if(!bits.length)return '';
@@ -3486,8 +3634,8 @@ function digestHTML(){
   if(digestOff)return '';
   const since=now()-7*864e5;
   const done=S.tasks.filter(t=>t.completed&&t.completed>=since);
-  const shipped=S.tasks.filter(t=>t.stamps&&t.stamps[3]&&t.stamps[3]>=since);
-  const arrived=S.tasks.filter(t=>t.stamps&&t.stamps[4]&&t.stamps[4]>=since);
+  const shipped=S.tasks.filter(t=>t.stamps&&t.stamps[ST_AWAY]&&t.stamps[ST_AWAY]>=since);
+  const arrived=S.tasks.filter(t=>t.stamps&&t.stamps[ST_HERE]&&t.stamps[ST_HERE]>=since);
   const slipped=S.tasks.filter(t=>!t.done&&!t.arch&&t.due&&diff(t.due)<0&&diff(t.due)>=-7);
   const rows=[[done.length,'completed'],[shipped.length,'shipped'],[arrived.length,'arrived'],
     [slipped.length,'went past due']].filter(([n])=>n);
@@ -3559,10 +3707,21 @@ function rowHTML(t){
   const st=trks.map(x=>x.status).filter(Boolean).sort((a,b)=>b.at-a.at)[0];
   if(st&&!t.done)chips.push(`<span class="chip" style="color:${st.done?'var(--green)':'var(--purple)'}"
     title="checked ${esc(fmtAgo(st.at))}">${esc(st.text)}</span>`);
-  if(t.type==='shipment')chips.push(`<button class="stagebar" data-stage="${t.id}" aria-label="Stage: ${STAGES[t.stage]}, tap to advance"
-    title="${esc(stampsTitle(t))}">
-    ${STAGES.map((_,i)=>`<i style="background:${i<=t.stage?SC[t.stage]:'var(--fill)'}"></i>`).join('')}
-    <span style="color:${SC[t.stage]}">${STAGES[t.stage]}</span></button>`);
+  if(t.type==='shipment'){
+    const s=stageOf(t),nm=stageNames(t);
+    /* Which way it is going, in one character before the stage. A word would be
+       a third chip on a row that already carries the job, the maker and the
+       date; the arrow is read at a glance and costs nothing. */
+    chips.push(`<button class="stagebar" data-stage="${t.id}" aria-label="${dirOf(t)==='out'?'Going out':'Coming in'}, ${nm[s]}, tap to advance"
+      title="${esc(stampsTitle(t))}">
+      <b class="dir">${dirOf(t)==='out'?'↗':'↘'}</b>
+      ${nm.map((_,i)=>`<i style="background:${i<=s?SC[s]:'var(--fill)'}"></i>`).join('')}
+      <span style="color:${SC[s]}">${nm[s]}</span></button>`);
+    // where the box actually is, once somebody has said. Only when it is here:
+    // "in the shop" over something still at the maker would be a lie.
+    if(s===ST_HERE&&(t.at||'').trim())
+      chips.push(`<button class="chip go" data-v="at" data-val="${esc(t.at.trim())}">📍 ${esc(t.at.trim())}</button>`);
+  }
   const n=t.due?diff(t.due):null,cls=n===null?'':n<0?'late':n<=2?'soon':'';
   return `<div class="rowwrap" data-id="${t.id}"><div class="act l">Done</div><div class="act r">Delete</div>
     <div class="row ${t.done?'done':''}" draggable="true">
@@ -3848,7 +4007,7 @@ function posHTML(){
   let h=`<div class="grp">Purchase orders<span class="c">${rows.length}${live<rows.length?` · ${live} open`:''}</span></div><div class="card">`;
   for(const r of rows){
     const ships=r.items.filter(t=>t.type==='shipment');
-    const got=ships.filter(t=>t.stage===4||t.done).length;
+    const got=ships.filter(t=>stageOf(t)===ST_HERE||t.done).length;
     const projs=[...new Set(r.items.map(t=>projectOf(t)).filter(Boolean))];
     const makers=[...new Set(r.items.map(t=>t.manufacturer).filter(Boolean))];
     const dests=[...new Set(r.items.map(t=>t.destination).filter(Boolean))];
@@ -3891,7 +4050,7 @@ function poHead(){
   const k=view.v,items=S.tasks.filter(t=>poKey(t)===k);
   if(!items.length)return '';
   const ships=items.filter(t=>t.type==='shipment');
-  const got=ships.filter(t=>t.stage===4||t.done).length;
+  const got=ships.filter(t=>stageOf(t)===ST_HERE||t.done).length;
   const projs=[...new Set(items.map(t=>projectOf(t)).filter(Boolean))];
   const makers=[...new Set(items.map(t=>t.manufacturer).filter(Boolean))];
   const dests=[...new Set(items.map(t=>t.destination).filter(Boolean))];
@@ -3924,6 +4083,53 @@ function poHead(){
    everything that records what happened to them last time does not. The number
    has to be typed, because a PO comes from somebody else's system and guessing
    the next one is how the wrong number gets onto the paperwork. */
+/* ============ where the box actually is ============
+   "Has it come in" is the stage. "Where is it" is this, and it had no answer at
+   all — the only place a shipment named was where it was *going*.
+
+   Free text with the previous answers offered, which is the same bargain every
+   other remembered field in this app makes: a workspace settles on four or five
+   places within a week, and the one that is not on the list is the reason this
+   is not a `<select>`. There is no record kind behind it — what has been typed
+   **is** the list, exactly as a destination works. */
+const atKey=s=>String(s||'').trim().toLowerCase();
+function places(){
+  const seen=new Map();
+  // newest first: the shelf you used this morning is the one you want offered
+  for(const t of [...S.tasks].sort((a,b)=>(b.u||0)-(a.u||0))){
+    const v=(t.at||'').trim();if(!v)continue;
+    if(!seen.has(atKey(v)))seen.set(atKey(v),v);
+  }
+  return [...seen.values()];
+}
+let atFor=null;
+function askWhere(id){
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  atFor=id;
+  $('#atnote').textContent=`“${t.title}” is here. Saying where means you can find it `
+    +`later without opening anything.`;
+  $('#atwhere').value=t.at||'';
+  drawPlaces();
+  rememberFocus();$('#scrim').classList.add('on');$('#atsheet').classList.add('on');
+  // not focused on a phone: the chips are the point, and a keyboard over them
+  // hides the one tap this sheet exists for
+  if(innerWidth>=861)setTimeout(()=>$('#atwhere').focus(),260);
+}
+function drawPlaces(){
+  const cur=atKey($('#atwhere').value);
+  $('#atrecent').innerHTML=places().slice(0,10).map(p=>
+    `<button data-place="${esc(p)}" class="${atKey(p)===cur?'on':''}">${esc(p)}</button>`).join('');
+}
+function saveWhere(){
+  const t=atFor?S.tasks.find(x=>x.id===atFor):null;
+  const v=$('#atwhere').value.trim();
+  closeSheets();
+  if(!t||atKey(t.at)===atKey(v))return;
+  const was=t.at||'';
+  t.at=v;t.u=now();save();render();
+  toast(v?`Put in ${v}`:'Where it is, cleared',
+    ()=>{t.at=was;t.u=now();save();render();},t.title);
+}
 function openDupPO(){
   const k=view.v,items=S.tasks.filter(t=>poKey(t)===k);
   if(!items.length)return;
@@ -4083,13 +4289,17 @@ function projectHead(){
   </div>`;
 }
 /* Whether a maker actually hits the lead time they quote is already recorded —
-   every shipment stamps the day it reached Shipped, and the expected date is
-   there beside it. Nothing had ever read the two together. */
+   every shipment stamps the day it went on its way, and the expected date is
+   there beside it. Nothing had ever read the two together.
+
+   That stamp used to be Shipped, the fourth of five stages. The collapse to
+   three kept it: `collapseStages` gives the merged stage the Shipped stamp in
+   preference to the Making one, precisely so no maker's record moves under them. */
 function makerRecord(name){
   const mine=S.tasks.filter(t=>t.type==='shipment'&&makerKey(t.manufacturer)===makerKey(name));
-  const judged=mine.filter(t=>t.stamps&&t.stamps[3]&&t.eta);
+  const judged=mine.filter(t=>t.stamps&&t.stamps[ST_AWAY]&&t.eta);
   if(!judged.length)return null;
-  const days=judged.map(t=>Math.round((fromISO(iso(new Date(t.stamps[3])))-fromISO(t.eta))/864e5));
+  const days=judged.map(t=>Math.round((fromISO(iso(new Date(t.stamps[ST_AWAY])))-fromISO(t.eta))/864e5));
   const onTime=days.filter(d=>d<=0).length;
   const avg=Math.round(days.reduce((a,b)=>a+b,0)/days.length);
   return {n:judged.length,onTime,avg,open:mine.filter(t=>!t.done&&!t.arch).length};
@@ -4129,11 +4339,24 @@ function destHead(){
   const mine=S.tasks.filter(t=>destKey(t.destination)===k);
   const open=mine.filter(t=>!t.done&&!t.arch).length;
   const makers=[...new Set(mine.map(t=>t.manufacturer).filter(Boolean))];
+  /* A destination is a place, and the question anybody asks a place is "what
+     have we sent there" as much as "what is going there". Counted apart, because
+     they are different claims: one is work owed, the other a job done. */
+  const ships=mine.filter(t=>t.type==='shipment');
+  const sent=ships.filter(t=>dirOf(t)==='out'&&stageOf(t)===ST_HERE).length;
+  const togo=ships.filter(t=>dirOf(t)==='out'&&stageOf(t)<ST_HERE).length;
+  const coming=ships.filter(t=>dirOf(t)==='in'&&stageOf(t)<ST_HERE).length;
+  const bits=[];
+  if(coming)bits.push([`${coming} coming in`,'is:in']);
+  if(togo)bits.push([`${togo} still to send`,'is:out']);
+  if(sent)bits.push([`${sent} sent`,'is:out is:here']);
   return `<div class="phead">
     <div style="flex:1;min-width:0"><h2>${esc(name)}</h2>
-      <div class="l">${open} open${mine.length!==open?` of ${mine.length}`:''}</div>
-      ${makers.length?`<div class="meta">${makers.map(m=>`<button class="chip go" data-v="mfr" data-val="${esc(m)}"
-        aria-label="Show everything from ${esc(m)}">${esc(m)}</button>`).join('')}</div>`:''}</div>
+      <div class="l">${open} open${mine.length!==open?` of ${mine.length}`:''}${
+        bits.length?' · '+bits.map(b=>b[0]).join(' · '):''}</div>
+      <div class="meta">${bits.map(([l,q])=>`<button class="chip go" data-q="${esc(q)} to:&quot;${esc(name)}&quot;"
+        >${esc(l)}</button>`).join('')}${makers.map(m=>`<button class="chip go" data-v="mfr" data-val="${esc(m)}"
+        aria-label="Show everything from ${esc(m)}">${esc(m)}</button>`).join('')}</div></div>
     <button class="iconbtn" data-editdest="1" aria-label="Rename this destination"><svg viewBox="0 0 20 20"><path d="M14.1 2.6a1.4 1.4 0 0 1 2 0l1.3 1.3a1.4 1.4 0 0 1 0 2l-1 1-3.3-3.3 1-1ZM12 4.7 3.4 13.3 2.5 17l3.7-.9 8.6-8.6L12 4.7Z"/></svg></button>
     <button class="iconbtn" data-a="new" aria-label="Add a shipment" style="background:var(--blue)"><svg viewBox="0 0 20 20" style="fill:#fff"><path d="M10 3.4a1.1 1.1 0 0 1 1.1 1.1v4.4h4.4a1.1 1.1 0 0 1 0 2.2h-4.4v4.4a1.1 1.1 0 0 1-2.2 0v-4.4H4.5a1.1 1.1 0 0 1 0-2.2h4.4V4.5A1.1 1.1 0 0 1 10 3.4Z"/></svg></button>
   </div>`;
@@ -4344,6 +4567,17 @@ function renderList(){
   if(view.t==='project'&&!query)chunk('pvisits',projectVisitsHTML(view.v));
   if(view.t==='mfr')chunk('mhead',makerHead());
   if(view.t==='dest')chunk('dhead',destHead());
+  /* Coming in and going out, side by side at the top of Shipments — the one
+     control that answers "what is on its way to me" and "what have I got out"
+     without a search. Same shape as Scheduled/Week and the three time views,
+     and the only way to either from a phone, where the sidebar is display:none. */
+  if(view.t==='shipments'&&!query){
+    const d=view.v||'all';
+    chunk('shipmode',`<div class="seg listseg" role="tablist">`
+      +[['all','All'],['in','Coming in'],['out','Going out']].map(([k,l])=>
+        `<button data-v="shipments" data-val="${k}" ${d===k?'class="on" aria-selected="true"':''} role="tab">${l}</button>`).join('')
+      +`</div>`);
+  }
   if(view.t==='po')chunk('pohead',poHead());
   /* The two ways of looking at dated work, side by side, because a week view
      nobody can find is not a week view. One tap from the phone, where the
@@ -4551,12 +4785,15 @@ let flashProj=null,flashT=null;
 function addTask(d){
   if(!d.title)return;
   const t={id:uid(),title:d.title,type:d.type||'task',projectId:findProjectId(d.project),
+    // only on a shipment: a task has no direction, and a field that means
+    // nothing on most records is one more thing every reader has to ignore
+    ...((d.type||'task')==='shipment'?{dir:d.dir==='out'?'out':'in'}:{}),
     manufacturer:canonMaker(d.manufacturer),destination:d.destination||'',
     tracking:d.tracking||'',carrier:d.carrier||'',po:d.po||'',
     // only ever true or unset from here: false is reserved for "no, it is not"
     inv:d.inv?true:null,
     tracks:d.tracking?[{id:uid(),n:d.tracking,carrier:d.carrier||'',got:null}]:[],
-    due:d.due||null,stage:0,flagged:!!d.flagged,notes:'',done:false,rep:null,arch:null,
+    due:d.due||null,stage:0,sv:2,at:'',flagged:!!d.flagged,notes:'',done:false,rep:null,arch:null,
     links:d.link?[{id:uid(),url:d.link,title:'',at:now()}]:[],
     created:now(),u:now()};
   // a maker with a quoted lead time answers "when is this expected" by itself,
@@ -4582,12 +4819,12 @@ function toggleDone(id,el){
     t.completed=now();t.doneBy=me||'';
     // completing a shipment marks it Delivered, but remember where it was so
     // un-ticking the box puts it back instead of stranding it on Delivered
-    if(t.type==='shipment'&&t.stage<4){t.stage0=t.stage;t.stage=4;stampStage(t,4);}
+    if(t.type==='shipment'&&stageOf(t)<ST_HERE){t.stage0=stageOf(t);t.stage=ST_HERE;stampStage(t,ST_HERE);}
   }else{
     t.completed=null;t.doneBy='';
     // only rewind if nothing has touched the stage since; a stage picked by hand
     // while the shipment was complete is the user's choice and stands
-    if(t.type==='shipment'&&t.stage0!=null){if(t.stage===4)t.stage=t.stage0;t.stage0=null;}
+    if(t.type==='shipment'&&t.stage0!=null){if(stageOf(t)===ST_HERE)t.stage=t.stage0;t.stage0=null;}
   }
   // completing a repeating task leaves the next one in its place
   let spawned=null;
@@ -4657,12 +4894,12 @@ function stampStage(t,stage){
    row is the cheapest possible way to ask "when did this ship". */
 function stampsTitle(t){
   const s=t.stamps||{};
-  const bits=STAGES.map((n,i)=>s[i]?`${n} ${fmtDue(iso(new Date(s[i])))}`:null).filter(Boolean);
-  return bits.length?bits.join(' · '):`At ${STAGES[t.stage]} · no stage dates recorded yet`;
+  const bits=stageNames(t).map((n,i)=>s[i]?`${n} ${fmtDue(iso(new Date(s[i])))}`:null).filter(Boolean);
+  return bits.length?bits.join(' · '):`At ${stageName(t)} · no stage dates recorded yet`;
 }
 function stampsHTML(t){
   const s=t.stamps||{};
-  const rows=STAGES.map((name,i)=>s[i]?{name,at:s[i],i}:null).filter(Boolean).sort((a,b)=>a.at-b.at);
+  const rows=stageNames(t).map((name,i)=>s[i]?{name,at:s[i],i}:null).filter(Boolean).sort((a,b)=>a.at-b.at);
   if(!rows.length)return '<span class="warn">No stage history yet.</span>';
   return rows.map((r,n)=>{
     const gap=n?Math.round((r.at-rows[n-1].at)/864e5):null;
@@ -4672,19 +4909,26 @@ function stampsHTML(t){
 }
 function bumpStage(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
-  const prev=t.stage,prevDone=t.done;
-  t.stage=(t.stage+1)%5;t.u=now();stampStage(t,t.stage);
-  if(t.stage===4){t.done=true;t.completed=now();}else if(prevDone){t.done=false;t.completed=null;}
+  const prev=stageOf(t),prevDone=t.done,prevAt=t.at||'';
+  t.stage=(prev+1)%STAGES.length;t.u=now();stampStage(t,t.stage);
+  if(t.stage===ST_HERE){t.done=true;t.completed=now();}else if(prevDone){t.done=false;t.completed=null;}
+  // round the loop and back to the start: it was never here, so neither is the place
+  if(t.stage===ST_ORDERED)t.at='';
   const bar=document.querySelector(`.rowwrap[data-id="${id}"] .stagebar`);
-  if(t.stage===3&&prev<3)sail(bar);                 // it has left the maker
-  if(t.stage===4&&prev!==4){ping(660);celebrate(bar,{milestone:true,kind:'deliver'});}
+  if(t.stage===ST_AWAY&&prev<ST_AWAY)sail(bar);     // it has left the maker
+  if(t.stage===ST_HERE&&prev!==ST_HERE){ping(660);celebrate(bar,{milestone:true,kind:'deliver'});}
   /* Advancing a stage is done on site, one-handed, often without looking — so it
      answers in the hand. Delivered gets a pattern rather than a tick, because it
      is the one advance that ends something. navigator.vibrate takes an array. */
-  buzz(t.stage===4?[16,55,30]:14);
+  buzz(t.stage===ST_HERE?[16,55,30]:14);
   save();render();
   slideStage(id,prev,t.stage);
-  toast(`${STAGES[prev]} → ${STAGES[t.stage]}`,()=>{t.stage=prev;t.done=prevDone;t.u=now();save();render();});
+  const nm=stageNames(t);
+  toast(`${nm[prev]} → ${nm[t.stage]}`,
+    ()=>{t.stage=prev;t.done=prevDone;t.at=prevAt;t.u=now();save();render();});
+  // arriving is the moment somebody knows where they put it, and the only moment
+  // they are holding the box. Asked here rather than left to the detail sheet.
+  if(t.stage===ST_HERE&&dirOf(t)==='in')setTimeout(()=>askWhere(t.id),420);
 }
 /* Reaching Shipped is the moment the thing actually left, and the app is called
    Shipshape. The liner runs the length of the stage bar once, on top of it, and
@@ -5636,20 +5880,29 @@ function celebrate(el,{milestone=false,force=false,kind=''}={}){
 const burst=el=>celebrate(el,{milestone:true});
 
 /* ============ composer ============ */
-function setType(t){
-  ctype=t;$$('#ctype button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-  $('#cshipfields').style.display=t==='shipment'?'':'none';   // PO and tracking are shipment-only
-  $('#ci').placeholder=t==='shipment'
-    ?'40 pendants #Harbor Lofts @Lumina >Chicago warehouse oct 15'
-    :'Approve shop drawings #Harbor Lofts fri';
+/* Three buttons, not two. Task / Coming in / Going out is one control where it
+   used to be a Task-Shipment toggle plus a direction nobody could set until the
+   thing existed — and which way a crate is going is known when you write it
+   down, never later. `ctype` stays the record's type and `cdir` rides beside it. */
+function setType(t,dir){
+  ctype=t==='shipment'?'shipment':'task';
+  if(dir)cdir=dir==='out'?'out':'in';
+  const key=ctype==='task'?'task':cdir;
+  $$('#ctype button').forEach(b=>b.classList.toggle('on',b.dataset.t===key));
+  $('#cshipfields').style.display=ctype==='shipment'?'':'none';  // PO and tracking are shipment-only
+  $('#ci').placeholder=ctype!=='shipment'
+    ?'Approve shop drawings #Harbor Lofts fri'
+    :cdir==='out'
+      ?'6 crates #Harbor Lofts >Chicago warehouse friday'
+      :'40 pendants #Harbor Lofts @Lumina >Chicago warehouse oct 15';
 }
 function openComposer(force){
   rememberFocus();$('#scrim').classList.add('on');$('#composer').classList.add('on');
-  cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;cpoManual=false;
+  cflag=false;$('#cflag').classList.remove('on');ctypeManual=false;cpoManual=false;cdir='in';
   ctx=composerCtx();
   // an explicit choice from the + menu outranks what the view implies
-  if(force){ctx.type=force;ctypeManual=true;}
-  setType(ctx.type);
+  if(force){ctx.type=force==='task'?'task':'shipment';ctx.dir=force==='out'?'out':'in';ctypeManual=force!=='task';}
+  setType(ctx.type,ctx.dir||'in');
   $('#ci').value='';$('#ctrack').value='';$('#cpo').value='';
   $('#ccarrier').innerHTML=carrierOptions('');updatePreview();
   setTimeout(()=>$('#ci').focus(),260);
@@ -5679,6 +5932,7 @@ function composed(){
     po:cpoManual?$('#cpo').value.trim():(p.po||''),
     link:p.link||'',
     carrier:$('#ccarrier').value,
+    dir:cdir,
     due:p.due||c.due};
 }
 function closeSheets(){
@@ -5808,6 +6062,10 @@ AC_SRC.cpo=AC_SRC.dpo;
 AC_SRC.destname=AC_SRC.ddest;
 AC_SRC.tmproject=AC_SRC.dproj;
 AC_SRC.vproject=AC_SRC.dproj;
+/* Where a box is. No record of its own — what has been typed is the list, the
+   same as a maker or a destination — and both fields that take one offer it. */
+AC_SRC.dat=()=>places().map(v=>({v,n:S.tasks.filter(t=>atKey(t.at)===atKey(v)).length||''}));
+AC_SRC.atwhere=AC_SRC.dat;
 const acEsc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 /* Letters in order but not adjacent — "chwh" finds "Chicago warehouse". Last
    resort, below every kind of real substring match. */
@@ -5937,10 +6195,14 @@ addEventListener('resize',acClose);
 document.addEventListener('scroll',()=>{if(acFor)acPlace();},true);
 
 function showKind(t){
-  $('#dkind').textContent=t.type==='shipment'?'Shipment':'Task';
-  $$('#dtype button').forEach(b=>b.classList.toggle('on',b.dataset.t===t.type));
-  $('#shipfields').style.display=t.type==='shipment'?'':'none';
-  $('#dstages').style.display=t.type==='shipment'?'':'none';
+  const ship=t.type==='shipment';
+  $('#dkind').textContent=ship?DIR_LABEL[dirOf(t)]:'Task';
+  const key=ship?dirOf(t):'task';
+  $$('#dtype button').forEach(b=>b.classList.toggle('on',b.dataset.t===key));
+  $('#shipfields').style.display=ship?'':'none';
+  // `.seg` and `.stages` are both display:flex, which beats [hidden] — the trap
+  // .durs and the entry sheet's rows each had to be written out for
+  $('#dstages').style.display=ship?'':'none';
 }
 function openDetail(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
@@ -5968,7 +6230,12 @@ function openDetail(id){
   $('#dstepnew').value='';renderSteps(t);
   renderTracks(t);
   $('#dproj').value=t.projectId&&P(t.projectId)?P(t.projectId).name:'';
-  $('#dstages').innerHTML=STAGES.map((s,i)=>`<button class="stg ${i===t.stage?'on':''}" data-s="${i}" ${i===t.stage?`style="background:${SC[i]}"`:''}>${s}</button>`).join('');
+  {const s=stageOf(t);
+   $('#dstages').innerHTML=stageNames(t).map((nm,i)=>
+     `<button class="stg ${i===s?'on':''}" data-s="${i}" ${i===s?`style="background:${SC[i]}"`:''}>${nm}</button>`).join('');}
+  $('#dat').value=t.at||'';
+  // where it is only means something once it is here
+  $('#datrow').style.display=stageOf(t)===ST_HERE?'':'none';
   $('#drep').innerHTML=REPS.map(([v,l])=>`<option value="${v||''}" ${(t.rep||'')===(v||'')?'selected':''}>${l}</option>`).join('');
   $('#dremind').innerHTML=REMINDS.map(([v,l])=>`<option value="${v}" ${(t.remind||0)===v?'selected':''}>${l}</option>`).join('');
   drawNoteOffers();
@@ -6363,7 +6630,7 @@ async function checkStatus(){
     }
     if(hits){
       t.u=now();
-      if(tracksOf(t).length&&tracksOf(t).every(x=>x.got)&&t.stage<4){t.stage=4;stampStage(t,4);}
+      if(tracksOf(t).length&&tracksOf(t).every(x=>x.got)&&stageOf(t)<ST_HERE){t.stage=ST_HERE;stampStage(t,ST_HERE);}
       save();renderTracks(t);render();
       toast(`Checked ${hits} number${hits===1?'':'s'}`);
     }else toast('The carrier had nothing to report yet.');
@@ -6390,6 +6657,7 @@ function saveDetail(){
   const q=parseInt($('#dqty').value,10);t.qty=Number.isFinite(q)&&q>0?q:null;
   const cst=parseFloat($('#dcost').value);t.cost=Number.isFinite(cst)&&cst>=0?cst:null;
   t.eta=$('#deta').value||null;
+  t.at=$('#dat').value.trim();
   /* Empty means no project. A name that matches one assigns it. A name that
      matches nothing is left alone here and settled by the field's own change
      handler — see namedProject. */
@@ -6961,7 +7229,7 @@ function bulkEach(fn,label){
 }
 $('#bulkexit').addEventListener('click',()=>setSelMode(false));
 $('#bulkdone').addEventListener('click',()=>bulkEach(t=>{
-  if(!t.done){t.done=true;t.completed=now();if(t.type==='shipment'&&t.stage<4){t.stage0=t.stage;t.stage=4;stampStage(t,4);}t.u=now();}
+  if(!t.done){t.done=true;t.completed=now();if(t.type==='shipment'&&stageOf(t)<ST_HERE){t.stage0=stageOf(t);t.stage=ST_HERE;stampStage(t,ST_HERE);}t.u=now();}
 },'Completed'));
 $('#bulkflag').addEventListener('click',()=>bulkEach(t=>{t.flagged=!t.flagged;t.u=now();},'Flagged'));
 $('#bulkdel').addEventListener('click',()=>{
@@ -7068,6 +7336,18 @@ $('#destname').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefau
 $('#mclose').addEventListener('click',()=>{editMaker=null;closeSheets();});
 $('#dupclose').addEventListener('click',()=>closeSheets());
 $('#dupgo').addEventListener('click',dupPO);
+$('#atclose').addEventListener('click',()=>closeSheets());
+$('#atskip').addEventListener('click',()=>closeSheets());
+$('#atsave').addEventListener('click',saveWhere);
+$('#atwhere').addEventListener('input',drawPlaces);
+$('#atwhere').addEventListener('keydown',e=>{
+  // unless the suggestion list is claiming the key to pick something
+  if(e.key==='Enter'&&acSel<0){e.preventDefault();saveWhere();}});
+/* A place already used is one tap and done — no typing, no second button. That
+   is the whole reason the chips are here. */
+$('#atrecent').addEventListener('click',e=>{
+  const b=e.target.closest('[data-place]');if(!b)return;
+  $('#atwhere').value=b.dataset.place;saveWhere();});
 $('#dupno').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();dupPO();}});
 $('#msave').addEventListener('click',()=>{
   const was=editMaker,name=$('#mname').value.trim();
@@ -7109,7 +7389,7 @@ $('#dtracks').addEventListener('click',e=>{
     tr.got=tr.got?null:now();t.u=now();buzz();
     // everything arrived: the shipment is delivered
     const all=tracksOf(t);
-    if(all.length&&all.every(x=>x.got)&&t.stage<4){t.stage=4;stampStage(t,4);t.done=true;t.completed=now();}
+    if(all.length&&all.every(x=>x.got)&&stageOf(t)<ST_HERE){t.stage=ST_HERE;stampStage(t,ST_HERE);t.done=true;t.completed=now();}
     save();renderTracks(t);render();return;
   }
   const d=e.target.closest('[data-deltrk]');
@@ -7195,12 +7475,21 @@ $('#ddel').addEventListener('click',()=>{const id=editing;editing=null;closeShee
 $('#cflag').addEventListener('click',()=>{cflag=!cflag;$('#cflag').classList.toggle('on',cflag);updatePreview();});
 $('#ctype').addEventListener('click',e=>{
   const b=e.target.closest('[data-t]');if(!b)return;
-  ctypeManual=true;setType(b.dataset.t);updatePreview();$('#ci').focus();
+  const k=b.dataset.t;
+  ctypeManual=true;
+  setType(k==='task'?'task':'shipment',k==='task'?null:k);
+  updatePreview();$('#ci').focus();
 });
+/* One control for the three things a record can be. A Task/Shipment toggle with
+   a separate direction under it was two controls and a header all saying
+   overlapping things, on a sheet this change was meant to quieten. */
 $('#dtype').addEventListener('click',e=>{
   const b=e.target.closest('[data-t]');if(!b||!editing)return;
-  const id=editing;saveDetail();
-  const t=S.tasks.find(x=>x.id===id);t.type=b.dataset.t;t.u=now();save();openDetail(id);render();
+  const id=editing,k=b.dataset.t;saveDetail();
+  const t=S.tasks.find(x=>x.id===id);
+  t.type=k==='task'?'task':'shipment';
+  if(k==='task')delete t.dir;else t.dir=k==='out'?'out':'in';
+  t.u=now();save();openDetail(id);render();
 });
 $('#ci').addEventListener('input',updatePreview);
 $('#ci').addEventListener('keydown',e=>{
@@ -7229,7 +7518,8 @@ $('#dproj').addEventListener('change',e=>{
 $('#dstages').addEventListener('click',e=>{
   const b=e.target.closest('[data-s]');if(!b||!editing)return;
   const t=S.tasks.find(x=>x.id===editing);t.stage=+b.dataset.s;t.u=now();stampStage(t,t.stage);
-  if(t.stage===4){t.done=true;t.completed=now();}else{t.done=false;t.completed=null;t.stage0=null;}
+  if(stageOf(t)===ST_HERE){t.done=true;t.completed=now();}else{t.done=false;t.completed=null;t.stage0=null;}
+  if(stageOf(t)===ST_ORDERED)t.at='';     // it was never here, so neither is the place
   buzz();save();openDetail(editing);render();
 });
 $('#tundo').addEventListener('click',()=>{popUndo();$('#toast').classList.remove('on');});
@@ -7601,7 +7891,7 @@ function openRowMenu(id,x,y){
     ['flag',t.flagged?'Remove flag':'Flag'],
     ['wait',t.wait==='them'?'Not waiting on them':'Waiting on them'],
     (running()&&running().taskId===t.id)?['tstop','Stop the timer']:['tstart','Start timer'],
-    t.type==='shipment'?['stage',`Advance to ${STAGES[(t.stage+1)%5]}`]:null,
+    t.type==='shipment'?['stage',`Advance to ${stageNames(t)[(stageOf(t)+1)%STAGES.length]}`]:null,
     ['today','Due today'],['tomorrow','Due tomorrow'],t.due?['nodate','Clear the date']:null,
     ['dup','Duplicate'],
     tracksOf(t).some(x=>clean(x.n))?['copytrack','Copy tracking number']:null,
@@ -8619,7 +8909,7 @@ const QHELP=[
     ['wait:dana','waiting on them'],['by:dana','who ticked it off']]],
   ['Numbers',[['po:41785','the order'],['cost:>5000','more than that'],
     ['cost:<500','less than that'],['cost:none','no price on it'],
-    ['qty:>10','how many'],['stage:shipped','where a crate has got to']]],
+    ['qty:>10','how many'],['stage:on','what is on its way'],['is:out','what is going out'],['has:at','where a box is']]],
   ['What it carries',[['has:link','an attached link'],['has:note','notes on it'],
     ['has:cost','a price'],['has:tracking','a tracking number'],
     ['has:time','hours logged against it'],['has:steps','a checklist'],
@@ -8662,21 +8952,34 @@ function loadSample(){
     {id:uid(),name:'Cedar Hotel',color:PAL[3],client:'Cedar Hospitality',due:d(21),notes:'Restaurant and guest rooms',u:now()},
     {id:uid(),name:'Marlow Residence',color:PAL[2],client:'Private',due:d(60),notes:'',u:now()},
   ];
-  const T=(title,pi,type,off,mfr,dest,stage,flag)=>({id:uid(),title,
+  /* `o` is the extras: which way it is going, where it is, whether it is flagged.
+     Three stages now, so a stage here is 0 ordered, 1 on its way, 2 here. */
+  const T=(title,pi,type,off,mfr,dest,stage,o)=>({id:uid(),title,
     projectId:pi===null?null:projs[pi].id,type,manufacturer:mfr||'',destination:dest||'',
-    tracking:'',due:off===null?null:d(off),stage:stage||0,flagged:!!flag,notes:'',done:false,
+    ...(type==='shipment'?{dir:(o&&o.dir)||'in'}:{}),
+    tracking:'',due:off===null?null:d(off),stage:stage||0,sv:2,at:(o&&o.at)||'',
+    flagged:!!(o&&o.flag),notes:'',
+    done:!!(o&&o.done),completed:(o&&o.done)?now()-864e5:null,
+    ...(o&&o.done?{stamps:{2:now()-864e5}}:{}),
     created:now()-Math.random()*1e7,u:now()});
   S.projects=projs;
   S.tasks=[
-    T('Approve shop drawings for corridor sconces',0,'task',-2,null,null,0,true),
+    T('Approve shop drawings for corridor sconces',0,'task',-2,null,null,0,{flag:1}),
     T('Send deposit invoice to accounting',0,'task',0),
-    T('40 lobby pendants',0,'shipment',5,'Lumina Studio','Chicago warehouse',2),
-    T('Corridor sconces, floors 2 to 8',0,'shipment',12,'Northline Metal','Chicago warehouse',1),
-    T('Confirm dimming protocol before production',1,'task',1,null,null,0,true),
+    T('40 lobby pendants',0,'shipment',5,'Lumina Studio','Chicago warehouse',1),
+    T('Corridor sconces, floors 2 to 8',0,'shipment',12,'Northline Metal','Chicago warehouse',0),
+    T('Confirm dimming protocol before production',1,'task',1,null,null,0,{flag:1}),
     T('Chase crate dimensions for freight quote',1,'task',0),
-    T('Restaurant chandeliers',1,'shipment',2,'Vantage Lighting','Austin job site',3),
+    T('Restaurant chandeliers',1,'shipment',2,'Vantage Lighting','Austin job site',1),
     T('Book delivery window with site super',1,'task',9),
-    T('Reorder 6 damaged glass shades',2,'shipment',3,'Atelier Verre','Denver studio',1,true),
+    T('Reorder 6 damaged glass shades',2,'shipment',3,'Atelier Verre','Denver studio',0,{flag:1}),
+    /* One of each, so the In/Out control has something to show on a fresh setup
+       — and the two that have arrived are marked done, because reaching Here is
+       what completes a shipment everywhere else in the app. A record sitting at
+       Here and still open is a state nothing but this list could produce. */
+    T('Sample box of finishes',0,'shipment',-1,'Lumina Studio','Chicago warehouse',2,{at:'Shop shelf B',done:1}),
+    T('6 crates to the Austin site',1,'shipment',4,'','Austin job site',1,{dir:'out'}),
+    T('Mock-up fixture back to Lumina',0,'shipment',-3,'','Lumina Studio',1,{dir:'out'}),
     T('Final walkthrough punch list',2,'task',16),
     T('Request Q4 lead times from all makers',null,'task',6),
   ];

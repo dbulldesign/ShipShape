@@ -946,6 +946,98 @@ for ever. `destHead()` puts a pencil on the destination's own view and
 - The field is in `AC_SRC`, so the merge is something somebody picks off the list
   rather than a coincidence of spelling.
 
+## Three stages, two directions, and where the box is
+
+Five stages — Quote, Ordered, Making, Shipped, Delivered — was a production
+schedule. The two questions anybody actually asks a shipment are **has it come
+in** and **where is it**, and three states answer both: `Ordered · On its way ·
+Here`, one tap from either end rather than four.
+
+**A shipment going out runs the same three indices under different words**:
+`To send · On its way · Delivered`. "Here" is the wrong word for something you
+have sent and "Ordered" is the wrong word for something you are sending. One set
+of states, two vocabularies, and `stageNames(t)` is the only thing that knows
+which — so nothing else has to care about direction.
+
+- `stageOf(t)` clamps on the way **out** as well as in. `STAGES[4]` is undefined,
+  which is a blank chip and a thrown render, and another device can still send
+  one.
+- `ST_ORDERED` / `ST_AWAY` / `ST_HERE` are named because `t.stage<4` read as
+  arithmetic and meant "has not arrived". Every one of those was a number that
+  had to move when the stages did.
+
+### The migration, which rewrites stored records
+
+`collapseStages(t)` maps `[0,0,1,1,2]` and **`t.sv` is the flag that makes it
+safe**. A stored `1` is "Ordered" under the old numbering and "On its way" under
+the new, and nothing about the number tells the two apart — without the flag this
+would re-map on every load and walk every shipment back to Ordered.
+
+**Which stamp survives a merge is the part with teeth.** Two old stages fold into
+one, and the new stage takes the stamp of the old one that *names* it rather than
+the earlier of the pair:
+
+- `stamps[1]` ← Shipped, falling back to Making. `makerRecord` measures a maker
+  against the day a crate reached Shipped and the digest's "shipped this week"
+  reads the same stamp; taking Making instead would have silently rewritten every
+  maker's record and every week's summary.
+- `stamps[0]` ← Ordered, falling back to Quote.
+
+`shapePulled()` exists because **a record arriving from sync never goes through
+`migrate()`** — it is assigned straight into the list. A device still on the
+five-stage build can push a 4 into a workspace this one has already collapsed, so
+both `mergeItems` and `mergeIn` run the collapse afterwards. An out-of-range
+stage is **re-mapped, not clamped**: 3 is On its way, and clamping alone would
+land it in Here.
+
+`STAGE_ALIAS` keeps the old words working, and the match tries **the word as
+typed and its alias**, not the alias alone. A shipment going out is called
+"Delivered", so running `stage:delivered` through the alias turned it into "here"
+and matched only the ones coming in.
+
+### Which way it is going
+
+`t.dir` is `in` or `out`, on shipments only — a task has no direction, and a
+field that means nothing on most records is one more thing every reader has to
+ignore. Everything written before this was coming in, so that is what they all
+become.
+
+- **One control, three buttons.** Task / Coming in / Going out, in the composer
+  and in the detail sheet. A Task–Shipment toggle with a separate direction under
+  it was two controls and a header all saying overlapping things, on a sheet this
+  change was meant to quieten.
+- Direction is **never inferred**. A maker, a destination or a PO still infers
+  *shipment* the way they always did, but `>Chicago warehouse` on an inbound
+  crate means where it is going — nothing in a line says which way it travels.
+- The row carries it as one character, `↘` or `↗`. A word would be a third chip
+  on a row that already holds the job, the maker and the date.
+- The Shipments view gains an **All / Coming in / Going out** control, with the
+  choice in `view.v` so a re-render agrees with what you were looking at — the
+  same shape `week` and the three time views use. Its eyebrow is short on
+  purpose: "Everything moving" wraps at 390px and squeezes the title row.
+- A destination counts **what is coming, what is still to send and what has been
+  sent** apart, because they are different claims on a place.
+- The sea state splits by direction rather than by production stage: "being made"
+  was a stage that no longer exists.
+
+### Where it actually is
+
+`t.at` is the second half of "has it come in and where is it", and it had no
+answer at all — the only place a shipment named was where it was *going*.
+
+- **Asked the moment it is marked Here**, because that is the one moment somebody
+  is holding the box. The places already used are offered as chips, so the common
+  answer is one tap and no typing; on a phone the field is deliberately not
+  focused, or the keyboard covers them.
+- No record kind behind it: what has been typed **is** the list, exactly as a
+  destination works. In `AC_SRC` for both fields that take one.
+- Shown on the row only at Here — "in the shop" over something still at the maker
+  would be a lie — and cleared when a stage walks back to Ordered, because it was
+  never here.
+- The chip is a door: `view.t==='at'` lists what else is in that place, **done
+  ones included**, since "what is on this shelf" is a question about boxes rather
+  than about open work.
+
 ## What is landing this week
 
 A shipment carries two dates and they mean different things: `due` is the day
