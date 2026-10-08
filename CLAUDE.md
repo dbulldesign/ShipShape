@@ -448,6 +448,47 @@ is the body: **the kind**, **the job**, and the punctuation that was joining the
   should not have to go through a parser to say so; this is for the times you
   would rather just write the sentence.
 
+## Adding from a link, which is all Siri can reach
+
+A Siri Shortcut cannot reach inside a web app: there is no API to call, no
+extension to install, and nothing on the phone that knows this page exists. What
+it **can** do is open a URL — so that is the whole interface. `#add=…` hands its
+words to `runQuickAdd`, the same router the quick add sheet and the ⌘K palette
+go through, and a Shortcut inherits every parser in the app rather than growing
+its own idea of a date, a PO or the length of an hour.
+
+- **The hash is stripped before anything is written.** A reload re-runs the boot
+  sequence against whatever is in the address bar, and an `#add=` still sitting
+  there would add the same thing again on every refresh — a duplicate time entry
+  nobody asked for. The strip comes first, not after, and the back button is
+  covered by the same thing.
+- It answers **`hashchange` as well as the first load**: on a phone the app is
+  usually already open behind the Shortcut and nothing reloads in that case.
+- **No words opens the quick add sheet**, which is the useful thing for a
+  Shortcut that only wants to put you in front of the keyboard.
+- Cut to `ADD_MAX`, and whatever arrives is text: it goes through the same
+  `esc()` every other title does, so markup stays words.
+- The link is **built from `location`** rather than written down, so it is right
+  on the deployed copy, on a local one, and on wherever this gets moved to.
+
+**The kind word belongs in the Shortcut, not in the dictation.** Without one the
+quick add infers from the sentence — a maker or a PO means a shipment, anything
+else is a task — so "matrix meeting 30min" is a *task*, not an hour. A Shortcut
+that prefixes `time ` lets somebody just say the words. One Shortcut, one kind.
+
+**What is deliberately not here**: a silent route that writes to Supabase without
+opening the app. It is possible — `shipshape_push_items` is a security-definer
+RPC the anon key can execute, so a Shortcut could POST a record straight in — but
+the parsers live in the app. A Shortcut would either have to re-implement them,
+which is the one-parser rule broken, or post raw text to an inbox drained later,
+which gets the *time* wrong on a time entry: "30 min" captured at two and drained
+at six would land at six. Neither trade is worth not seeing the app flash.
+
+**One caveat worth keeping in the file**: with sync off, iOS does not reliably
+treat a Home Screen web app and Safari as the same browser, so a link opened from
+Shortcuts can land in a different copy of the data. The Settings panel says so
+when sync is off, and with sync on it stops mattering.
+
 ## The notes are read, and never rewritten
 
 The notes are the one field in this app that is **prose**. Everywhere else a line

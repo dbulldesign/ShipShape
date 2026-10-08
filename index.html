@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.74.0">
+<meta name="app-version" content="1.75.0">
 <meta name="app-build" content="2026-10-08">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -1106,6 +1106,28 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
   <div class="sethead">Syncing and reminders</div>
   <div class="blurb" id="setsyncnote" style="padding-bottom:0"></div>
   <div style="padding:10px 14px 0"><button class="btn sec" id="setsync" style="width:100%;margin:0;text-align:center">Sync setup…</button></div>
+
+  <!-- A URL that adds something. Siri Shortcuts cannot reach into a web app, but
+       it can open a link, and the quick add already turns a sentence into the
+       right record — so the link is the whole interface. -->
+  <div class="sethead">Siri Shortcuts</div>
+  <div class="blurb" style="padding-bottom:0">Open this link with your words on the end and
+    they are added, read exactly as the quick add reads them. In Shortcuts:
+    <b>Dictate Text</b>, then <b>Open URL</b> with this and the dictated text joined on
+    the end.<br><br>
+    Put the kind in the Shortcut rather than saying it out loud, and one Shortcut
+    does one thing: <b>…#add=time </b> then your words logs an hour
+    (<i>matrix meeting 30min</i>), <b>…#add=new shipment </b> books a crate
+    (<i>40 pendants @Lumina friday</i>). With no kind word in front it reads the
+    sentence the way the composer does — a maker or a PO still means a shipment,
+    anything else is a task.</div>
+  <div style="padding:10px 14px 0"><div class="field stack"><label for="setaddurl">The link</label>
+    <input id="setaddurl" readonly spellcheck="false"></div></div>
+  <div style="padding:8px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sec" id="setaddcopy" style="margin:0;font-size:14px;padding:9px 14px">Copy the link</button>
+    <button class="btn sec" id="setaddtry" style="margin:0;font-size:14px;padding:9px 14px">Try it</button>
+  </div>
+  <div class="blurb" id="setaddnote" style="padding-top:8px"></div>
 
   <div class="sethead">Your data</div>
   <div style="padding:10px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
@@ -8721,6 +8743,38 @@ function drawQuickAdd(){
 /* Takes the line rather than reading the field, because the palette says the
    same sentence from somewhere else. One router, so ⌘K and the sheet cannot
    make different things out of the same words. */
+/* ============ adding from a link ============
+   Siri Shortcuts cannot reach inside a web app — there is no API to call and no
+   extension to install. What it can do is **open a URL**, and that turns out to
+   be enough: `#add=…` hands its words straight to `runQuickAdd`, which is the
+   one router the quick add sheet and the ⌘K palette already go through. So a
+   Shortcut inherits every parser in the app — the date, the PO, the maker, the
+   length of an hour — rather than growing its own idea of any of them.
+
+   **The hash is stripped before anything is written.** A reload re-runs the boot
+   sequence with whatever is in the address bar, and an `#add=` still sitting
+   there would add the same entry again on every refresh. That is a duplicate
+   time entry nobody asked for, which is why the strip comes first and not after.
+
+   It answers `hashchange` as well as the first load: on a phone the app is very
+   often already open behind the Shortcut, and nothing reloads in that case. */
+const ADD_MAX=500;
+// not `addLink` — that one puts a URL on a task, and this file already has it
+const shortcutLink=()=>location.origin+location.pathname+'#add=';
+function addFromHash(raw){
+  const text=decodeURIComponent(String(raw||'').replace(/\+/g,' ')).trim().slice(0,ADD_MAX);
+  if(!text)return openQuickAdd();      // no words: the sheet, with the keyboard up
+  runQuickAdd(text);
+}
+function readAddHash(){
+  const m=location.hash.match(/^#add=([\s\S]*)$/);
+  if(!m)return false;
+  // first, or a refresh adds it all over again
+  history.replaceState(null,'',location.pathname+location.search);
+  try{addFromHash(m[1]);}catch(e){toast('Could not read that');}
+  return true;
+}
+addEventListener('hashchange',()=>{if(S.started||S.tasks.length)readAddHash();});
 function runQuickAdd(text){
   const p=quickPlan(typeof text==='string'?text:$('#qatext').value);
   if(p.empty||!p.body)return toast('Say what to add.');
@@ -8799,6 +8853,17 @@ function renderSettings(){
   // the only way to reach it on a phone, where .hctl is display:none
   $('#setpsort').innerHTML=PSORTS.map(v=>`<option value="${v}" ${v===projSort?'selected':''}>${PSORT_LABEL[v]}</option>`).join('');
   if($('#setme')&&document.activeElement!==$('#setme'))$('#setme').value=me;
+  /* Built from where the app is actually being served rather than written down,
+     so it is right on the deployed copy, on a local one and on whatever this
+     gets moved to — and cannot go stale the way a pasted URL would. */
+  if($('#setaddurl')){
+    $('#setaddurl').value=shortcutLink();
+    $('#setaddnote').innerHTML=sync.on
+      ? 'Whatever it adds reaches your other devices on the next sync.'
+      : '<b>Sync is off.</b> A link opened from Shortcuts may land in a different copy of '
+        +'your data than the one on your Home Screen — iOS does not always treat them as the '
+        +'same browser. Turn sync on and it stops mattering.';
+  }
   seg('set-rows',[['comfortable','Comfortable'],['compact','Compact']],compact?'compact':'comfortable');
   seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');
   seg('set-streak',[['off','Off'],['on','On']],streakOn?'on':'off');
@@ -8848,6 +8913,19 @@ $('#setclose').addEventListener('click',closeSheets);
    never again. */
 $('#setme').addEventListener('input',()=>{me=$('#setme').value.trim().slice(0,40);saveView();});
 $('#setsync').addEventListener('click',()=>{closeSheets();openSync();});
+/* Copy falls back to selecting it, the same bargain the brief makes:
+   navigator.clipboard needs a secure context and a permission that is not
+   always there, and a link in front of somebody who can copy it always works. */
+$('#setaddcopy').addEventListener('click',async()=>{
+  const el=$('#setaddurl');
+  try{await navigator.clipboard.writeText(el.value);toast('Link copied');}
+  catch(e){el.focus();el.select();toast('Copy it from here');}
+});
+// the one thing a setup screen should do: prove the link works before you go and
+// build a Shortcut around it
+$('#setaddtry').addEventListener('click',()=>{
+  closeSheets();location.hash='add='+encodeURIComponent('time matrix meeting 30min');
+});
 $('#setsort').addEventListener('change',e=>{sortBy=e.target.value;saveView();render();});
 $('#setgroup').addEventListener('change',e=>{groupBy=e.target.value;saveView();render();});
 $('#setpsort').addEventListener('change',e=>{projSort=e.target.value;saveView();render();});
@@ -9001,6 +9079,8 @@ function loadSample(){
   const hp=location.hash.match(/^#project=(.+)$/);
   if(hp){const id=decodeURIComponent(hp[1]);history.replaceState(null,'',location.pathname+location.search);
     if(P(id))setView('project',id);}
+  // a Shortcut opening the app with words on the end of the link
+  readAddHash();
   setSync(sync.on?'idle':'off');
   if(sync.on){rtConnect();startPolling();pull(true);}
   renderVersion();
