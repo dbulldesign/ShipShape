@@ -448,6 +448,40 @@ is the body: **the kind**, **the job**, and the punctuation that was joining the
   should not have to go through a parser to say so; this is for the times you
   would rather just write the sentence.
 
+## Every link into the app, in one place
+
+A Siri Shortcut is one action — Open URL — so what this app is worth to one is
+the number of places a URL can land. `routeHash()` is the only thing that reads
+one, on the first load **and on every hash after it**.
+
+That second half was the bug: the handlers were four regexes scattered down the
+boot sequence and only `#add=` answered `hashchange`, so **a link to a view did
+nothing at all when the app was already open** — which on a phone it usually is.
+
+The names are the app's own — `setView`'s view names and the + menu's kinds —
+rather than a second vocabulary to keep in step.
+
+| Ending | Lands on |
+| --- | --- |
+| `#view=<t>` | any view; `#view=shipments/out` carries its sub-state, `#view=project/<id>` the job |
+| `#new=<kind>` | the sheet that makes one: task, shipment, **out**, time, hours, visit, idea, project, quick, scan, brief, sync |
+| `#search=<q>` / `#q=<q>` | the query, stepping aside from the board and the archive the way `runSaved` does |
+| `#add=<line>` | written straight in — see below |
+| `#board=<p>`, `#project=<id>`, `#sync` | kept, because board.html links to them |
+
+- **`#new=out` is the one thing a link reaches that a sentence cannot.**
+  Direction is never inferred, so no wording means "going out".
+- The hash is **taken off before anything runs**, for every ending. Only `#add=`
+  is actually dangerous to repeat, but there is no reason for the rest to behave
+  differently.
+- An unknown view, kind or key is **ignored rather than thrown**: a link is
+  typed by hand into Shortcuts and will be mistyped.
+- `VIEW_OK` is `TITLES` plus `makers`, `mfr`, `dest`, `at` and `po`, which have
+  their own headings. Adding `makers` to `TITLES` fixed a heading that had read
+  "Today" on the maker comparison since it was built — `renderHead` falls back
+  to that for any view `TITLES` does not name, and nobody had noticed until a
+  link could land there.
+
 ## Adding from a link, which is all Siri can reach
 
 A Siri Shortcut cannot reach inside a web app: there is no API to call, no

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.76.0">
+<meta name="app-version" content="1.77.0">
 <meta name="app-build" content="2026-10-08">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -367,6 +367,11 @@ body[data-board] #updbar{bottom:calc(12px + env(safe-area-inset-bottom))}
 .seg button.on{background:var(--card);color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .hint{font-size:12.5px;color:var(--label3);display:flex;flex-wrap:wrap;gap:9px;padding:10px 0 2px;border-top:.5px solid var(--sep);margin-top:10px}
 .hint code{font-family:var(--mono);font-size:12px;background:var(--fill2);padding:1px 5px;border-radius:5px;color:var(--label2)}
+/* The same chip in a blurb — the Shortcuts panel is a list of link endings, and
+   unstyled they read as prose rather than as things to copy. `inline-block`
+   keeps a long one whole rather than breaking it across two lines. */
+.blurb code{font-family:var(--mono);font-size:12px;background:var(--fill2);padding:1px 5px;
+  border-radius:5px;color:var(--label);display:inline-block;margin:1px 0}
 .sugg{display:flex;gap:6px;overflow-x:auto;padding:10px 0 2px;scrollbar-width:none}
 .sugg::-webkit-scrollbar{display:none}
 .sugg button{flex:none;font-size:13px;font-weight:600;padding:6px 11px;border-radius:20px;background:var(--fill2);color:var(--label2);transition:transform .15s var(--ease);white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
@@ -1111,18 +1116,19 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
        it can open a link, and the quick add already turns a sentence into the
        right record — so the link is the whole interface. -->
   <div class="sethead">Siri Shortcuts</div>
-  <div class="blurb" style="padding-bottom:0">Open this link with your words on the end and
-    they are added, read exactly as the quick add reads them. In Shortcuts:
-    <b>Dictate Text</b>, then <b>Open URL</b> with this and the dictated text joined on
-    the end.<br><br>
-    <b>The link on its own</b> opens the quick add sheet with the keyboard up, so
-    you type into the field that previews what it will make. Put a kind on the end
-    and the sheet opens with that already picked — <b>…#add=time </b>,
-    <b>…#add=new shipment </b>. Add the words too and it is written straight in
-    without the sheet, which is what a dictated Shortcut wants.<br><br>
-    With no kind word it reads the sentence the way the composer does — a maker or
-    a PO still means a shipment, anything else is a task.</div>
-  <div style="padding:10px 14px 0"><div class="field stack"><label for="setaddurl">The link</label>
+  <div class="blurb" style="padding-bottom:0">One <b>Open URL</b> action in Shortcuts,
+    with this link and an ending. Put it on the Home Screen, the Lock Screen, the
+    Action Button or a Back Tap.<br><br>
+    <b>A place</b> — <code>#view=today</code>, <code>#view=time</code>,
+    <code>#view=shipments/out</code>, <code>#view=pos</code>, <code>#view=visits</code>,
+    <code>#view=makers</code>.<br>
+    <b>Something to fill in</b> — <code>#new=task</code>, <code>#new=shipment</code>,
+    <code>#new=out</code>, <code>#new=time</code>, <code>#new=visit</code>,
+    <code>#new=idea</code>, <code>#new=project</code>, <code>#new=quick</code>.<br>
+    <b>A question</b> — <code>#search=is:latemaker</code>.<br>
+    <b>Words to add outright</b> — <code>#add=</code> and a line, read exactly as the
+    quick add reads it. On its own it opens the quick add with the keyboard up.</div>
+  <div style="padding:10px 14px 0"><div class="field stack"><label for="setaddurl">The link, then an ending</label>
     <input id="setaddurl" readonly spellcheck="false"></div></div>
   <div style="padding:8px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn sec" id="setaddcopy" style="margin:0;font-size:14px;padding:9px 14px">Copy the link</button>
@@ -3425,7 +3431,11 @@ function renderNav(){
   rollCounts();
 }
 const TITLES={today:'Today',scheduled:'Scheduled',week:'Week',flagged:'Flagged',waiting:'Whose move',board:'Everything Board',time:'Time',timelog:'Time',timecal:'Time',pos:'POs',invoices:'Invoices',all:'All open',done:'Completed',
-  projects:'Projects',shipments:'Shipments',archive:'Archived',visits:'Site visits'};
+  projects:'Projects',shipments:'Shipments',archive:'Archived',visits:'Site visits',
+  /* The maker comparison has had a heading reading "Today" since it was built:
+     `renderHead` falls back to that for any view TITLES does not name, and this
+     one was never added. Only noticed once a link could land on it. */
+  makers:'Makers'};
 function renderHead(){
   const d=new Date();
   let name=TITLES[view.t]||'Today',sub='&nbsp;';
@@ -3443,6 +3453,7 @@ function renderHead(){
   if(view.t==='timelog')sub='Every entry';
   if(view.t==='timecal')sub='Hours by month';
   if(view.t==='visits')sub='Days on site';
+  if(view.t==='makers')sub='How they compare';
   if(view.t==='pos')sub='Everything on order';
   if(view.t==='invoices')sub='Everything invoiced';
   if(view.t==='po'){name='PO '+view.v;sub='Purchase order';}
@@ -8762,8 +8773,11 @@ function drawQuickAdd(){
    It answers `hashchange` as well as the first load: on a phone the app is very
    often already open behind the Shortcut, and nothing reloads in that case. */
 const ADD_MAX=500;
-// not `addLink` — that one puts a URL on a task, and this file already has it
-const shortcutLink=()=>location.origin+location.pathname+'#add=';
+/* The base, with no `#` on it, because the panel lists endings that carry their
+   own — so the two concatenate. It used to end `#add=`, which was right while
+   that was the only ending and wrong the moment there were four.
+   Not `addLink` — that one puts a URL on a task, and this file already has it. */
+const shortcutLink=()=>location.origin+location.pathname;
 /* Dictated words arrive however the Shortcut sent them — URL-encoded if it was
    built that way, raw if it was not. A stray `%` makes `decodeURIComponent`
    throw on the whole string, and "50% complete" is a sentence somebody will
@@ -8805,15 +8819,70 @@ function addFromHash(raw){
   if(!p.body)return openQuickAdd(p.kind);
   runQuickAdd(text);
 }
-function readAddHash(){
-  const m=location.hash.match(/^#add=([\s\S]*)$/);
+/* ============ every link into the app, in one place ============
+   A Shortcut is one action — Open URL — so what the app is worth to one is the
+   number of places a URL can land. These were four regexes scattered down the
+   boot sequence, and only `#add=` answered `hashchange`: a link to a **view**
+   did nothing at all when the app was already open, which on a phone it usually
+   is. One router, read on the first load and on every hash after it.
+
+   The names are the ones already in the app — `setView`'s own view names and the
+   + menu's own kinds — rather than a second vocabulary to keep in step. */
+const NEW_HASH={
+  task:()=>openComposer('task'),
+  shipment:()=>openComposer('shipment'),
+  in:()=>openComposer('shipment'),
+  out:()=>openComposer('out'),            // the one thing a typed link reaches that a sentence cannot
+  time:()=>openNewEntry('timer'),
+  hours:()=>openNewEntry('amount'),
+  visit:()=>openVisit(null,view.t==='project'?view.v:null),
+  idea:()=>openIdea(),
+  project:()=>openProject(null),
+  quick:()=>openQuickAdd(),
+  scan:()=>openScanner('find'),
+  brief:()=>openBrief(),
+  sync:()=>openSync(),
+};
+function routeHash(){
+  const h=location.hash;
+  if(!h||h==='#')return false;
+  /* Taken off the address bar **before** anything runs. A reload re-runs this
+     against whatever is still there, and for `#add=` that is the same entry
+     added twice — see addFromHash. The others are harmless to repeat but there
+     is no reason for them to behave differently. */
+  const take=()=>history.replaceState(null,'',location.pathname+location.search);
+  const m=h.match(/^#(\w+)(?:=([\s\S]*))?$/);
   if(!m)return false;
-  // first, or a refresh adds it all over again
-  history.replaceState(null,'',location.pathname+location.search);
-  try{addFromHash(m[1]);}catch(e){toast('Could not read that');}
+  const k=m[1].toLowerCase(),raw=m[2]===undefined?'':m[2];
+  let v='';try{v=decodeURIComponent(raw);}catch(e){v=raw;}
+  take();
+  try{
+    if(k==='add'){addFromHash(raw);return true;}
+    if(k==='sync'){openSync();return true;}
+    if(k==='board'){openBoard(v);return true;}
+    if(k==='project'){if(P(v))setView('project',v);return true;}
+    if(k==='new'){const f=NEW_HASH[v.trim().toLowerCase()];if(f)f();return true;}
+    // a question rather than a place: `#search=is:latemaker` opens on the answer
+    if(k==='search'||k==='q'){
+      if(view.t==='board'||view.t==='archive')setView('all');
+      $('#q').value=v;query=v.trim();renderList();return true;
+    }
+    if(k==='view'){
+      // `shipments/out` and `project/<id>` — a view plus the thing it is of
+      const [t,...rest]=v.split('/');
+      const val=rest.join('/');
+      if(t==='board'){openBoard(val);return true;}
+      if(t==='project'){if(P(val))setView('project',val);return true;}
+      if(VIEW_OK.has(t)){setView(t,val||undefined);return true;}
+      return true;
+    }
+  }catch(e){toast('Could not read that link');}
   return true;
 }
-addEventListener('hashchange',()=>{if(S.started||S.tasks.length)readAddHash();});
+/* Every view a link may name. `TITLES` is most of it but not all — `makers`,
+   `mfr`, `dest` and `at` have their own headings and were unreachable. */
+const VIEW_OK=new Set([...Object.keys(TITLES),'makers','mfr','dest','at','po']);
+addEventListener('hashchange',()=>{if(S.started||S.tasks.length)routeHash();});
 function runQuickAdd(text){
   const p=quickPlan(typeof text==='string'?text:$('#qatext').value);
   if(p.empty||!p.body)return toast('Say what to add.');
@@ -9105,21 +9174,7 @@ function loadSample(){
 (async()=>{
   await loadAll();
   render();
-  // board.html sends people here to set sync up; open the sheet they came for
-  if(location.hash==='#sync'){openSync();history.replaceState(null,'',location.pathname+location.search);}
-  const hv=location.hash.match(/^#view=(\w+)$/);
-  if(hv){history.replaceState(null,'',location.pathname+location.search);
-    if(hv[1]==='board')openBoard();
-    else if(TITLES[hv[1]])setView(hv[1]);}
-  // board.html hands a desktop-width visitor over here, keeping its deep link
-  const hb=location.hash.match(/^#board=(.*)$/);
-  if(hb){history.replaceState(null,'',location.pathname+location.search);
-    openBoard(decodeURIComponent(hb[1]||''));}
-  const hp=location.hash.match(/^#project=(.+)$/);
-  if(hp){const id=decodeURIComponent(hp[1]);history.replaceState(null,'',location.pathname+location.search);
-    if(P(id))setView('project',id);}
-  // a Shortcut opening the app with words on the end of the link
-  readAddHash();
+  routeHash();
   setSync(sync.on?'idle':'off');
   if(sync.on){rtConnect();startPolling();pull(true);}
   renderVersion();
