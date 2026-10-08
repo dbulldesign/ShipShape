@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.77.0">
+<meta name="app-version" content="1.78.0">
 <meta name="app-build" content="2026-10-08">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -314,6 +314,14 @@ h1 .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body[data-board] #updbar{bottom:calc(12px + env(safe-area-inset-bottom))}
 #updbar[hidden]{display:none}          /* display:flex beats the UA rule */
 #updbar .ub-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* "Version 1.2.3 is ready" fits a line; "this is the browser copy, not your
+   Home Screen app" does not, and ellipsing it cuts off the half that matters.
+   The one message that needs two lines gets them. */
+/* The bar is shrink-to-fit, so a wrapping child alone collapses it to the width
+   of the longest word — one character a line. Give the split message a real box
+   to wrap inside, and let the text have what the buttons do not. */
+#updbar[data-kind="split"]{width:calc(100vw - 24px);max-width:460px}
+#updbar[data-kind="split"] .ub-t{white-space:normal;line-height:1.3;flex:1;min-width:0}
 #updbar b{font-family:var(--round);font-weight:700}
 #updbar #ub-go{flex:none;background:var(--blue);color:#fff;font-weight:600;
   padding:7px 14px;border-radius:10px;transition:transform .15s var(--ease)}
@@ -1191,7 +1199,7 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
      asked. It stays up until it is taken — a deploy that fixes something is no
      use sitting on a server. -->
 <div id="updbar" hidden role="status">
-  <span class="ub-t">Version <b id="ub-v"></b> is ready</span>
+  <span class="ub-t" id="ub-t"></span>
   <button id="ub-go">Update</button>
   <button id="ub-x" aria-label="Not now">✕</button>
 </div>
@@ -4733,11 +4741,44 @@ function renderVersion(status){
    two can never disagree. Dismissing hides it for this tab only — the next check
    after a reload finds the same version and says so again, because a build that
    is still not installed is still worth saying. */
+/* A Home Screen web app and Safari are, on iOS, two browsers that do not share
+   storage — so the same URL opened from a Shortcut lands in a *different copy of
+   the workspace* from the one on the Home Screen, with its own empty sync
+   settings. Nothing said so, and a time entry written into the wrong copy looks
+   exactly like one written into the right one.
+
+   `splitWarn` is set only where it can actually be true: arrived by a link, not
+   running standalone, and sync off. With sync on the two converge and there is
+   nothing to say. */
+const standalone=()=>!!(window.navigator.standalone
+  ||matchMedia('(display-mode: standalone)').matches
+  ||matchMedia('(display-mode: fullscreen)').matches);
+let splitWarn=false,splitHidden=false;
+/* One banner and two things worth interrupting a list for. The split copy wins
+   when both are true: a build going uninstalled another hour is a nuisance,
+   where writing into a copy you did not mean to is not fixed by anything you
+   press later. Dismiss it and the update takes the bar. */
 function drawUpdBar(){
-  $('#updbar').hidden=!newVersion||updHidden;
-  if(newVersion)$('#ub-v').textContent=newVersion;
+  const split=splitWarn&&!splitHidden;
+  const upd=!!newVersion&&!updHidden;
+  $('#updbar').hidden=!(split||upd);
+  $('#updbar').dataset.kind=split?'split':'upd';
+  if(split){
+    $('#ub-t').innerHTML='This is the <b>browser</b> copy, not your Home Screen app';
+    $('#ub-go').textContent='Set up sync';
+  }else if(upd){
+    $('#ub-t').innerHTML=`Version <b>${esc(newVersion)}</b> is ready`;
+    $('#ub-go').textContent='Update';
+  }else{
+    /* Cleared, not merely hidden — the same rule the offer row needed. A hidden
+       bar holding the last message is one `hidden=false` from showing something
+       that is no longer true. */
+    $('#ub-t').textContent='';$('#ub-go').textContent='Update';
+  }
 }
 $('#ub-go').addEventListener('click',()=>{
+  // whichever message the bar is carrying is what the button does
+  if($('#updbar').dataset.kind==='split'){closeSheets();openSync();return;}
   /* Past the cache, and past the service worker's copy with it: the worker
      answers HTML network-first, but a stale cached page is exactly what a
      reload is trying to get away from. The search parameter makes the request
@@ -4753,7 +4794,9 @@ $('#ub-go').addEventListener('click',()=>{
   // never let a worker that will not answer strand somebody on the old build
   setTimeout(go,2500);
 });
-$('#ub-x').addEventListener('click',()=>{updHidden=true;drawUpdBar();});
+$('#ub-x').addEventListener('click',()=>{
+  if($('#updbar').dataset.kind==='split')splitHidden=true;else updHidden=true;
+  drawUpdBar();});
 async function liveVersion(){
   const r=await fetch(location.pathname+'?vcheck='+Date.now(),{cache:'no-store'});
   if(!r.ok)throw new Error(r.status);
@@ -8856,6 +8899,11 @@ function routeHash(){
   const k=m[1].toLowerCase(),raw=m[2]===undefined?'':m[2];
   let v='';try{v=decodeURIComponent(raw);}catch(e){v=raw;}
   take();
+  /* A link is how a Shortcut gets here, and on iOS that opens Safari rather than
+     the Home Screen app — two browsers that do not share storage, so this is a
+     different copy of the workspace with its own empty sync settings. Said only
+     where it can be true, and only once per tab. */
+  if(!standalone()&&!sync.on&&!splitWarn){splitWarn=true;drawUpdBar();}
   try{
     if(k==='add'){addFromHash(raw);return true;}
     if(k==='sync'){openSync();return true;}
@@ -8968,9 +9016,10 @@ function renderSettings(){
     $('#setaddurl').value=shortcutLink();
     $('#setaddnote').innerHTML=sync.on
       ? 'Whatever it adds reaches your other devices on the next sync.'
-      : '<b>Sync is off.</b> A link opened from Shortcuts may land in a different copy of '
-        +'your data than the one on your Home Screen — iOS does not always treat them as the '
-        +'same browser. Turn sync on and it stops mattering.';
+      : '<b>Sync is off, so this will not work properly.</b> iOS opens a link in Safari, '
+        +'not in your Home Screen app, and the two do not share storage — so a Shortcut '
+        +'writes into a separate copy of your data. Turn sync on <i>here and in the Home '
+        +'Screen app</i> and they become one workspace.';
   }
   seg('set-rows',[['comfortable','Comfortable'],['compact','Compact']],compact?'compact':'comfortable');
   seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');

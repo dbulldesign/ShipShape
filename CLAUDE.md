@@ -536,10 +536,41 @@ which is the one-parser rule broken, or post raw text to an inbox drained later,
 which gets the *time* wrong on a time entry: "30 min" captured at two and drained
 at six would land at six. Neither trade is worth not seeing the app flash.
 
-**One caveat worth keeping in the file**: with sync off, iOS does not reliably
-treat a Home Screen web app and Safari as the same browser, so a link opened from
-Shortcuts can land in a different copy of the data. The Settings panel says so
-when sync is off, and with sync on it stops mattering.
+## Two copies of the same workspace
+
+**iOS cannot open an installed web app from a URL.** There is no scheme to
+register, no manifest field and no Shortcuts action that does it — a link to the
+app's own address opens Safari. And a Home Screen web app and Safari are two
+browsers that **do not share storage**, so a Shortcut lands in a *different copy
+of the workspace*, with its own empty `shipshape:sync` and therefore no sync at
+all. Everything written there is stranded.
+
+Nothing said so, which is the part that made it a bug rather than a limitation:
+a time entry written into the wrong copy looks exactly like one written into the
+right one.
+
+- `standalone()` is `navigator.standalone` or the `display-mode` media query.
+- `splitWarn` is set **only where it can be true** — arrived by a link, not
+  standalone, sync off — and only once a tab. With sync on the two copies
+  converge and there is nothing to say.
+- **One banner, two messages.** `#updbar` carries whichever is worth
+  interrupting a list for, and the split copy outranks a waiting update: a build
+  going uninstalled another hour is a nuisance, where writing into a copy you
+  did not mean to is not fixed by anything pressed later. Dismiss it and the
+  update takes the bar. `data-kind` is what the button and the ✕ read to know
+  which they belong to.
+- It is **cleared, not merely hidden**, when neither applies — the same rule
+  `drawOfferRow` needed, and for the same reason: a hidden bar holding the last
+  message is one `hidden=false` from showing something untrue.
+- `"Version 1.2.3 is ready"` fits a line and the split message does not, so that
+  one wraps. The bar is shrink-to-fit, so a wrapping child **alone** collapses it
+  to the width of the longest word — one character a line. It needs a real width
+  to wrap inside.
+
+**The fix to tell somebody is to set sync up in both copies**, which is a paste:
+the sync sheet already copies and pastes `{url,key,ws}` through `spreadSettings`.
+After that the Shortcut route is sound, because Safari and the Home Screen app
+are then two devices on one workspace — which is what sync was for.
 
 ## The notes are read, and never rewritten
 
