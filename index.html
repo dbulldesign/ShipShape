@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.75.0">
+<meta name="app-version" content="1.75.1">
 <meta name="app-build" content="2026-10-08">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -8761,8 +8761,24 @@ function drawQuickAdd(){
 const ADD_MAX=500;
 // not `addLink` — that one puts a URL on a task, and this file already has it
 const shortcutLink=()=>location.origin+location.pathname+'#add=';
+/* Dictated words arrive however the Shortcut sent them — URL-encoded if it was
+   built that way, raw if it was not. A stray `%` makes `decodeURIComponent`
+   throw on the whole string, and "50% complete" is a sentence somebody will
+   dictate, so a failed decode falls back to the words as they came rather than
+   losing the lot. */
+/* Falling back to the whole raw string would leave every `%20` sitting in the
+   title as four characters, so the retry decodes **run by run** instead: a run
+   of escapes is decoded together, because one character outside ASCII is three
+   of them and decoding each alone would throw on its continuation bytes. A run
+   that will not decode, and a bare `%` that is not an escape at all, are left
+   exactly as they came. */
+const softDecode=s=>{
+  try{return decodeURIComponent(s);}catch(e){}
+  return s.replace(/(?:%[0-9a-f]{2})+/gi,r=>{try{return decodeURIComponent(r);}catch(e){return r;}});
+};
 function addFromHash(raw){
-  const text=decodeURIComponent(String(raw||'').replace(/\+/g,' ')).trim().slice(0,ADD_MAX);
+  const text0=softDecode(String(raw||'').replace(/\+/g,' '));
+  let text=text0.trim().slice(0,ADD_MAX);
   if(!text)return openQuickAdd();      // no words: the sheet, with the keyboard up
   runQuickAdd(text);
 }
