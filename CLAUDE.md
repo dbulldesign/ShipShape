@@ -567,10 +567,57 @@ right one.
   to the width of the longest word — one character a line. It needs a real width
   to wrap inside.
 
-**The fix to tell somebody is to set sync up in both copies**, which is a paste:
-the sync sheet already copies and pastes `{url,key,ws}` through `spreadSettings`.
-After that the Shortcut route is sound, because Safari and the Home Screen app
-are then two devices on one workspace — which is what sync was for.
+**The fix is to set sync up in both copies, once.** localStorage is per origin,
+not per tab, so after that every later open of Safari — a Shortcut's included —
+is already synced, and Safari and the Home Screen app are two devices on one
+workspace, which is what sync was for. The hand-off below makes the once a tap.
+
+## Setting sync up, made short
+
+It was five steps, three fields, two blocks of SQL and a Generate button, and
+every one of them was a place to get stuck. Now:
+
+- **One box takes the paste** (`#spaste1`, read by `sipAny`). Nobody holds a
+  "Project URL" and an "anon key" as two separate things — they hold a
+  dashboard page they can select. Each is known by its own shape (a
+  `*.supabase.co` URL, a three-part JWT starting `eyJ`), so both at once, one at
+  a time in either order, or another device's settings JSON all land in the
+  right fields. It is a **textarea**: an input strips newlines, and the URL and
+  key pasted together then ran into one word (`…supabase.coanon publiceyJ…`)
+  with no edge for either pattern to find. The three fields stay, folded, for
+  correcting rather than filling, and open when something is read so it can be
+  checked.
+- **No workspace to invent.** It is a random string this app makes up — nothing
+  to look up and no decision in it, so asking for one was a step that could only
+  be got wrong. Turn on sync makes one when there is none; New workspace is still
+  there for starting over.
+- **One block of SQL.** Item-by-item sync was "optional", which was a kindness
+  that cost a decision: it is strictly better and the app finds it on its own.
+  The reminders SQL stays separate, because it is genuinely optional and needs
+  keys of its own.
+- **The steps come first** while sync is off, above Reminders rather than at the
+  foot of the sheet, and fold once it is on. Set in `openSync`, not in
+  `renderSyncSheet` — that runs on every paste, and would reopen the steps under
+  somebody who had just folded them.
+
+### Handing it to another device
+
+`#sync=<payload>` carries `{url,key,ws}` base64url'd (through the existing
+`b64url`, which the push key already used). **Set up another device** copies one;
+opening it fills the other copy's sheet through `spreadSettings`.
+
+**It fills the fields and stops — it never turns sync on.** That is the whole of
+its safety. A link like this from somebody else would otherwise point the app at
+*their* database and push your work into it; leaving the switch to a person is
+the bargain `spreadSettings` already made for a pasted line. The payload is
+encoding, not protection — the link carries the anon key and should be treated
+like the key itself.
+
+**Links are read once the boot is done, not once there is data.** The
+`hashchange` handler used to ask `S.started||S.tasks.length`, which is false on a
+brand-new copy — exactly who a hand-off is for — so any link that arrived while
+the page was already open was silently dropped. `booted` is set just before the
+first `routeHash()`.
 
 ## The notes are read, and never rewritten
 

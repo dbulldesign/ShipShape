@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Shipshape">
 <!-- Single source of truth for the build. Bump both when you deploy; the ⋯ menu
      shows these, and compares them against whatever is live on the server. -->
-<meta name="app-version" content="1.78.0">
-<meta name="app-build" content="2026-10-08">
+<meta name="app-version" content="1.79.0">
+<meta name="app-build" content="2026-10-09">
 <link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -1413,56 +1413,49 @@ pre{background:var(--bg);border-radius:10px;padding:11px;font-family:var(--mono)
 <div class="sheet" role="dialog" aria-modal="true" id="ssheet"><div class="grab"></div>
   <div class="sheettitle">Sync<button class="x" id="sclose" aria-label="Close"><svg viewBox="0 0 12 12"><path d="M1.4 0 6 4.6 10.6 0 12 1.4 7.4 6 12 10.6 10.6 12 6 7.4 1.4 12 0 10.6 4.6 6 0 1.4Z"/></svg></button></div>
   <div class="blurb" id="sstatus">Off. Paste your Supabase details below to keep every device in step.</div>
+  <!-- One box in front of the three. Nobody has a "Project URL" and an "anon
+       key" in their hand as two separate things — they have a dashboard page
+       they can select and copy, and a line another device gave them. `sipAny`
+       pulls whichever of the three it can find out of whatever lands here, so
+       the fields below are for correcting rather than for filling. -->
+  <div class="fgroup">
+    <div class="field stack"><label for="spaste1">Paste from Supabase</label>
+      <!-- a textarea, not an input: an input strips newlines, and the URL and the
+           key pasted together then run into one word with no edge to find -->
+      <textarea id="spaste1" class="mono" rows="2" placeholder="the URL and the anon key, together or one at a time"
+        autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"
+        style="width:100%;resize:none;background:transparent;border:0;outline:none;font-size:13px"></textarea></div>
+  </div>
+  <details id="sfields"><summary style="padding:2px 16px 0;font-size:13px;color:var(--label3)">The three fields</summary>
   <div class="fgroup">
     <div class="field stack"><label for="surl">Project URL</label><input id="surl" class="mono" placeholder="https://abc.supabase.co" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
     <div class="field stack"><label for="skey">Anon key</label><input id="skey" class="mono" placeholder="eyJhbGci…" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
-    <div class="field stack"><label for="sws">Workspace</label><input id="sws" class="mono" placeholder="press Generate" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
-  </div>
+    <div class="field stack"><label for="sws">Workspace</label><input id="sws" class="mono" placeholder="made for you" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
+  </div></details>
   <div class="blurb" id="sdraft" style="display:none;color:var(--orange);padding-bottom:8px"></div>
   <div style="padding:0 14px;display:flex;gap:8px;flex-wrap:wrap">
-    <button class="btn sec" id="sgen" style="margin:0;font-size:14px;padding:9px 14px">Generate</button>
+    <button class="btn sec" id="shandoff" style="margin:0;font-size:14px;padding:9px 14px">Set up another device</button>
+    <button class="btn sec" id="sgen" style="margin:0;font-size:14px;padding:9px 14px">New workspace</button>
     <button class="btn sec" id="scopy" style="margin:0;font-size:14px;padding:9px 14px">Copy settings</button>
-    <button class="btn sec" id="spaste" style="margin:0;font-size:14px;padding:9px 14px">Paste settings</button>
   </div>
   <div style="padding:12px 14px 0;display:flex;gap:10px">
     <button class="btn sec" id="soff" style="flex:1;margin:0;text-align:center">Turn off</button>
     <button class="btn" id="son" style="flex:1;margin:0;text-align:center">Turn on sync</button>
   </div>
-  <div class="trackhead" style="padding-top:14px"><span>Reminders</span><span id="pushstate" class="got"></span></div>
-  <div class="fgroup" style="margin-top:0">
-    <div class="field stack"><label for="pushkey">Public key</label><input id="pushkey" class="mono" placeholder="VAPID public key" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
-    <div class="field stack"><label for="pushurl">Function URL</label><input id="pushurl" class="mono" placeholder="https://….functions.supabase.co/notify" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
-  </div>
-  <div style="padding:10px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
-    <button class="btn sec" id="pushoff" style="flex:1;margin:0;text-align:center">Turn off</button>
-    <button class="btn" id="pushon" style="flex:1;margin:0;text-align:center">Turn on reminders</button>
-  </div>
-  <div style="padding:8px 14px 0;display:flex;gap:8px">
-    <button class="btn sec" id="pushgen" style="flex:1;margin:0;text-align:center;font-size:14px">Make a key pair</button>
-    <button class="btn sec" id="pushtest" style="flex:1;margin:0;text-align:center;font-size:14px">Test this device</button>
-    <button class="btn sec" id="pushsend" style="flex:1;margin:0;text-align:center;font-size:14px">Test the chain</button>
-  </div>
-  <div id="pushsecret" style="display:none;padding:10px 14px 0">
-    <div class="blurb" style="padding:0 0 6px">This half is the secret. Put it in Supabase under Edge Functions &rarr;
-    Secrets as <code>VAPID_PRIVATE_KEY</code>. It must never go back into this app.</div>
-    <input id="pushpriv" class="mono" readonly style="width:100%;background:var(--fill2);border:0;border-radius:9px;padding:9px 12px;font-size:13px">
-    <button class="btn sec" id="pushprivcopy" style="margin:8px 0 0;font-size:14px;padding:8px 14px">Copy the private key</button>
-  </div>
-  <div id="pushdiag" class="tracklink" style="padding-top:10px"></div>
-  <div class="blurb" style="padding-top:8px">A push needs a server to send it, so this needs the notify
-  function deployed and its key pasted above — see notify/README.md in the repo. On iPhone the app has to be
-  on your Home Screen first; Safari will not grant notifications to a tab.
-  <br><br>A second function on the same project can say where a parcel actually is, which puts a
-  <b>Check status</b> button on any shipment with a tracking number — see track/README.md. It needs the
-  function URL above, and your own carrier credentials.</div>
-  <details><summary>First-time setup (5 minutes)</summary><div class="body">
+  <!-- Above Reminders, not below: setting sync up is the thing most people open
+       this sheet to do, and it was the last thing on it. Open while sync is off,
+       folded once it is on — see renderSyncSheet. -->
+  <details id="ssetup" open><summary>First-time setup</summary><div class="body">
     <ol>
       <li>Make a free project at supabase.com.</li>
-      <li>Open <b>SQL Editor</b>, paste the block below, press Run.</li>
-      <li>Open <b>Project Settings → API</b>. Copy the <b>Project URL</b> and the <b>anon public</b> key into the fields above.</li>
-      <li>Press <b>Generate</b> for a workspace key, then <b>Turn on sync</b>.</li>
-      <li>On your other devices, open the same page, press <b>Copy settings</b> here and <b>Paste settings</b> there — or paste the copied
-      line into any of the three fields — and turn sync on. What you type is kept if you close this sheet part-way through.</li>
+      <li>Open <b>SQL Editor</b>, paste the block below, press <b>Run</b>. That is the only code.</li>
+      <li>Open <b>Project Settings → API</b>, select the <b>Project URL</b> and the
+        <b>anon public</b> key, and paste them into the box above — together, in any
+        order. It takes them apart itself.</li>
+      <li>Press <b>Turn on sync</b>. A workspace key is made for you if you have not set one.</li>
+      <li>For another device — or Safari on this iPhone, which is a separate copy from the Home
+        Screen app — press <b>Set up another device</b> here and open the link it copies over
+        there. It fills everything in; you press <b>Turn on sync</b>.</li>
     </ol>
     <button class="btn sec" id="sqlcopy" style="margin:4px 0 0;font-size:14px;padding:8px 14px">Copy the SQL</button>
     <pre id="sql">create table if not exists shipshape_state (
@@ -1494,14 +1487,8 @@ end $$;
 revoke all on function shipshape_pull(text) from public;
 revoke all on function shipshape_push(text, jsonb) from public;
 grant execute on function shipshape_pull(text) to anon;
-grant execute on function shipshape_push(text, jsonb) to anon;</pre>
-  </div></details>
-  <details><summary>Optional: sync item by item</summary><div class="body">
-    <p style="margin:0 0 8px">Without this, each device sends its whole list on every change, and a
-    device that has not caught up can overwrite a change made elsewhere. Run this and the app
-    switches by itself to sending only what changed. It keeps working if you never run it.</p>
-    <button class="btn sec" id="sqlcopy2" style="margin:4px 0 8px;font-size:14px;padding:8px 14px">Copy the SQL</button>
-    <pre id="sql2">create table if not exists shipshape_items (
+grant execute on function shipshape_push(text, jsonb) to anon;
+create table if not exists shipshape_items (
   ws         text   not null,
   id         text   not null,
   kind       text   not null,
@@ -1541,6 +1528,33 @@ revoke all on function shipshape_push_items(text, jsonb) from public;
 grant execute on function shipshape_pull_items(text, bigint) to anon;
 grant execute on function shipshape_push_items(text, jsonb) to anon;</pre>
   </div></details>
+  <div class="trackhead" style="padding-top:14px"><span>Reminders</span><span id="pushstate" class="got"></span></div>
+  <div class="fgroup" style="margin-top:0">
+    <div class="field stack"><label for="pushkey">Public key</label><input id="pushkey" class="mono" placeholder="VAPID public key" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
+    <div class="field stack"><label for="pushurl">Function URL</label><input id="pushurl" class="mono" placeholder="https://….functions.supabase.co/notify" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></div>
+  </div>
+  <div style="padding:10px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sec" id="pushoff" style="flex:1;margin:0;text-align:center">Turn off</button>
+    <button class="btn" id="pushon" style="flex:1;margin:0;text-align:center">Turn on reminders</button>
+  </div>
+  <div style="padding:8px 14px 0;display:flex;gap:8px">
+    <button class="btn sec" id="pushgen" style="flex:1;margin:0;text-align:center;font-size:14px">Make a key pair</button>
+    <button class="btn sec" id="pushtest" style="flex:1;margin:0;text-align:center;font-size:14px">Test this device</button>
+    <button class="btn sec" id="pushsend" style="flex:1;margin:0;text-align:center;font-size:14px">Test the chain</button>
+  </div>
+  <div id="pushsecret" style="display:none;padding:10px 14px 0">
+    <div class="blurb" style="padding:0 0 6px">This half is the secret. Put it in Supabase under Edge Functions &rarr;
+    Secrets as <code>VAPID_PRIVATE_KEY</code>. It must never go back into this app.</div>
+    <input id="pushpriv" class="mono" readonly style="width:100%;background:var(--fill2);border:0;border-radius:9px;padding:9px 12px;font-size:13px">
+    <button class="btn sec" id="pushprivcopy" style="margin:8px 0 0;font-size:14px;padding:8px 14px">Copy the private key</button>
+  </div>
+  <div id="pushdiag" class="tracklink" style="padding-top:10px"></div>
+  <div class="blurb" style="padding-top:8px">A push needs a server to send it, so this needs the notify
+  function deployed and its key pasted above — see notify/README.md in the repo. On iPhone the app has to be
+  on your Home Screen first; Safari will not grant notifications to a tab.
+  <br><br>A second function on the same project can say where a parcel actually is, which puts a
+  <b>Check status</b> button on any shipment with a tracking number — see track/README.md. It needs the
+  function URL above, and your own carrier credentials.</div>
   <details><summary>Optional: reminders</summary><div class="body">
     <p style="margin:0 0 8px">Needed only if you want a notification when something is due. Run this,
     then deploy the notify function from the repo and paste its public key above.</p>
@@ -7063,6 +7077,9 @@ function openSync(){
   // re-check right here rather than making you reload. Called before the sheet
   // is marked open, since a quiet pull skips itself while a sheet is up.
   if(sync.on&&sync.mode==='doc'){sync.mode=null;pull(true);}
+  /* Here and not in renderSyncSheet: that runs on every paste, and setting this
+     there would reopen the steps under somebody who had just folded them. */
+  if($('#ssetup'))$('#ssetup').open=!sync.on;
   renderSyncSheet();rememberFocus();$('#scrim').classList.add('on');$('#ssheet').classList.add('on');}
 function readSyncFields(){
   sync.url=$('#surl').value.trim();sync.key=$('#skey').value.trim();sync.ws=$('#sws').value.trim();
@@ -7484,10 +7501,46 @@ $('#scanx').addEventListener('click',closeScanner);
 $('#pclose').addEventListener('click',()=>{editProj=null;closeSheets();});
 $('#sclose').addEventListener('click',closeSheets);
 $('#psave').addEventListener('click',saveProject);
+const newWorkspace=()=>{const a=new Uint8Array(16);crypto.getRandomValues(a);
+  return [...a].map(b=>b.toString(36).padStart(2,'0')).join('').slice(0,24);};
 $('#sgen').addEventListener('click',()=>{
-  const a=new Uint8Array(16);crypto.getRandomValues(a);
-  $('#sws').value=[...a].map(b=>b.toString(36).padStart(2,'0')).join('').slice(0,24);
+  $('#sws').value=newWorkspace();
   flushSyncDraft();     // setting .value fires no input event, so keep it by hand
+});
+/* One box in front of the three. Nobody holds a "Project URL" and an "anon key"
+   as two separate things — they hold a dashboard page they can select, or a line
+   another device gave them. Each is recognised by its own shape, so pasting both
+   at once, one at a time, or the whole JSON all land in the right fields. */
+function sipAny(raw){
+  const v=String(raw||'').trim();
+  if(!v)return false;
+  if(spreadSettings(v))return true;                      // the JSON another device copied
+  let got=0;
+  const url=v.match(/https?:\/\/[a-z0-9-]+\.supabase\.(?:co|in|net)\b/i);
+  if(url){$('#surl').value=url[0];got++;}
+  // an anon key is a JWT: three dot-separated base64url runs, starting eyJ
+  const key=v.match(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
+  if(key){$('#skey').value=key[0];got++;}
+  if(!got)return false;
+  $('#sfields').open=true;          // show what was read, so it can be checked
+  flushSyncDraft();renderSyncSheet();
+  toast(got===2?'URL and key read':url?'Project URL read':'Anon key read');
+  return true;
+}
+$('#spaste1').addEventListener('input',e=>{
+  if(sipAny(e.target.value))e.target.value='';           // taken, so the box empties
+});
+/* iOS will not open an installed web app from a URL, so a Shortcut always lands
+   in Safari — a separate copy with no sync settings. This hands them over in one
+   tap. The link fills the fields and stops: turning sync on stays a decision,
+   because a link like this from somebody else would otherwise point the app at
+   their database. */
+$('#shandoff').addEventListener('click',async()=>{
+  readSyncFields();
+  if(!sync.url||!sync.key||!sync.ws)return toast('Fill this in first, then hand it over.');
+  const link=syncHandoffLink();
+  try{await navigator.clipboard.writeText(link);toast('Link copied — open it on the other device');}
+  catch(e){prompt('Open this on the other device:',link);}
 });
 $('#scopy').addEventListener('click',async()=>{
   readSyncFields();
@@ -7495,15 +7548,14 @@ $('#scopy').addEventListener('click',async()=>{
     toast('Settings copied. Paste them on your other device.');}
   catch(e){toast('Copy blocked. Select the fields and copy by hand.');}
 });
-$('#spaste').addEventListener('click',async()=>{
-  try{
-    if(!spreadSettings(await navigator.clipboard.readText()))throw new Error('bad');
-  }catch(e){toast('No settings found on the clipboard. You can also paste them straight into a field.');}
-});
 $('#son').addEventListener('click',async()=>{
   const prevWs=sync.ws;
   readSyncFields();
-  if(!sync.url||!sync.key||!sync.ws){toast('Fill in all three fields first.');return;}
+  /* A workspace key is a random string this app invents — there is nothing to
+     look up and no decision in it, so asking for one was a step that could only
+     be got wrong. Made here if there is none. */
+  if(sync.url&&sync.key&&!sync.ws){$('#sws').value=newWorkspace();flushSyncDraft();readSyncFields();}
+  if(!sync.url||!sync.key){toast('Paste your Supabase URL and anon key first.');return;}
   if(sync.ws!==prevWs){sync.mode=null;sync.pushed=0;sync.pulled=0;}   // a new workspace re-probes
   sync.on=true;await saveSyncCfg();
   setSync('syncing');
@@ -7524,10 +7576,6 @@ $('#soff').addEventListener('click',async()=>{
 });
 $('#sqlcopy3').addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText($('#sql3').textContent);toast('SQL copied');}
-  catch(e){toast('Copy blocked. Select the text and copy by hand.');}
-});
-$('#sqlcopy2').addEventListener('click',async()=>{
-  try{await navigator.clipboard.writeText($('#sql2').textContent);toast('SQL copied');}
   catch(e){toast('Copy blocked. Select the text and copy by hand.');}
 });
 $('#sqlcopy').addEventListener('click',async()=>{
@@ -8821,6 +8869,34 @@ const ADD_MAX=500;
    that was the only ending and wrong the moment there were four.
    Not `addLink` — that one puts a URL on a task, and this file already has it. */
 const shortcutLink=()=>location.origin+location.pathname;
+/* ============ handing sync to the browser copy ============
+   iOS will not open an installed web app from a URL, so a Shortcut always lands
+   in Safari — a different storage jar, and therefore a copy of this app that has
+   never been told about the Supabase project. Set sync up there **once** and it
+   stays: localStorage is per origin, not per tab, so every later open is already
+   synced and the two copies are simply two devices on one workspace.
+
+   This makes that once a single tap. `#sync=<payload>` carries `{url,key,ws}`
+   base64url'd — and **fills the fields without turning anything on**, which is
+   the whole of the safety: a link like this from somebody else would otherwise
+   point your app at their database and quietly push your work into it. Filling
+   the sheet and leaving the switch to a person is `spreadSettings`'s existing
+   bargain, and this reuses it rather than growing a second way in. */
+// b64url already exists for the push key and takes the bytes, so this hands it
+// the bytes rather than growing a second encoder
+const b64urlText=t=>b64url(new TextEncoder().encode(t));
+function unb64url(v){
+  const b=String(v||'').replace(/-/g,'+').replace(/_/g,'/');
+  const bin=atob(b+'='.repeat((4-b.length%4)%4));
+  return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)));
+}
+const syncHandoffLink=()=>location.origin+location.pathname+'#sync='
+  +b64urlText(JSON.stringify({url:sync.url,key:sync.key,ws:sync.ws}));
+function readSyncHandoff(v){
+  let json='';try{json=unb64url(v);}catch(e){return false;}
+  openSync();                       // the fields live in that sheet, so show it
+  return spreadSettings(json);
+}
 /* Dictated words arrive however the Shortcut sent them — URL-encoded if it was
    built that way, raw if it was not. A stray `%` makes `decodeURIComponent`
    throw on the whole string, and "50% complete" is a sentence somebody will
@@ -8906,7 +8982,12 @@ function routeHash(){
   if(!standalone()&&!sync.on&&!splitWarn){splitWarn=true;drawUpdBar();}
   try{
     if(k==='add'){addFromHash(raw);return true;}
-    if(k==='sync'){openSync();return true;}
+    if(k==='sync'){
+      // with a payload it is a hand-off from the other copy; bare, just the sheet
+      if(v&&!readSyncHandoff(v))toast('That sync link could not be read');
+      else if(!v)openSync();
+      return true;
+    }
     if(k==='board'){openBoard(v);return true;}
     if(k==='project'){if(P(v))setView('project',v);return true;}
     if(k==='new'){const f=NEW_HASH[v.trim().toLowerCase()];if(f)f();return true;}
@@ -8930,7 +9011,12 @@ function routeHash(){
 /* Every view a link may name. `TITLES` is most of it but not all — `makers`,
    `mfr`, `dest` and `at` have their own headings and were unreachable. */
 const VIEW_OK=new Set([...Object.keys(TITLES),'makers','mfr','dest','at','po']);
-addEventListener('hashchange',()=>{if(S.started||S.tasks.length)routeHash();});
+/* Gated on the boot having finished, not on there being data. It used to ask
+   `S.started||S.tasks.length`, which on a brand-new copy — exactly who a sync
+   hand-off is for — is false, so every link that arrived while the page was
+   already open was silently ignored. */
+let booted=false;
+addEventListener('hashchange',()=>{if(booted)routeHash();});
 function runQuickAdd(text){
   const p=quickPlan(typeof text==='string'?text:$('#qatext').value);
   if(p.empty||!p.body)return toast('Say what to add.');
@@ -9018,8 +9104,8 @@ function renderSettings(){
       ? 'Whatever it adds reaches your other devices on the next sync.'
       : '<b>Sync is off, so this will not work properly.</b> iOS opens a link in Safari, '
         +'not in your Home Screen app, and the two do not share storage — so a Shortcut '
-        +'writes into a separate copy of your data. Turn sync on <i>here and in the Home '
-        +'Screen app</i> and they become one workspace.';
+        +'writes into a separate copy of your data. In the Home Screen app, open Sync and '
+        +'press <b>Set up another device</b>, then open that link in Safari. Once, and it stays.';
   }
   seg('set-rows',[['comfortable','Comfortable'],['compact','Compact']],compact?'compact':'comfortable');
   seg('set-digest',[['shown','Shown'],['hidden','Hidden']],digestOff?'hidden':'shown');
@@ -9223,7 +9309,7 @@ function loadSample(){
 (async()=>{
   await loadAll();
   render();
-  routeHash();
+  booted=true;routeHash();
   setSync(sync.on?'idle':'off');
   if(sync.on){rtConnect();startPolling();pull(true);}
   renderVersion();
